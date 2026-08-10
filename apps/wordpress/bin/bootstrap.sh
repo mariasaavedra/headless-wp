@@ -39,6 +39,10 @@ if [ "${WORDPRESS_LOCALE}" != "en_US" ]; then
 fi
 $WP site switch-language "${WORDPRESS_LOCALE}"
 
+echo "bootstrap: configuring permalinks..."
+$WP rewrite structure '/%postname%/' --hard
+$WP rewrite flush --hard
+
 echo "bootstrap: activating theme and plugin..."
 $WP theme activate habeas-cle
 $WP plugin activate habeas-cle
