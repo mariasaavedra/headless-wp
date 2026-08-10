@@ -107,6 +107,52 @@ function pcle_unenroll_user( $program_id, $user_id ) {
 }
 
 /**
+ * Programs visible to a user: all published programs for staff, or only the
+ * ones they're enrolled in for a student.
+ *
+ * Shared by the "My Training" front door (blocks.php) and the my-training
+ * REST endpoint (rest.php) so both list the same set of programs the same way.
+ *
+ * @param int $user_id User ID (defaults to the current user).
+ * @return WP_Post[]
+ */
+function pcle_get_visible_programs( $user_id = 0 ) {
+	$user_id = $user_id ? (int) $user_id : get_current_user_id();
+
+	if ( pcle_user_is_staff( $user_id ) ) {
+		return get_posts(
+			array(
+				'post_type'   => 'pcle_program',
+				'post_status' => 'publish',
+				'numberposts' => -1,
+				'orderby'     => array(
+					'menu_order' => 'ASC',
+					'title'      => 'ASC',
+				),
+			)
+		);
+	}
+
+	$enrolled = pcle_get_enrolled_programs( $user_id );
+	if ( ! $enrolled ) {
+		return array();
+	}
+
+	return get_posts(
+		array(
+			'post_type'   => 'pcle_program',
+			'post_status' => 'publish',
+			'numberposts' => -1,
+			'post__in'    => $enrolled,
+			'orderby'     => array(
+				'menu_order' => 'ASC',
+				'title'      => 'ASC',
+			),
+		)
+	);
+}
+
+/**
  * Is the user "teaching staff" (can manage content)?
  *
  * Instructors and administrators have `edit_pcle_contents`; students don't.

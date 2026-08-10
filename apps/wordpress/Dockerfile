@@ -8,6 +8,7 @@ RUN curl -o /usr/local/bin/wp -fsSL https://raw.githubusercontent.com/wp-cli/bui
 
 COPY --chown=www-data:www-data apps/wordpress/plugins/platform-cle/plugin /var/www/html/wp-content/plugins/platform-cle
 COPY --chown=www-data:www-data apps/wordpress/plugins/platform-cle/theme /var/www/html/wp-content/themes/platform-cle
+COPY --chown=www-data:www-data apps/wordpress/plugins/jwt-authentication-for-wp-rest-api /var/www/html/wp-content/plugins/jwt-authentication-for-wp-rest-api
 COPY apps/wordpress/bin/bootstrap.sh /usr/local/bin/bootstrap.sh
 
 RUN chmod +x /usr/local/bin/bootstrap.sh

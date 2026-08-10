@@ -14,6 +14,11 @@ until $WP db check --quiet --skip-ssl 2>/dev/null; do
 done
 echo "bootstrap: database is up."
 
+if [ -n "${JWT_AUTH_SECRET_KEY:-}" ]; then
+	echo "bootstrap: configuring JWT_AUTH_SECRET_KEY..."
+	$WP config set JWT_AUTH_SECRET_KEY "${JWT_AUTH_SECRET_KEY}" --type=constant
+fi
+
 FRESH_INSTALL=false
 if ! $WP core is-installed --quiet 2>/dev/null; then
 	echo "bootstrap: installing WordPress..."
@@ -43,9 +48,12 @@ echo "bootstrap: configuring permalinks..."
 $WP rewrite structure '/%postname%/' --hard
 $WP rewrite flush --hard
 
-echo "bootstrap: activating theme and plugin..."
+echo "bootstrap: activating theme and plugins..."
 $WP theme activate platform-cle
 $WP plugin activate platform-cle
+if ! $WP plugin is-active jwt-authentication-for-wp-rest-api --quiet 2>/dev/null; then
+	$WP plugin activate jwt-authentication-for-wp-rest-api
+fi
 
 if [ "$FRESH_INSTALL" = true ]; then
 	echo "bootstrap: seeding demo data..."

@@ -226,7 +226,36 @@ pcle_eq( pcle_rest_status( $admin, "/wp/v2/pcle_program/{$prog_b}" ), 200, 'staf
 wp_set_current_user( 0 );
 
 /* ------------------------------------------------------------------ */
-/* 7) Emails                                                          */
+/* 7) REST: my-training                                               */
+/* ------------------------------------------------------------------ */
+pcle_section( '# REST my-training' );
+function pcle_rest_my_training( $uid ) {
+	wp_set_current_user( $uid );
+	return rest_do_request( new WP_REST_Request( 'GET', '/platform-cle/v1/my-training' ) );
+}
+
+$anon_res = pcle_rest_my_training( 0 );
+pcle_eq( $anon_res->get_status(), 401, 'anonymous my-training request → 401' );
+
+$student_res  = pcle_rest_my_training( $student );
+$student_data = $student_res->get_data();
+pcle_eq( $student_res->get_status(), 200, 'enrolled student my-training request → 200' );
+pcle_eq( count( $student_data['programs'] ), 1, 'student sees only their enrolled program' );
+pcle_eq( $student_data['programs'][0]['id'], $prog_a, 'student sees Program A' );
+pcle_eq( $student_data['programs'][0]['title'], 'TEST Program A', 'program title is present' );
+pcle_eq( $student_data['programs'][0]['progress']['total'], 2, 'program progress total is 2 modules' );
+pcle_eq( $student_data['programs'][0]['progress']['completed'], 1, 'program progress completed matches earlier fixture state (module2 completed)' );
+pcle_eq( $student_data['programs'][0]['progress']['percentage'], 50, 'program progress percentage matches completed/total' );
+pcle_ok( ! isset( $student_data['programs'][0]['post_type'] ), 'response does not leak raw WP_Post fields' );
+
+$admin_res  = pcle_rest_my_training( $admin );
+$admin_data = $admin_res->get_data();
+pcle_eq( $admin_res->get_status(), 200, 'staff my-training request → 200' );
+pcle_ok( count( $admin_data['programs'] ) >= 2, 'staff sees all programs, not just enrolled ones' );
+wp_set_current_user( 0 );
+
+/* ------------------------------------------------------------------ */
+/* 8) Emails                                                          */
 /* ------------------------------------------------------------------ */
 pcle_section( '# Emails' );
 $before = count( $GLOBALS['pcle_mail'] );

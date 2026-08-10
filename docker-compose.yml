@@ -45,6 +45,7 @@ services:
       - WORDPRESS_ADMIN_USER=${WORDPRESS_ADMIN_USER}
       - WORDPRESS_ADMIN_PASSWORD=${WORDPRESS_ADMIN_PASSWORD}
       - WORDPRESS_ADMIN_EMAIL=${WORDPRESS_ADMIN_EMAIL}
+      - JWT_AUTH_SECRET_KEY=${JWT_AUTH_SECRET_KEY}
     volumes:
       - wordpress_data:/var/www/html
     depends_on:

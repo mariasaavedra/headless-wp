@@ -426,35 +426,7 @@ function pcle_render_my_programs() {
 	}
 
 	// Teaching staff see all programs; a student sees only their own.
-	if ( pcle_user_is_staff() ) {
-		$programs = get_posts(
-			array(
-				'post_type'   => 'pcle_program',
-				'post_status' => 'publish',
-				'numberposts' => -1,
-				'orderby'     => array(
-					'menu_order' => 'ASC',
-					'title'      => 'ASC',
-				),
-			)
-		);
-	} else {
-		$enrolled = pcle_get_enrolled_programs();
-		$programs = $enrolled
-			? get_posts(
-				array(
-					'post_type'   => 'pcle_program',
-					'post_status' => 'publish',
-					'numberposts' => -1,
-					'post__in'    => $enrolled,
-					'orderby'     => array(
-						'menu_order' => 'ASC',
-						'title'      => 'ASC',
-					),
-				)
-			)
-			: array();
-	}
+	$programs = pcle_get_visible_programs();
 
 	if ( ! $programs ) {
 		return $notice . '<div class="pcle-myprograms"><p>'
