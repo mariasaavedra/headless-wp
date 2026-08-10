@@ -1,18 +1,12 @@
+import { wordpressFetch } from "@/lib/wordpress";
+
 type WordPressSite = {
   name: string;
   description: string;
 };
 
 async function getWordPressSite(): Promise<WordPressSite> {
-  const response = await fetch(`${process.env.WORDPRESS_API_URL}/`, {
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    throw new Error("Failed to load WordPress site");
-  }
-
-  return response.json();
+  return wordpressFetch("/") as Promise<WordPressSite>;
 }
 
 export default async function Home() {
