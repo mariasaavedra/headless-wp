@@ -1,5 +1,5 @@
 /**
- * Habeas CLE — frontend progress.
+ * Platform CLE — frontend progress.
  *
  * Handles the "mark as complete" button click, sends it to the REST endpoint,
  * and updates the UI (button + any week progress bar).
@@ -7,14 +7,14 @@
 ( function () {
 	'use strict';
 
-	if ( typeof window.hcleProgress === 'undefined' ) {
+	if ( typeof window.pcleProgress === 'undefined' ) {
 		return;
 	}
 
-	var cfg = window.hcleProgress;
+	var cfg = window.pcleProgress;
 
 	document.addEventListener( 'click', function ( event ) {
-		var btn = event.target.closest( '.hcle-complete-btn' );
+		var btn = event.target.closest( '.pcle-complete-btn' );
 		if ( ! btn ) {
 			return;
 		}
@@ -76,10 +76,10 @@
 	 * Updates all visible progress bars with the week's data.
 	 */
 	function updateWeekBars( progress ) {
-		var bars = document.querySelectorAll( '.hcle-progress' );
+		var bars = document.querySelectorAll( '.pcle-progress' );
 		bars.forEach( function ( bar ) {
-			var fill = bar.querySelector( '.hcle-progress__fill' );
-			var track = bar.querySelector( '.hcle-progress__track' );
+			var fill = bar.querySelector( '.pcle-progress__fill' );
+			var track = bar.querySelector( '.pcle-progress__track' );
 			if ( fill ) {
 				fill.style.width = progress.percent + '%';
 			}

@@ -1,4 +1,4 @@
-# Habeas CLE
+# Platform CLE
 
 A CLE (Continuing Legal Education) training platform on **immigration habeas corpus**, built for the nonprofit **The Pen & Sword KC** (Sharma-Crawford Attorneys at Law).
 
@@ -8,11 +8,11 @@ It is not a full LMS: it's a **lightweight, authenticated learning platform** th
 
 ## Architecture in one sentence
 
-> The **plugin** (`habeas-cle`) owns all business logic; the **block theme** (`habeas-cle-theme`) handles presentation only; WordPress provides native authentication and roles.
+> The **plugin** (`platform-cle`) owns all business logic; the **block theme** (`platform-cle-theme`) handles presentation only; WordPress provides native authentication and roles.
 
 ```
 ┌─────────────────────────┐     ┌──────────────────────────┐
-│  Plugin habeas-cle       │     │  Theme habeas-cle-theme   │
+│  Plugin platform-cle       │     │  Theme platform-cle-theme   │
 │  (logic)                 │     │  (presentation)           │
 │                          │     │                           │
 │  • CPTs                  │     │  • Child of Twenty         │
@@ -28,9 +28,9 @@ It is not a full LMS: it's a **lightweight, authenticated learning platform** th
 ## Repository structure
 
 ```
-habeas-cle/
-├── plugin/        → the plugin (goes in wp-content/plugins/habeas-cle/)
-├── theme/         → the theme  (goes in wp-content/themes/habeas-cle-theme/)
+platform-cle/
+├── plugin/        → the plugin (goes in wp-content/plugins/platform-cle/)
+├── theme/         → the theme  (goes in wp-content/themes/platform-cle-theme/)
 ├── docs/          → documentation
 │   ├── ARCHITECTURE.md   → data model and technical design
 │   ├── DEVELOPMENT.md    → local setup, scripts, commands
@@ -52,7 +52,7 @@ habeas-cle/
 - **Per-program access control:** content is protected behind login and requires **enrollment** in the specific program.
 - **Hierarchy** Program → Week → Module → (Scenario | Template), with Events per week.
 - **Progress tracking** (MVP via user meta) with per-week and per-program bars.
-- **Model answers** protected server-side (`[hcle_model_answer]`).
+- **Model answers** protected server-side (`[pcle_model_answer]`).
 - **Student enrollment** managed by instructors.
 - **Front door** ("My Training") + breadcrumbs for navigation.
 - **Session dates** on Schedule Events.

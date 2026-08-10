@@ -16,7 +16,7 @@ To assign a role: **Users → (user) → Role**.
 
 ## Building the curriculum
 
-The **Habeas CLE** sidebar menu groups all content types. The recommended creation order follows the hierarchy top-down:
+The **Platform CLE** sidebar menu groups all content types. The recommended creation order follows the hierarchy top-down:
 
 1. **Program** — the program container (e.g. "Immigration Habeas Corpus — Spring 2026").
 2. **Week** — in the sidebar, select its **Parent Program**.
@@ -34,9 +34,9 @@ The **Habeas CLE** sidebar menu groups all content types. The recommended creati
 Inside a Practice Scenario's content, wrap the answer like this:
 
 ```
-[hcle_model_answer]
+[pcle_model_answer]
 The model answer that only participants will see goes here...
-[/hcle_model_answer]
+[/pcle_model_answer]
 ```
 
 It renders inside a **"Reveal model answer"** disclosure. Users without permission never receive that content (real protection, not just hidden).
@@ -49,7 +49,7 @@ When editing a **Schedule Event**, use the **Session Date & Time** field in the 
 
 ## Enrolling students
 
-1. Go to **Habeas CLE → Participants & Enrollment**.
+1. Go to **Platform CLE → Participants & Enrollment**.
 2. Pick the **program** in the selector.
 3. Check the **Enrolled** box for each student who should have access.
 4. Click **Save enrollment**.

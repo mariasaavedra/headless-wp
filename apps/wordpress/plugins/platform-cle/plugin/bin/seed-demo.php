@@ -2,14 +2,14 @@
 /**
  * CLI entry point for the sample data seeder.
  *
- * The actual seeding logic lives in includes/demo-data.php (hcle_seed_demo_data()),
+ * The actual seeding logic lives in includes/demo-data.php (pcle_seed_demo_data()),
  * shared with the "Seed Demo Data" button in the admin dashboard so it also works
  * on hosts without shell/WP-CLI access.
  *
  * Usage (from the site root, with Local's socket):
- *   php -d mysqli.default_socket=<sock> wp-content/plugins/habeas-cle/bin/seed-demo.php
+ *   php -d mysqli.default_socket=<sock> wp-content/plugins/platform-cle/bin/seed-demo.php
  *
- * @package Habeas_CLE
+ * @package Platform_CLE
  */
 
 // CLI only.
@@ -27,7 +27,7 @@ if ( ! file_exists( $dir . '/wp-load.php' ) ) {
 }
 require $dir . '/wp-load.php';
 
-$counts = hcle_seed_demo_data();
+$counts = pcle_seed_demo_data();
 
 echo 'Cleanup: ' . $counts['removed'] . " previous demos removed.\n\n";
 echo "\n=== Summary ===\n";

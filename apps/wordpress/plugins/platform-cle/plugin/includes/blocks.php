@@ -1,6 +1,6 @@
 <?php
 /**
- * Habeas CLE dynamic blocks.
+ * Platform CLE dynamic blocks.
  *
  * These blocks are server-rendered (render_callback in PHP, no build step).
  * The PLUGIN provides the data/logic; the THEME only places them in its
@@ -8,12 +8,12 @@
  * theme.
  *
  * Blocks:
- *   - habeas-cle/curriculum-children : lists the current post's children
+ *   - platform-cle/curriculum-children : lists the current post's children
  *     (Program→Weeks, Week→Modules+Events, Module→Scenarios+Templates).
- *   - habeas-cle/progress-bar        : progress bar for the current Program/Week.
- *   - habeas-cle/complete-button     : module "mark as complete" button.
+ *   - platform-cle/progress-bar        : progress bar for the current Program/Week.
+ *   - platform-cle/complete-button     : module "mark as complete" button.
  *
- * @package Habeas_CLE
+ * @package Platform_CLE
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -23,44 +23,44 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Registers the dynamic blocks.
  */
-function hcle_register_blocks() {
+function pcle_register_blocks() {
 	register_block_type(
-		'habeas-cle/curriculum-children',
+		'platform-cle/curriculum-children',
 		array(
 			'api_version'     => 2,
-			'render_callback' => 'hcle_block_curriculum_children',
+			'render_callback' => 'pcle_block_curriculum_children',
 		)
 	);
 
 	register_block_type(
-		'habeas-cle/progress-bar',
+		'platform-cle/progress-bar',
 		array(
 			'api_version'     => 2,
-			'render_callback' => 'hcle_block_progress_bar',
+			'render_callback' => 'pcle_block_progress_bar',
 		)
 	);
 
 	register_block_type(
-		'habeas-cle/complete-button',
+		'platform-cle/complete-button',
 		array(
 			'api_version'     => 2,
-			'render_callback' => 'hcle_block_complete_button',
+			'render_callback' => 'pcle_block_complete_button',
 		)
 	);
 
 	register_block_type(
-		'habeas-cle/event-datetime',
+		'platform-cle/event-datetime',
 		array(
 			'api_version'     => 2,
-			'render_callback' => 'hcle_block_event_datetime',
+			'render_callback' => 'pcle_block_event_datetime',
 		)
 	);
 
 	register_block_type(
-		'habeas-cle/breadcrumbs',
+		'platform-cle/breadcrumbs',
 		array(
 			'api_version'     => 2,
-			'render_callback' => 'hcle_block_breadcrumbs',
+			'render_callback' => 'pcle_block_breadcrumbs',
 		)
 	);
 }
@@ -70,14 +70,14 @@ function hcle_register_blocks() {
  *
  * @return string
  */
-function hcle_get_front_door_url() {
+function pcle_get_front_door_url() {
 	$pages = get_posts(
 		array(
 			'post_type'   => 'page',
 			'post_status' => 'publish',
 			'numberposts' => 1,
 			'fields'      => 'ids',
-			'meta_key'    => '_hcle_front_door',
+			'meta_key'    => '_pcle_front_door',
 			'meta_value'  => 1,
 		)
 	);
@@ -93,14 +93,14 @@ function hcle_get_front_door_url() {
  *
  * @return int Page ID.
  */
-function hcle_ensure_front_door_page() {
+function pcle_ensure_front_door_page() {
 	$existing = get_posts(
 		array(
 			'post_type'   => 'page',
 			'post_status' => 'any',
 			'numberposts' => 1,
 			'fields'      => 'ids',
-			'meta_key'    => '_hcle_front_door',
+			'meta_key'    => '_pcle_front_door',
 			'meta_value'  => 1,
 		)
 	);
@@ -109,7 +109,7 @@ function hcle_ensure_front_door_page() {
 	}
 
 	$content = '<!-- wp:heading {"level":1} --><h1 class="wp-block-heading">My Training</h1><!-- /wp:heading -->'
-		. '<!-- wp:habeas-cle/my-programs /-->';
+		. '<!-- wp:platform-cle/my-programs /-->';
 
 	$page_id = wp_insert_post(
 		array(
@@ -122,7 +122,7 @@ function hcle_ensure_front_door_page() {
 	);
 
 	if ( $page_id && ! is_wp_error( $page_id ) ) {
-		update_post_meta( $page_id, '_hcle_front_door', 1 );
+		update_post_meta( $page_id, '_pcle_front_door', 1 );
 		return (int) $page_id;
 	}
 	return 0;
@@ -135,11 +135,11 @@ function hcle_ensure_front_door_page() {
  *
  * @return string
  */
-function hcle_block_breadcrumbs() {
+function pcle_block_breadcrumbs() {
 	$id   = get_the_ID();
 	$type = get_post_type( $id );
 
-	$hierarchy = array( 'hcle_program', 'hcle_week', 'hcle_module', 'hcle_scenario', 'hcle_template', 'hcle_event' );
+	$hierarchy = array( 'pcle_program', 'pcle_week', 'pcle_module', 'pcle_scenario', 'pcle_template', 'pcle_event' );
 	if ( ! $id || ! in_array( $type, $hierarchy, true ) ) {
 		return '';
 	}
@@ -150,18 +150,18 @@ function hcle_block_breadcrumbs() {
 	$guard  = 0;
 	while ( $cursor && $guard < 10 ) {
 		$chain[] = (int) $cursor;
-		$cursor  = hcle_get_parent_id( $cursor );
+		$cursor  = pcle_get_parent_id( $cursor );
 		$guard++;
 	}
 	$chain = array_reverse( $chain );
 
 	// Build the items: "My Training" root + each level.
 	$items = array();
-	$front = hcle_get_front_door_url();
+	$front = pcle_get_front_door_url();
 	if ( $front ) {
 		$items[] = array(
 			'url'     => $front,
-			'label'   => __( 'My Training', 'habeas-cle' ),
+			'label'   => __( 'My Training', 'platform-cle' ),
 			'current' => false,
 		);
 	}
@@ -180,12 +180,12 @@ function hcle_block_breadcrumbs() {
 	foreach ( $items as $item ) {
 		if ( $item['current'] ) {
 			$lis .= sprintf(
-				'<li class="hcle-breadcrumbs__item" aria-current="page"><span>%s</span></li>',
+				'<li class="pcle-breadcrumbs__item" aria-current="page"><span>%s</span></li>',
 				esc_html( $item['label'] )
 			);
 		} else {
 			$lis .= sprintf(
-				'<li class="hcle-breadcrumbs__item"><a href="%s">%s</a></li>',
+				'<li class="pcle-breadcrumbs__item"><a href="%s">%s</a></li>',
 				esc_url( $item['url'] ),
 				esc_html( $item['label'] )
 			);
@@ -193,19 +193,19 @@ function hcle_block_breadcrumbs() {
 	}
 
 	return sprintf(
-		'<nav class="hcle-breadcrumbs" aria-label="%s"><ol class="hcle-breadcrumbs__list">%s</ol></nav>',
-		esc_attr__( 'Breadcrumb', 'habeas-cle' ),
+		'<nav class="pcle-breadcrumbs" aria-label="%s"><ol class="pcle-breadcrumbs__list">%s</ol></nav>',
+		esc_attr__( 'Breadcrumb', 'platform-cle' ),
 		$lis
 	);
 }
-add_action( 'init', 'hcle_register_blocks' );
+add_action( 'init', 'pcle_register_blocks' );
 
 /**
  * Render: list of the current post's children by type.
  *
  * @return string HTML.
  */
-function hcle_block_curriculum_children() {
+function pcle_block_curriculum_children() {
 	$id   = get_the_ID();
 	$type = get_post_type( $id );
 	if ( ! $id ) {
@@ -215,44 +215,44 @@ function hcle_block_curriculum_children() {
 	$sections = array();
 
 	switch ( $type ) {
-		case 'hcle_program':
-			$sections[] = hcle_render_children_section(
-				__( 'Weeks', 'habeas-cle' ),
-				hcle_get_weeks( $id ),
+		case 'pcle_program':
+			$sections[] = pcle_render_children_section(
+				__( 'Weeks', 'platform-cle' ),
+				pcle_get_weeks( $id ),
 				false,
 				false,
 				true // show each week's progress bar
 			);
 			break;
 
-		case 'hcle_week':
-			$sections[] = hcle_render_children_section(
-				__( 'Modules', 'habeas-cle' ),
-				hcle_get_modules( $id ),
+		case 'pcle_week':
+			$sections[] = pcle_render_children_section(
+				__( 'Modules', 'platform-cle' ),
+				pcle_get_modules( $id ),
 				true // mark completed modules
 			);
-			$sections[] = hcle_render_children_section(
-				__( 'Live Sessions', 'habeas-cle' ),
-				hcle_get_events( $id ),
+			$sections[] = pcle_render_children_section(
+				__( 'Live Sessions', 'platform-cle' ),
+				pcle_get_events( $id ),
 				false,
 				true // show each session's date/time
 			);
 			break;
 
-		case 'hcle_module':
-			$sections[] = hcle_render_children_section(
-				__( 'Practice Scenarios', 'habeas-cle' ),
-				hcle_get_scenarios( $id )
+		case 'pcle_module':
+			$sections[] = pcle_render_children_section(
+				__( 'Practice Scenarios', 'platform-cle' ),
+				pcle_get_scenarios( $id )
 			);
-			$sections[] = hcle_render_children_section(
-				__( 'Templates', 'habeas-cle' ),
-				hcle_get_templates( $id )
+			$sections[] = pcle_render_children_section(
+				__( 'Templates', 'platform-cle' ),
+				pcle_get_templates( $id )
 			);
 			break;
 	}
 
 	$html = implode( '', array_filter( $sections ) );
-	return $html ? '<div class="hcle-curriculum">' . $html . '</div>' : '';
+	return $html ? '<div class="pcle-curriculum">' . $html . '</div>' : '';
 }
 
 /**
@@ -265,7 +265,7 @@ function hcle_block_curriculum_children() {
  * @param bool      $show_week_progress If true, adds each week's progress bar.
  * @return string
  */
-function hcle_render_children_section( $title, $items, $show_complete = false, $show_datetime = false, $show_week_progress = false ) {
+function pcle_render_children_section( $title, $items, $show_complete = false, $show_datetime = false, $show_week_progress = false ) {
 	if ( empty( $items ) ) {
 		return '';
 	}
@@ -273,24 +273,24 @@ function hcle_render_children_section( $title, $items, $show_complete = false, $
 	$rows = '';
 	foreach ( $items as $item ) {
 		$mark = '';
-		if ( $show_complete && hcle_is_module_complete( $item->ID ) ) {
-			$mark = '<span class="hcle-curriculum__check" aria-hidden="true">✓</span> ';
+		if ( $show_complete && pcle_is_module_complete( $item->ID ) ) {
+			$mark = '<span class="pcle-curriculum__check" aria-hidden="true">✓</span> ';
 		}
 
 		$meta = '';
 		if ( $show_datetime ) {
-			$when = hcle_format_event_datetime( $item->ID );
+			$when = pcle_format_event_datetime( $item->ID );
 			if ( '' !== $when ) {
-				$meta = '<span class="hcle-curriculum__when">' . esc_html( $when ) . '</span>';
+				$meta = '<span class="pcle-curriculum__when">' . esc_html( $when ) . '</span>';
 			}
 		}
 
 		if ( $show_week_progress ) {
-			$meta .= hcle_render_progress_bar( hcle_get_week_progress( $item->ID ) );
+			$meta .= pcle_render_progress_bar( pcle_get_week_progress( $item->ID ) );
 		}
 
 		$rows .= sprintf(
-			'<li class="hcle-curriculum__item">%s<a href="%s">%s</a>%s</li>',
+			'<li class="pcle-curriculum__item">%s<a href="%s">%s</a>%s</li>',
 			$mark,
 			esc_url( get_permalink( $item->ID ) ),
 			esc_html( get_the_title( $item->ID ) ),
@@ -299,7 +299,7 @@ function hcle_render_children_section( $title, $items, $show_complete = false, $
 	}
 
 	return sprintf(
-		'<section class="hcle-curriculum__section"><h2 class="hcle-curriculum__title">%s</h2><ul class="hcle-curriculum__list">%s</ul></section>',
+		'<section class="pcle-curriculum__section"><h2 class="pcle-curriculum__title">%s</h2><ul class="pcle-curriculum__list">%s</ul></section>',
 		esc_html( $title ),
 		$rows
 	);
@@ -312,7 +312,7 @@ function hcle_render_children_section( $title, $items, $show_complete = false, $
  *
  * @return string
  */
-function hcle_block_progress_bar() {
+function pcle_block_progress_bar() {
 	if ( ! is_user_logged_in() || ! current_user_can( 'view_cle_content' ) ) {
 		return '';
 	}
@@ -320,17 +320,17 @@ function hcle_block_progress_bar() {
 	$id   = get_the_ID();
 	$type = get_post_type( $id );
 
-	if ( 'hcle_program' === $type ) {
-		$progress = hcle_get_program_progress( $id );
-		$label    = __( 'Program progress:', 'habeas-cle' );
-	} elseif ( 'hcle_week' === $type ) {
-		$progress = hcle_get_week_progress( $id );
-		$label    = __( 'Week progress:', 'habeas-cle' );
+	if ( 'pcle_program' === $type ) {
+		$progress = pcle_get_program_progress( $id );
+		$label    = __( 'Program progress:', 'platform-cle' );
+	} elseif ( 'pcle_week' === $type ) {
+		$progress = pcle_get_week_progress( $id );
+		$label    = __( 'Week progress:', 'platform-cle' );
 	} else {
 		return '';
 	}
 
-	return hcle_render_progress_bar( $progress, $label );
+	return pcle_render_progress_bar( $progress, $label );
 }
 
 /**
@@ -338,12 +338,12 @@ function hcle_block_progress_bar() {
  *
  * @return string
  */
-function hcle_block_complete_button() {
+function pcle_block_complete_button() {
 	$id = get_the_ID();
-	if ( 'hcle_module' !== get_post_type( $id ) ) {
+	if ( 'pcle_module' !== get_post_type( $id ) ) {
 		return '';
 	}
-	return hcle_render_complete_button( $id );
+	return pcle_render_complete_button( $id );
 }
 
 /**
@@ -351,19 +351,19 @@ function hcle_block_complete_button() {
  *
  * @return string
  */
-function hcle_block_event_datetime() {
+function pcle_block_event_datetime() {
 	$id = get_the_ID();
-	if ( 'hcle_event' !== get_post_type( $id ) ) {
+	if ( 'pcle_event' !== get_post_type( $id ) ) {
 		return '';
 	}
 
-	$when = hcle_format_event_datetime( $id );
+	$when = pcle_format_event_datetime( $id );
 	if ( '' === $when ) {
 		return '';
 	}
 
 	return sprintf(
-		'<p class="hcle-event-datetime"><span class="hcle-event-datetime__icon" aria-hidden="true">🗓️</span> %s</p>',
+		'<p class="pcle-event-datetime"><span class="pcle-event-datetime__icon" aria-hidden="true">🗓️</span> %s</p>',
 		esc_html( $when )
 	);
 }
@@ -375,17 +375,17 @@ function hcle_block_event_datetime() {
 /**
  * Registers the `my-programs` block + shortcode (the front door).
  */
-function hcle_register_my_programs() {
+function pcle_register_my_programs() {
 	register_block_type(
-		'habeas-cle/my-programs',
+		'platform-cle/my-programs',
 		array(
 			'api_version'     => 2,
-			'render_callback' => 'hcle_render_my_programs',
+			'render_callback' => 'pcle_render_my_programs',
 		)
 	);
-	add_shortcode( 'hcle_my_programs', 'hcle_render_my_programs' );
+	add_shortcode( 'pcle_my_programs', 'pcle_render_my_programs' );
 }
-add_action( 'init', 'hcle_register_my_programs' );
+add_action( 'init', 'pcle_register_my_programs' );
 
 /**
  * Renders the list of programs accessible to the current user.
@@ -396,40 +396,40 @@ add_action( 'init', 'hcle_register_my_programs' );
  *
  * @return string HTML.
  */
-function hcle_render_my_programs() {
+function pcle_render_my_programs() {
 	// Anonymous: invitation to log in (returns to this same page afterward).
 	if ( ! is_user_logged_in() ) {
 		$here  = get_permalink() ? get_permalink() : home_url( '/' );
 		$login = wp_login_url( $here );
 		return sprintf(
-			'<div class="hcle-myprograms hcle-myprograms--guest"><p>%s</p><p><a class="hcle-myprograms__cta" href="%s">%s</a></p></div>',
-			esc_html__( 'Please log in to access your training program.', 'habeas-cle' ),
+			'<div class="pcle-myprograms pcle-myprograms--guest"><p>%s</p><p><a class="pcle-myprograms__cta" href="%s">%s</a></p></div>',
+			esc_html__( 'Please log in to access your training program.', 'platform-cle' ),
 			esc_url( $login ),
-			esc_html__( 'Log in', 'habeas-cle' )
+			esc_html__( 'Log in', 'platform-cle' )
 		);
 	}
 
 	// Logged in but without the program capability.
 	if ( ! current_user_can( 'view_cle_content' ) ) {
 		return sprintf(
-			'<div class="hcle-myprograms hcle-myprograms--guest"><p>%s</p></div>',
-			esc_html__( 'Your account is not enrolled in the training program. Please contact an administrator.', 'habeas-cle' )
+			'<div class="pcle-myprograms pcle-myprograms--guest"><p>%s</p></div>',
+			esc_html__( 'Your account is not enrolled in the training program. Please contact an administrator.', 'platform-cle' )
 		);
 	}
 
 	// Notice if they arrived here after trying to view a program without enrollment.
 	$notice = '';
-	if ( isset( $_GET['hcle_notice'] ) && 'not_enrolled' === $_GET['hcle_notice'] ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		$notice = '<div class="hcle-myprograms__notice">'
-			. esc_html__( 'You are not enrolled in that program. Below are the programs available to you.', 'habeas-cle' )
+	if ( isset( $_GET['pcle_notice'] ) && 'not_enrolled' === $_GET['pcle_notice'] ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$notice = '<div class="pcle-myprograms__notice">'
+			. esc_html__( 'You are not enrolled in that program. Below are the programs available to you.', 'platform-cle' )
 			. '</div>';
 	}
 
 	// Teaching staff see all programs; a student sees only their own.
-	if ( hcle_user_is_staff() ) {
+	if ( pcle_user_is_staff() ) {
 		$programs = get_posts(
 			array(
-				'post_type'   => 'hcle_program',
+				'post_type'   => 'pcle_program',
 				'post_status' => 'publish',
 				'numberposts' => -1,
 				'orderby'     => array(
@@ -439,11 +439,11 @@ function hcle_render_my_programs() {
 			)
 		);
 	} else {
-		$enrolled = hcle_get_enrolled_programs();
+		$enrolled = pcle_get_enrolled_programs();
 		$programs = $enrolled
 			? get_posts(
 				array(
-					'post_type'   => 'hcle_program',
+					'post_type'   => 'pcle_program',
 					'post_status' => 'publish',
 					'numberposts' => -1,
 					'post__in'    => $enrolled,
@@ -457,30 +457,30 @@ function hcle_render_my_programs() {
 	}
 
 	if ( ! $programs ) {
-		return $notice . '<div class="hcle-myprograms"><p>'
-			. esc_html__( 'You are not enrolled in any program yet. Please contact an administrator.', 'habeas-cle' )
+		return $notice . '<div class="pcle-myprograms"><p>'
+			. esc_html__( 'You are not enrolled in any program yet. Please contact an administrator.', 'platform-cle' )
 			. '</p></div>';
 	}
 
-	$out = $notice . '<div class="hcle-myprograms">';
+	$out = $notice . '<div class="pcle-myprograms">';
 	foreach ( $programs as $program ) {
-		$progress = hcle_get_program_progress( $program->ID );
+		$progress = pcle_get_program_progress( $program->ID );
 		$url      = get_permalink( $program->ID );
 
-		$out .= '<article class="hcle-myprograms__card">';
+		$out .= '<article class="pcle-myprograms__card">';
 		$out .= sprintf(
-			'<h2 class="hcle-myprograms__title"><a href="%s">%s</a></h2>',
+			'<h2 class="pcle-myprograms__title"><a href="%s">%s</a></h2>',
 			esc_url( $url ),
 			esc_html( get_the_title( $program ) )
 		);
 		if ( $program->post_excerpt ) {
-			$out .= '<p class="hcle-myprograms__excerpt">' . esc_html( $program->post_excerpt ) . '</p>';
+			$out .= '<p class="pcle-myprograms__excerpt">' . esc_html( $program->post_excerpt ) . '</p>';
 		}
-		$out .= hcle_render_progress_bar( $progress );
+		$out .= pcle_render_progress_bar( $progress );
 		$out .= sprintf(
-			'<a class="hcle-myprograms__cta" href="%s">%s</a>',
+			'<a class="pcle-myprograms__cta" href="%s">%s</a>',
 			esc_url( $url ),
-			esc_html__( 'Open program', 'habeas-cle' )
+			esc_html__( 'Open program', 'platform-cle' )
 		);
 		$out .= '</article>';
 	}

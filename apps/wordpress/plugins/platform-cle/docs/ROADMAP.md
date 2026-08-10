@@ -70,7 +70,7 @@ Goal: run the first real 4-week cohort safely.
 **Decision (deferred):** in production, students are enrolled when they **pay**.
 Provider not yet chosen — plan only for now; the pilot uses bulk/manual enrollment.
 
-**Design — the "bridge" pattern.** `hcle_enroll_user($program_id, $user_id)` is the
+**Design — the "bridge" pattern.** `pcle_enroll_user($program_id, $user_id)` is the
 single enrollment primitive. Payment is only the *trigger*. Any provider does the
 same four things:
 

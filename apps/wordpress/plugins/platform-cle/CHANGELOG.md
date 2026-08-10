@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Habeas CLE.
+All notable changes to Platform CLE.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/) and the project uses semantic versioning.
 
@@ -9,8 +9,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and the proje
 ### Security
 
 - **Protected file delivery.** Files attached to CLE content are stored in
-  `uploads/hcle-protected/` and served only through a guarded endpoint
-  (`?hcle_download=<id>`) that enforces per-program access; attachment URLs are
+  `uploads/pcle-protected/` and served only through a guarded endpoint
+  (`?pcle_download=<id>`) that enforces per-program access; attachment URLs are
   rewritten to that endpoint so the raw path is never exposed. Includes an
   `.htaccess` deny (Apache) and a documented nginx rule. (`includes/protected-files.php`)
 - **Fixed an ineffective REST guard.** The previous guard hooked a non-existent
@@ -29,18 +29,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and the proje
   access control, enrollment, progress, relationships, protected files, the REST
   guard, and emails (41 assertions). Non-zero exit on failure for CI.
 - **Transactional emails** (`includes/emails.php`): enrollment confirmation (via
-  the new `hcle_user_enrolled` action, fired only on genuinely new enrollments)
+  the new `pcle_user_enrolled` action, fired only on genuinely new enrollments)
   and a WP-Cron **session reminder** for live sessions within the next 24h
   (de-duplicated per event date). Subjects/bodies filterable. Sending uses
   `wp_mail` — configure SMTP on the host for deliverability.
 - **Health check endpoint** (`includes/health.php`):
-  `GET /wp-json/habeas-cle/v1/health` returns `{status, version}` publicly, plus
+  `GET /wp-json/platform-cle/v1/health` returns `{status, version}` publicly, plus
   configuration `checks` (roles, cron, protected dir, front door) for admins.
   For deploy verification and uptime monitoring.
 - **Deployment runbook** ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)) — Local →
   production steps and a go-live checklist.
 - The **"My Training" front-door page is auto-created on activation**
-  (`hcle_ensure_front_door_page()`), so a fresh install needs no CLI script;
+  (`pcle_ensure_front_door_page()`), so a fresh install needs no CLI script;
   adding it to the nav menu remains a one-time manual step.
 
 ## [0.1.0] — 2026-06-23
@@ -51,10 +51,10 @@ First functional release. Implements every feature from the brief.
 
 - **Custom Post Types** (7): Program, Week, Module, Practice Scenario, Template, Schedule Event, Case Update. Grouped into 2 capability groups (`content`, `case_update`).
 - **Roles and capabilities:** CLE Student, CLE Instructor, and an extended Administrator. Custom caps `view_cle_content`, `reveal_model_answers`, `view_participant_progress`.
-- **Per-program access control:** login gate + enrollment check (`hcle_can_access_post`). REST API protection. Search filtering.
-- **Model answers** protected server-side via `[hcle_model_answer]`.
+- **Per-program access control:** login gate + enrollment check (`pcle_can_access_post`). REST API protection. Search filtering.
+- **Model answers** protected server-side via `[pcle_model_answer]`.
 - **Hierarchical relationships** via post meta (Program → Week → Module → Scenario/Template; Event per week), with a select meta box, a "Parent" admin column, and a query API.
-- **Progress tracking** (user meta) with per-week and per-program computation, REST endpoint `habeas-cle/v1/progress`, a live-updating frontend button, and per-week progress bars on the program page.
+- **Progress tracking** (user meta) with per-week and per-program computation, REST endpoint `platform-cle/v1/progress`, a live-updating frontend button, and per-week progress bars on the program page.
 - **Per-program enrollment** (user meta) with a "Participants & Enrollment" management screen.
 - **Session dates** on Schedule Events (datetime meta box + validation that rejects overflow).
 - **Block theme** (child of Twenty Twenty-Five) with 7 `single-*` templates.

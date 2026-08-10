@@ -7,7 +7,7 @@ How to work with the code in the local environment (Local by Flywheel).
 ## Environment
 
 - **Site:** Local by Flywheel, at `~/Local Sites/tps/app/public`.
-- **WordPress:** active theme `habeas-cle-theme`, active plugin `habeas-cle`.
+- **WordPress:** active theme `platform-cle-theme`, active plugin `platform-cle`.
 - **PHP / MySQL:** the binaries live inside the Local app (see below).
 
 ### Local binary paths
@@ -26,7 +26,7 @@ There is no WP-CLI on the PATH, and MySQL uses a non-standard socket. The trick 
 
 ```bash
 cd ~/Local\ Sites/tps/app/public
-"$PHP" -d mysqli.default_socket="$SOCK" wp-content/plugins/habeas-cle/bin/seed-demo.php
+"$PHP" -d mysqli.default_socket="$SOCK" wp-content/plugins/platform-cle/bin/seed-demo.php
 ```
 
 For an ad-hoc script that boots WordPress:
@@ -41,7 +41,7 @@ echo get_bloginfo("name")."\n";
 ## Syntax check (lint)
 
 ```bash
-"$PHP" -l wp-content/plugins/habeas-cle/includes/post-types.php
+"$PHP" -l wp-content/plugins/platform-cle/includes/post-types.php
 ```
 
 ## Querying the database directly
@@ -54,17 +54,17 @@ MYSQL_PWD="$PW" "$MYSQL" -u root --socket="$SOCK" local -e "SELECT option_value 
 ## Included scripts
 
 ### `plugin/bin/seed-demo.php`
-Creates a full sample program (1 Program, 4 Weeks, 9 Modules, scenarios, templates, events, 2 Case Updates). **Idempotent**: it marks everything with the `_hcle_demo` meta and clears previous demos before recreating.
+Creates a full sample program (1 Program, 4 Weeks, 9 Modules, scenarios, templates, events, 2 Case Updates). **Idempotent**: it marks everything with the `_pcle_demo` meta and clears previous demos before recreating.
 
 ```bash
-"$PHP" -d mysqli.default_socket="$SOCK" wp-content/plugins/habeas-cle/bin/seed-demo.php
+"$PHP" -d mysqli.default_socket="$SOCK" wp-content/plugins/platform-cle/bin/seed-demo.php
 ```
 
 ### `plugin/bin/setup-front-door.php`
-Creates the **My Training** page (`/my-training/`) with the `my-programs` block and adds a navigation menu link. Idempotent (meta `_hcle_front_door`).
+Creates the **My Training** page (`/my-training/`) with the `my-programs` block and adds a navigation menu link. Idempotent (meta `_pcle_front_door`).
 
 ```bash
-"$PHP" -d mysqli.default_socket="$SOCK" wp-content/plugins/habeas-cle/bin/setup-front-door.php
+"$PHP" -d mysqli.default_socket="$SOCK" wp-content/plugins/platform-cle/bin/setup-front-door.php
 ```
 
 ## Tests
@@ -75,7 +75,7 @@ and the REST guard. They boot WordPress, create isolated fixtures, assert, and
 clean up. Exit code is non-zero on failure, so they can gate CI later.
 
 ```bash
-"$PHP" -d mysqli.default_socket="$SOCK" wp-content/plugins/habeas-cle/tests/smoke-test.php
+"$PHP" -d mysqli.default_socket="$SOCK" wp-content/plugins/platform-cle/tests/smoke-test.php
 echo "exit=$?"   # 0 = all passed, 1 = a test failed
 ```
 
@@ -94,7 +94,7 @@ bin/sync.sh pull
 bin/sync.sh push
 ```
 
-Paths are configurable via the `HCLE_PLUGIN_LIVE` and `HCLE_THEME_LIVE` environment variables.
+Paths are configurable via the `PCLE_PLUGIN_LIVE` and `PCLE_THEME_LIVE` environment variables.
 
 ## Testing the flow as a student
 
@@ -112,8 +112,8 @@ echo (defined("SECURE_AUTH_COOKIE")?SECURE_AUTH_COOKIE:AUTH_COOKIE)."=".wp_gener
 
 ## Protected files (uploads)
 
-Files uploaded while editing a CLE post are stored in `wp-content/uploads/hcle-protected/`
-and served only through the guarded endpoint `?hcle_download=<attachment_id>`, which
+Files uploaded while editing a CLE post are stored in `wp-content/uploads/pcle-protected/`
+and served only through the guarded endpoint `?pcle_download=<attachment_id>`, which
 checks per-program access before streaming. Attachment URLs for these files are
 rewritten to that endpoint automatically.
 
@@ -121,7 +121,7 @@ Direct HTTP access to the raw path is blocked by an `.htaccess` on **Apache**. O
 **nginx** (Local, and many managed hosts) add this rule to the server block:
 
 ```nginx
-location ^~ /wp-content/uploads/hcle-protected/ {
+location ^~ /wp-content/uploads/pcle-protected/ {
     deny all;
     return 404;
 }
@@ -133,6 +133,6 @@ the rule before the first real pilot.
 
 ## Code conventions
 
-- `hcle_` prefix on functions; `HCLE_` on constants.
+- `pcle_` prefix on functions; `PCLE_` on constants.
 - Standards from WordPress: escape on output (`esc_html`, `esc_url`, `esc_attr`), nonces in forms, capability checks on every save.
 - No build step: blocks are server-rendered (`render_callback`).

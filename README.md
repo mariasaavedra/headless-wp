@@ -1,13 +1,13 @@
 # headless-wp
 
-npm workspaces monorepo for **Habeas CLE**, a Continuing Legal Education platform. WordPress is the current backend/CMS; a Next.js frontend is being developed alongside it, moving toward a headless architecture.
+npm workspaces monorepo for **Platform CLE**, a Continuing Legal Education platform. WordPress is the current backend/CMS; a Next.js frontend is being developed alongside it, moving toward a headless architecture.
 
 ## Architecture
 
-Today, WordPress serves the site directly through the Habeas CLE plugin and theme (existing WordPress templates render the app). The intended direction is headless:
+Today, WordPress serves the site directly through the Platform CLE plugin and theme (existing WordPress templates render the app). The intended direction is headless:
 
 ```text
-WordPress + Habeas CLE plugin
+WordPress + Platform CLE plugin
         ↓
 WordPress REST API
         ↓
@@ -28,9 +28,9 @@ The Next.js app (`apps/web`) does not yet consume the WordPress REST API — tha
 │       ├── bin/
 │       │   └── bootstrap.sh          # container entrypoint: install + configure WP
 │       ├── plugins/
-│       │   └── habeas-cle/
-│       │       ├── plugin/           # Habeas CLE plugin source
-│       │       ├── theme/            # Habeas CLE child theme source
+│       │   └── platform-cle/
+│       │       ├── plugin/           # Platform CLE plugin source
+│       │       ├── theme/            # Platform CLE child theme source
 │       │       └── docs/             # plugin architecture/dev/deployment docs
 │       └── Dockerfile
 ├── docker-compose.yml
@@ -53,7 +53,7 @@ docker compose up --build
 This builds and starts three services:
 
 - `web` — Next.js app
-- `wordpress` — WordPress + Habeas CLE plugin/theme, built with WP-CLI
+- `wordpress` — WordPress + Platform CLE plugin/theme, built with WP-CLI
 - `db` — MySQL 8.0
 
 ## Local URLs
@@ -94,8 +94,8 @@ On container start, `apps/wordpress/bin/bootstrap.sh` runs (via the image's `CMD
 3. If WordPress is not yet installed, runs `wp core install` using `WORDPRESS_SITE_URL`, `WORDPRESS_SITE_TITLE`, and the `WORDPRESS_ADMIN_*` credentials. If it's already installed, this step is skipped.
 4. Applies site settings unconditionally: site title, tagline, site URL, and home URL, from the corresponding env vars. Installs and switches to `WORDPRESS_LOCALE` if it isn't `en_US`.
 5. Configures pretty permalinks (`/%postname%/`) and flushes rewrite rules.
-6. Activates the `habeas-cle` theme and the `habeas-cle` plugin.
-7. **Only on a fresh install**, runs the Habeas CLE demo-data seeder (`seed-demo.php`).
+6. Activates the `platform-cle` theme and the `platform-cle` plugin.
+7. **Only on a fresh install**, runs the Platform CLE demo-data seeder (`seed-demo.php`).
 8. Starts Apache in the foreground.
 
 This is idempotent: restarting the `wordpress` container against an existing `wordpress_data` volume re-applies site settings and skips both the WordPress install and the demo-data seed, so content is not duplicated. A destroyed/recreated volume triggers a fresh install and reseeds demo data.
@@ -160,22 +160,22 @@ npm run start
 
 These root scripts delegate to the `apps/web` workspace.
 
-## Habeas CLE plugin and theme
+## Platform CLE plugin and theme
 
-The `habeas-cle` plugin (`apps/wordpress/plugins/habeas-cle/plugin`) owns the application's domain logic: custom post types, roles/capabilities, access control, enrollment, progress tracking, and dynamic blocks. It includes an idempotent demo-data seeder (`plugin/bin/seed-demo.php`) invoked by the bootstrap script only on a fresh install.
+The `platform-cle` plugin (`apps/wordpress/plugins/platform-cle/plugin`) owns the application's domain logic: custom post types, roles/capabilities, access control, enrollment, progress tracking, and dynamic blocks. It includes an idempotent demo-data seeder (`plugin/bin/seed-demo.php`) invoked by the bootstrap script only on a fresh install.
 
-The child theme (`apps/wordpress/plugins/habeas-cle/theme`) handles presentation for the current WordPress-rendered site and is required for the plugin's templates to display correctly. It is activated automatically by the bootstrap script.
+The child theme (`apps/wordpress/plugins/platform-cle/theme`) handles presentation for the current WordPress-rendered site and is required for the plugin's templates to display correctly. It is activated automatically by the bootstrap script.
 
 WordPress remains the CMS/backend of record while `apps/web` is developed; the plugin and theme are not being removed as part of that move.
 
 For plugin-specific architecture, local setup, and deployment details, see:
 
-- [apps/wordpress/plugins/habeas-cle/README.md](apps/wordpress/plugins/habeas-cle/README.md)
-- [apps/wordpress/plugins/habeas-cle/docs/ARCHITECTURE.md](apps/wordpress/plugins/habeas-cle/docs/ARCHITECTURE.md)
-- [apps/wordpress/plugins/habeas-cle/docs/DEVELOPMENT.md](apps/wordpress/plugins/habeas-cle/docs/DEVELOPMENT.md)
-- [apps/wordpress/plugins/habeas-cle/docs/DEPLOYMENT.md](apps/wordpress/plugins/habeas-cle/docs/DEPLOYMENT.md)
+- [apps/wordpress/plugins/platform-cle/README.md](apps/wordpress/plugins/platform-cle/README.md)
+- [apps/wordpress/plugins/platform-cle/docs/ARCHITECTURE.md](apps/wordpress/plugins/platform-cle/docs/ARCHITECTURE.md)
+- [apps/wordpress/plugins/platform-cle/docs/DEVELOPMENT.md](apps/wordpress/plugins/platform-cle/docs/DEVELOPMENT.md)
+- [apps/wordpress/plugins/platform-cle/docs/DEPLOYMENT.md](apps/wordpress/plugins/platform-cle/docs/DEPLOYMENT.md)
 
-Note: that plugin repository's own docs refer to the theme's source directory as `habeas-cle-theme`; in this monorepo it is built and deployed as `wp-content/themes/habeas-cle` (see `apps/wordpress/Dockerfile`).
+Note: that plugin repository's own docs refer to the theme's source directory as `platform-cle-theme`; in this monorepo it is built and deployed as `wp-content/themes/platform-cle` (see `apps/wordpress/Dockerfile`).
 
 ## Next.js frontend
 

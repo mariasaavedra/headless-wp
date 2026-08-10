@@ -3,12 +3,12 @@
  * Schedule Event meta: session date and time.
  *
  * Provides:
- *   - Registration of the `_hcle_event_datetime` meta (string 'Y-m-d H:i:s', in REST).
+ *   - Registration of the `_pcle_event_datetime` meta (string 'Y-m-d H:i:s', in REST).
  *   - A meta box with a datetime-local field on the event screen.
  *   - Secure save (nonce + capability + format validation).
  *   - Helpers to read/format the date respecting the site timezone.
  *
- * @package Habeas_CLE
+ * @package Platform_CLE
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /** Meta key where we store the event date/time. */
-const HCLE_EVENT_DATETIME_META = '_hcle_event_datetime';
+const PCLE_EVENT_DATETIME_META = '_pcle_event_datetime';
 
 /* =========================================================================
  * 1) META REGISTRATION
@@ -25,23 +25,23 @@ const HCLE_EVENT_DATETIME_META = '_hcle_event_datetime';
 /**
  * Registers the event date meta (exposed in REST).
  */
-function hcle_register_event_meta() {
+function pcle_register_event_meta() {
 	register_post_meta(
-		'hcle_event',
-		HCLE_EVENT_DATETIME_META,
+		'pcle_event',
+		PCLE_EVENT_DATETIME_META,
 		array(
 			'type'              => 'string',
 			'single'            => true,
 			'default'           => '',
 			'show_in_rest'      => true,
-			'sanitize_callback' => 'hcle_sanitize_event_datetime',
+			'sanitize_callback' => 'pcle_sanitize_event_datetime',
 			'auth_callback'     => function ( $allowed, $meta_key, $post_id ) {
 				return current_user_can( 'edit_post', $post_id );
 			},
 		)
 	);
 }
-add_action( 'init', 'hcle_register_event_meta' );
+add_action( 'init', 'pcle_register_event_meta' );
 
 /**
  * Normalizes a date value to 'Y-m-d H:i:s' (or '' if invalid).
@@ -51,7 +51,7 @@ add_action( 'init', 'hcle_register_event_meta' );
  * @param string $value Incoming value.
  * @return string
  */
-function hcle_sanitize_event_datetime( $value ) {
+function pcle_sanitize_event_datetime( $value ) {
 	$value = trim( (string) $value );
 	if ( '' === $value ) {
 		return '';
@@ -87,25 +87,25 @@ function hcle_sanitize_event_datetime( $value ) {
 /**
  * Adds the date meta box to the Schedule Event screen.
  */
-function hcle_add_event_metabox() {
+function pcle_add_event_metabox() {
 	add_meta_box(
-		'hcle_event_datetime',
-		__( 'Session Date & Time', 'habeas-cle' ),
-		'hcle_render_event_metabox',
-		'hcle_event',
+		'pcle_event_datetime',
+		__( 'Session Date & Time', 'platform-cle' ),
+		'pcle_render_event_metabox',
+		'pcle_event',
 		'side',
 		'high'
 	);
 }
-add_action( 'add_meta_boxes', 'hcle_add_event_metabox' );
+add_action( 'add_meta_boxes', 'pcle_add_event_metabox' );
 
 /**
  * Renders the datetime-local field.
  *
  * @param WP_Post $post Event being edited.
  */
-function hcle_render_event_metabox( $post ) {
-	$raw = (string) get_post_meta( $post->ID, HCLE_EVENT_DATETIME_META, true );
+function pcle_render_event_metabox( $post ) {
+	$raw = (string) get_post_meta( $post->ID, PCLE_EVENT_DATETIME_META, true );
 
 	// 'Y-m-d H:i:s' -> 'Y-m-d\TH:i' for the HTML5 input.
 	$input_value = '';
@@ -116,21 +116,21 @@ function hcle_render_event_metabox( $post ) {
 		}
 	}
 
-	wp_nonce_field( 'hcle_save_event_datetime', 'hcle_event_datetime_nonce' );
+	wp_nonce_field( 'pcle_save_event_datetime', 'pcle_event_datetime_nonce' );
 
 	echo '<p>';
 	printf(
-		'<label for="hcle_event_datetime_field" class="screen-reader-text">%s</label>',
-		esc_html__( 'Session date and time', 'habeas-cle' )
+		'<label for="pcle_event_datetime_field" class="screen-reader-text">%s</label>',
+		esc_html__( 'Session date and time', 'platform-cle' )
 	);
 	printf(
-		'<input type="datetime-local" id="hcle_event_datetime_field" name="hcle_event_datetime" value="%s" style="width:100%%;" />',
+		'<input type="datetime-local" id="pcle_event_datetime_field" name="pcle_event_datetime" value="%s" style="width:100%%;" />',
 		esc_attr( $input_value )
 	);
 	echo '</p>';
 
 	echo '<p class="description">';
-	esc_html_e( 'Shown to students in the week schedule. Uses the site timezone.', 'habeas-cle' );
+	esc_html_e( 'Shown to students in the week schedule. Uses the site timezone.', 'platform-cle' );
 	echo '</p>';
 }
 
@@ -144,8 +144,8 @@ function hcle_render_event_metabox( $post ) {
  * @param int     $post_id Post ID.
  * @param WP_Post $post    The post object.
  */
-function hcle_save_event_datetime( $post_id, $post ) {
-	if ( 'hcle_event' !== $post->post_type ) {
+function pcle_save_event_datetime( $post_id, $post ) {
+	if ( 'pcle_event' !== $post->post_type ) {
 		return;
 	}
 	if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
@@ -156,8 +156,8 @@ function hcle_save_event_datetime( $post_id, $post ) {
 	}
 
 	// Nonce: if our field isn't present, it's not our form.
-	if ( ! isset( $_POST['hcle_event_datetime_nonce'] )
-		|| ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['hcle_event_datetime_nonce'] ) ), 'hcle_save_event_datetime' )
+	if ( ! isset( $_POST['pcle_event_datetime_nonce'] )
+		|| ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['pcle_event_datetime_nonce'] ) ), 'pcle_save_event_datetime' )
 	) {
 		return;
 	}
@@ -166,17 +166,17 @@ function hcle_save_event_datetime( $post_id, $post ) {
 		return;
 	}
 
-	$value = isset( $_POST['hcle_event_datetime'] )
-		? hcle_sanitize_event_datetime( wp_unslash( $_POST['hcle_event_datetime'] ) )
+	$value = isset( $_POST['pcle_event_datetime'] )
+		? pcle_sanitize_event_datetime( wp_unslash( $_POST['pcle_event_datetime'] ) )
 		: '';
 
 	if ( '' !== $value ) {
-		update_post_meta( $post_id, HCLE_EVENT_DATETIME_META, $value );
+		update_post_meta( $post_id, PCLE_EVENT_DATETIME_META, $value );
 	} else {
-		delete_post_meta( $post_id, HCLE_EVENT_DATETIME_META );
+		delete_post_meta( $post_id, PCLE_EVENT_DATETIME_META );
 	}
 }
-add_action( 'save_post', 'hcle_save_event_datetime', 10, 2 );
+add_action( 'save_post', 'pcle_save_event_datetime', 10, 2 );
 
 /* =========================================================================
  * 4) READ / FORMAT HELPERS
@@ -188,8 +188,8 @@ add_action( 'save_post', 'hcle_save_event_datetime', 10, 2 );
  * @param int $event_id Event ID.
  * @return string
  */
-function hcle_get_event_datetime( $event_id ) {
-	return (string) get_post_meta( $event_id, HCLE_EVENT_DATETIME_META, true );
+function pcle_get_event_datetime( $event_id ) {
+	return (string) get_post_meta( $event_id, PCLE_EVENT_DATETIME_META, true );
 }
 
 /**
@@ -199,8 +199,8 @@ function hcle_get_event_datetime( $event_id ) {
  * @param string $format   Optional format; defaults to the site's date + time.
  * @return string Empty string if there is no date.
  */
-function hcle_format_event_datetime( $event_id, $format = '' ) {
-	$raw = hcle_get_event_datetime( $event_id );
+function pcle_format_event_datetime( $event_id, $format = '' ) {
+	$raw = pcle_get_event_datetime( $event_id );
 	if ( '' === $raw ) {
 		return '';
 	}

@@ -44,12 +44,12 @@ $WP rewrite structure '/%postname%/' --hard
 $WP rewrite flush --hard
 
 echo "bootstrap: activating theme and plugin..."
-$WP theme activate habeas-cle
-$WP plugin activate habeas-cle
+$WP theme activate platform-cle
+$WP plugin activate platform-cle
 
 if [ "$FRESH_INSTALL" = true ]; then
 	echo "bootstrap: seeding demo data..."
-	php /var/www/html/wp-content/plugins/habeas-cle/bin/seed-demo.php
+	php /var/www/html/wp-content/plugins/platform-cle/bin/seed-demo.php
 else
 	echo "bootstrap: existing install, skipping demo data seed."
 fi

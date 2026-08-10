@@ -7,14 +7,14 @@
 #   bin/sync.sh push   # repo      -> live site (after cloning/editing)
 #
 # Paths are configurable via the environment variables:
-#   HCLE_PLUGIN_LIVE, HCLE_THEME_LIVE
+#   PCLE_PLUGIN_LIVE, PCLE_THEME_LIVE
 #
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-PLUGIN_LIVE="${HCLE_PLUGIN_LIVE:-$HOME/Local Sites/tps/app/public/wp-content/plugins/habeas-cle}"
-THEME_LIVE="${HCLE_THEME_LIVE:-$HOME/Local Sites/tps/app/public/wp-content/themes/habeas-cle-theme}"
+PLUGIN_LIVE="${PCLE_PLUGIN_LIVE:-$HOME/Local Sites/tps/app/public/wp-content/plugins/platform-cle}"
+THEME_LIVE="${PCLE_THEME_LIVE:-$HOME/Local Sites/tps/app/public/wp-content/themes/platform-cle-theme}"
 
 DIRECTION="${1:-}"
 

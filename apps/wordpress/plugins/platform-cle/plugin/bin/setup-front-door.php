@@ -3,12 +3,12 @@
  * Creates the CLE "front door": a Page with the my-programs block and a link to
  * it in the theme's navigation menu.
  *
- * Idempotent: the Page is identified by the `_hcle_front_door` meta. The
+ * Idempotent: the Page is identified by the `_pcle_front_door` meta. The
  * navigation link is not duplicated if it already exists.
  *
- * Usage: php -d mysqli.default_socket=<sock> wp-content/plugins/habeas-cle/bin/setup-front-door.php
+ * Usage: php -d mysqli.default_socket=<sock> wp-content/plugins/platform-cle/bin/setup-front-door.php
  *
- * @package Habeas_CLE
+ * @package Platform_CLE
  */
 
 if ( 'cli' !== php_sapi_name() ) {
@@ -29,13 +29,13 @@ $existing = get_posts(
 		'post_type'   => 'page',
 		'post_status' => 'any',
 		'numberposts' => 1,
-		'meta_key'    => '_hcle_front_door',
+		'meta_key'    => '_pcle_front_door',
 		'meta_value'  => 1,
 	)
 );
 
 $page_content = '<!-- wp:heading {"level":1} --><h1 class="wp-block-heading">My Training</h1><!-- /wp:heading -->'
-	. '<!-- wp:habeas-cle/my-programs /-->';
+	. '<!-- wp:platform-cle/my-programs /-->';
 
 if ( $existing ) {
 	$page_id = $existing[0]->ID;
@@ -57,7 +57,7 @@ if ( $existing ) {
 			'post_content' => $page_content,
 		)
 	);
-	update_post_meta( $page_id, '_hcle_front_door', 1 );
+	update_post_meta( $page_id, '_pcle_front_door', 1 );
 	echo "'My Training' page created (#{$page_id}).\n";
 }
 

@@ -1,6 +1,6 @@
 <?php
 /**
- * Habeas CLE hierarchical relationships.
+ * Platform CLE hierarchical relationships.
  *
  * Links the CPTs in the curriculum hierarchy using post meta:
  *
@@ -15,7 +15,7 @@
  *   - Helper functions to traverse the hierarchy in both directions.
  *   - An admin list column that shows the parent.
  *
- * @package Habeas_CLE
+ * @package Platform_CLE
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -33,32 +33,32 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * @return array<string, array{parent:string, meta_key:string, label:string}>
  */
-function hcle_relationship_map() {
+function pcle_relationship_map() {
 	return array(
-		'hcle_week'     => array(
-			'parent'   => 'hcle_program',
-			'meta_key' => '_hcle_program_id',
-			'label'    => __( 'Parent Program', 'habeas-cle' ),
+		'pcle_week'     => array(
+			'parent'   => 'pcle_program',
+			'meta_key' => '_pcle_program_id',
+			'label'    => __( 'Parent Program', 'platform-cle' ),
 		),
-		'hcle_module'   => array(
-			'parent'   => 'hcle_week',
-			'meta_key' => '_hcle_week_id',
-			'label'    => __( 'Parent Week', 'habeas-cle' ),
+		'pcle_module'   => array(
+			'parent'   => 'pcle_week',
+			'meta_key' => '_pcle_week_id',
+			'label'    => __( 'Parent Week', 'platform-cle' ),
 		),
-		'hcle_event'    => array(
-			'parent'   => 'hcle_week',
-			'meta_key' => '_hcle_week_id',
-			'label'    => __( 'Parent Week', 'habeas-cle' ),
+		'pcle_event'    => array(
+			'parent'   => 'pcle_week',
+			'meta_key' => '_pcle_week_id',
+			'label'    => __( 'Parent Week', 'platform-cle' ),
 		),
-		'hcle_scenario' => array(
-			'parent'   => 'hcle_module',
-			'meta_key' => '_hcle_module_id',
-			'label'    => __( 'Parent Module', 'habeas-cle' ),
+		'pcle_scenario' => array(
+			'parent'   => 'pcle_module',
+			'meta_key' => '_pcle_module_id',
+			'label'    => __( 'Parent Module', 'platform-cle' ),
 		),
-		'hcle_template' => array(
-			'parent'   => 'hcle_module',
-			'meta_key' => '_hcle_module_id',
-			'label'    => __( 'Parent Module', 'habeas-cle' ),
+		'pcle_template' => array(
+			'parent'   => 'pcle_module',
+			'meta_key' => '_pcle_module_id',
+			'label'    => __( 'Parent Module', 'platform-cle' ),
 		),
 	);
 }
@@ -73,10 +73,10 @@ function hcle_relationship_map() {
  * show_in_rest allows reading/writing the link from the block editor.
  * auth_callback ensures only someone who can edit the post touches the meta.
  */
-function hcle_register_relationship_meta() {
+function pcle_register_relationship_meta() {
 	$registered = array();
 
-	foreach ( hcle_relationship_map() as $child => $rel ) {
+	foreach ( pcle_relationship_map() as $child => $rel ) {
 		// Avoid registering the same (child, meta_key) twice if it repeats.
 		$signature = $child . '|' . $rel['meta_key'];
 		if ( isset( $registered[ $signature ] ) ) {
@@ -100,7 +100,7 @@ function hcle_register_relationship_meta() {
 		);
 	}
 }
-add_action( 'init', 'hcle_register_relationship_meta' );
+add_action( 'init', 'pcle_register_relationship_meta' );
 
 /* =========================================================================
  * 2) META BOX (parent selector)
@@ -109,52 +109,52 @@ add_action( 'init', 'hcle_register_relationship_meta' );
 /**
  * Adds the "parent" meta box to each child's edit screen.
  */
-function hcle_add_relationship_metaboxes() {
-	foreach ( hcle_relationship_map() as $child => $rel ) {
+function pcle_add_relationship_metaboxes() {
+	foreach ( pcle_relationship_map() as $child => $rel ) {
 		add_meta_box(
-			'hcle_relationship_' . $child,
+			'pcle_relationship_' . $child,
 			$rel['label'],
-			'hcle_render_relationship_metabox',
+			'pcle_render_relationship_metabox',
 			$child,
 			'side',
 			'high'
 		);
 	}
 }
-add_action( 'add_meta_boxes', 'hcle_add_relationship_metaboxes' );
+add_action( 'add_meta_boxes', 'pcle_add_relationship_metaboxes' );
 
 /**
  * Renders the meta box: a <select> with the possible parents.
  *
  * @param WP_Post $post Post being edited.
  */
-function hcle_render_relationship_metabox( $post ) {
-	$map = hcle_relationship_map();
+function pcle_render_relationship_metabox( $post ) {
+	$map = pcle_relationship_map();
 	if ( ! isset( $map[ $post->post_type ] ) ) {
 		return;
 	}
 
 	$rel      = $map[ $post->post_type ];
 	$current  = (int) get_post_meta( $post->ID, $rel['meta_key'], true );
-	$parents  = hcle_get_selectable_parents( $rel['parent'] );
+	$parents  = pcle_get_selectable_parents( $rel['parent'] );
 
 	// Nonce to validate the save.
-	wp_nonce_field( 'hcle_save_relationship', 'hcle_relationship_nonce' );
+	wp_nonce_field( 'pcle_save_relationship', 'pcle_relationship_nonce' );
 
 	echo '<p>';
 	printf(
-		'<label for="hcle_parent_select" class="screen-reader-text">%s</label>',
+		'<label for="pcle_parent_select" class="screen-reader-text">%s</label>',
 		esc_html( $rel['label'] )
 	);
-	echo '<select name="' . esc_attr( $rel['meta_key'] ) . '" id="hcle_parent_select" style="width:100%;">';
-	echo '<option value="0">' . esc_html__( '— None —', 'habeas-cle' ) . '</option>';
+	echo '<select name="' . esc_attr( $rel['meta_key'] ) . '" id="pcle_parent_select" style="width:100%;">';
+	echo '<option value="0">' . esc_html__( '— None —', 'platform-cle' ) . '</option>';
 
 	foreach ( $parents as $parent ) {
 		printf(
 			'<option value="%d"%s>%s</option>',
 			(int) $parent->ID,
 			selected( $current, $parent->ID, false ),
-			esc_html( $parent->post_title ? $parent->post_title : sprintf( __( '(no title) #%d', 'habeas-cle' ), $parent->ID ) )
+			esc_html( $parent->post_title ? $parent->post_title : sprintf( __( '(no title) #%d', 'platform-cle' ), $parent->ID ) )
 		);
 	}
 
@@ -167,7 +167,7 @@ function hcle_render_relationship_metabox( $post ) {
 		echo '<p class="description">';
 		printf(
 			/* translators: %s: parent post type singular name. */
-			esc_html__( 'No %s exists yet. Create one first.', 'habeas-cle' ),
+			esc_html__( 'No %s exists yet. Create one first.', 'platform-cle' ),
 			esc_html( $name )
 		);
 		echo '</p>';
@@ -183,7 +183,7 @@ function hcle_render_relationship_metabox( $post ) {
  * @param string $parent_type Parent CPT.
  * @return WP_Post[]
  */
-function hcle_get_selectable_parents( $parent_type ) {
+function pcle_get_selectable_parents( $parent_type ) {
 	return get_posts(
 		array(
 			'post_type'        => $parent_type,
@@ -211,8 +211,8 @@ function hcle_get_selectable_parents( $parent_type ) {
  * @param int     $post_id ID of the post being saved.
  * @param WP_Post $post    The post object.
  */
-function hcle_save_relationship( $post_id, $post ) {
-	$map = hcle_relationship_map();
+function pcle_save_relationship( $post_id, $post ) {
+	$map = pcle_relationship_map();
 	if ( ! isset( $map[ $post->post_type ] ) ) {
 		return;
 	}
@@ -227,8 +227,8 @@ function hcle_save_relationship( $post_id, $post ) {
 	}
 
 	// 2. Nonce. If the field isn't present, it's not our form → leave it alone.
-	if ( ! isset( $_POST['hcle_relationship_nonce'] )
-		|| ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['hcle_relationship_nonce'] ) ), 'hcle_save_relationship' )
+	if ( ! isset( $_POST['pcle_relationship_nonce'] )
+		|| ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['pcle_relationship_nonce'] ) ), 'pcle_save_relationship' )
 	) {
 		return;
 	}
@@ -258,7 +258,7 @@ function hcle_save_relationship( $post_id, $post ) {
 		delete_post_meta( $post_id, $rel['meta_key'] );
 	}
 }
-add_action( 'save_post', 'hcle_save_relationship', 10, 2 );
+add_action( 'save_post', 'pcle_save_relationship', 10, 2 );
 
 /* =========================================================================
  * 4) QUERY HELPERS (the API used by the rest of the plugin/theme)
@@ -274,8 +274,8 @@ add_action( 'save_post', 'hcle_save_relationship', 10, 2 );
  * @param array  $args       WP_Query overrides (e.g. post_status).
  * @return WP_Post[]
  */
-function hcle_get_children( $parent_id, $child_type, $args = array() ) {
-	$map = hcle_relationship_map();
+function pcle_get_children( $parent_id, $child_type, $args = array() ) {
+	$map = pcle_relationship_map();
 	if ( ! isset( $map[ $child_type ] ) || $parent_id <= 0 ) {
 		return array();
 	}
@@ -302,9 +302,9 @@ function hcle_get_children( $parent_id, $child_type, $args = array() ) {
  * @param int $child_id Child ID.
  * @return int
  */
-function hcle_get_parent_id( $child_id ) {
+function pcle_get_parent_id( $child_id ) {
 	$child_type = get_post_type( $child_id );
-	$map        = hcle_relationship_map();
+	$map        = pcle_relationship_map();
 	if ( ! isset( $map[ $child_type ] ) ) {
 		return 0;
 	}
@@ -321,20 +321,20 @@ function hcle_get_parent_id( $child_id ) {
  * @param int $post_id Post ID.
  * @return int Program ID, or 0.
  */
-function hcle_get_program_for_post( $post_id ) {
+function pcle_get_program_for_post( $post_id ) {
 	$post_id = (int) $post_id;
-	if ( 'hcle_program' === get_post_type( $post_id ) ) {
+	if ( 'pcle_program' === get_post_type( $post_id ) ) {
 		return $post_id;
 	}
 
 	$cursor = $post_id;
 	$guard  = 0;
 	while ( $cursor && $guard < 10 ) {
-		$parent = hcle_get_parent_id( $cursor );
+		$parent = pcle_get_parent_id( $cursor );
 		if ( ! $parent ) {
 			return 0;
 		}
-		if ( 'hcle_program' === get_post_type( $parent ) ) {
+		if ( 'pcle_program' === get_post_type( $parent ) ) {
 			return (int) $parent;
 		}
 		$cursor = $parent;
@@ -352,8 +352,8 @@ function hcle_get_program_for_post( $post_id ) {
  * @param array $args       WP_Query overrides.
  * @return WP_Post[]
  */
-function hcle_get_weeks( $program_id, $args = array() ) {
-	return hcle_get_children( $program_id, 'hcle_week', $args );
+function pcle_get_weeks( $program_id, $args = array() ) {
+	return pcle_get_children( $program_id, 'pcle_week', $args );
 }
 
 /**
@@ -363,8 +363,8 @@ function hcle_get_weeks( $program_id, $args = array() ) {
  * @param array $args    WP_Query overrides.
  * @return WP_Post[]
  */
-function hcle_get_modules( $week_id, $args = array() ) {
-	return hcle_get_children( $week_id, 'hcle_module', $args );
+function pcle_get_modules( $week_id, $args = array() ) {
+	return pcle_get_children( $week_id, 'pcle_module', $args );
 }
 
 /**
@@ -374,8 +374,8 @@ function hcle_get_modules( $week_id, $args = array() ) {
  * @param array $args      WP_Query overrides.
  * @return WP_Post[]
  */
-function hcle_get_scenarios( $module_id, $args = array() ) {
-	return hcle_get_children( $module_id, 'hcle_scenario', $args );
+function pcle_get_scenarios( $module_id, $args = array() ) {
+	return pcle_get_children( $module_id, 'pcle_scenario', $args );
 }
 
 /**
@@ -385,8 +385,8 @@ function hcle_get_scenarios( $module_id, $args = array() ) {
  * @param array $args      WP_Query overrides.
  * @return WP_Post[]
  */
-function hcle_get_templates( $module_id, $args = array() ) {
-	return hcle_get_children( $module_id, 'hcle_template', $args );
+function pcle_get_templates( $module_id, $args = array() ) {
+	return pcle_get_children( $module_id, 'pcle_template', $args );
 }
 
 /**
@@ -396,8 +396,8 @@ function hcle_get_templates( $module_id, $args = array() ) {
  * @param array $args    WP_Query overrides.
  * @return WP_Post[]
  */
-function hcle_get_events( $week_id, $args = array() ) {
-	return hcle_get_children( $week_id, 'hcle_event', $args );
+function pcle_get_events( $week_id, $args = array() ) {
+	return pcle_get_children( $week_id, 'pcle_event', $args );
 }
 
 /* =========================================================================
@@ -410,17 +410,17 @@ function hcle_get_events( $week_id, $args = array() ) {
  * @param array $columns Existing columns.
  * @return array
  */
-function hcle_add_parent_admin_column( $columns ) {
+function pcle_add_parent_admin_column( $columns ) {
 	// Insert before the date column if it exists.
 	$new = array();
 	foreach ( $columns as $key => $label ) {
 		if ( 'date' === $key ) {
-			$new['hcle_parent'] = __( 'Parent', 'habeas-cle' );
+			$new['pcle_parent'] = __( 'Parent', 'platform-cle' );
 		}
 		$new[ $key ] = $label;
 	}
-	if ( ! isset( $new['hcle_parent'] ) ) {
-		$new['hcle_parent'] = __( 'Parent', 'habeas-cle' );
+	if ( ! isset( $new['pcle_parent'] ) ) {
+		$new['pcle_parent'] = __( 'Parent', 'platform-cle' );
 	}
 	return $new;
 }
@@ -431,12 +431,12 @@ function hcle_add_parent_admin_column( $columns ) {
  * @param string $column  Column slug.
  * @param int    $post_id ID of the row's post.
  */
-function hcle_render_parent_admin_column( $column, $post_id ) {
-	if ( 'hcle_parent' !== $column ) {
+function pcle_render_parent_admin_column( $column, $post_id ) {
+	if ( 'pcle_parent' !== $column ) {
 		return;
 	}
 
-	$parent_id = hcle_get_parent_id( $post_id );
+	$parent_id = pcle_get_parent_id( $post_id );
 	if ( $parent_id <= 0 ) {
 		echo '<span aria-hidden="true">—</span>';
 		return;
@@ -455,10 +455,10 @@ function hcle_render_parent_admin_column( $column, $post_id ) {
 /**
  * Hooks the column onto each child CPT.
  */
-function hcle_register_parent_admin_columns() {
-	foreach ( array_keys( hcle_relationship_map() ) as $child ) {
-		add_filter( "manage_{$child}_posts_columns", 'hcle_add_parent_admin_column' );
-		add_action( "manage_{$child}_posts_custom_column", 'hcle_render_parent_admin_column', 10, 2 );
+function pcle_register_parent_admin_columns() {
+	foreach ( array_keys( pcle_relationship_map() ) as $child ) {
+		add_filter( "manage_{$child}_posts_columns", 'pcle_add_parent_admin_column' );
+		add_action( "manage_{$child}_posts_custom_column", 'pcle_render_parent_admin_column', 10, 2 );
 	}
 }
-add_action( 'admin_init', 'hcle_register_parent_admin_columns' );
+add_action( 'admin_init', 'pcle_register_parent_admin_columns' );

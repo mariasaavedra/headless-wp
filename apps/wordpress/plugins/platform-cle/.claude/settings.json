@@ -1,11 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(rm -rf /tmp/hcle-package)",
-      "Bash(mkdir -p /tmp/hcle-package/habeas-cle /tmp/hcle-package/habeas-cle-theme)",
-      "Bash(rsync -a --exclude='.DS_Store' --exclude='tests' plugin/ /tmp/hcle-package/habeas-cle/)",
-      "Bash(rsync -a --exclude='.DS_Store' theme/ /tmp/hcle-package/habeas-cle-theme/)",
-      "Bash(zip -r -X habeas-cle.zip habeas-cle -x '*.DS_Store')"
+      "Bash(rm -rf /tmp/pcle-package)",
+      "Bash(mkdir -p /tmp/pcle-package/platform-cle /tmp/pcle-package/platform-cle-theme)",
+      "Bash(rsync -a --exclude='.DS_Store' --exclude='tests' plugin/ /tmp/pcle-package/platform-cle/)",
+      "Bash(rsync -a --exclude='.DS_Store' theme/ /tmp/pcle-package/platform-cle-theme/)",
+      "Bash(zip -r -X platform-cle.zip platform-cle -x '*.DS_Store')"
     ]
   }
 }

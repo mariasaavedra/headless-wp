@@ -1,6 +1,6 @@
 # Deployment guide (Local → production)
 
-Going live is a standard WordPress migration plus a few Habeas-CLE-specific
+Going live is a standard WordPress migration plus a few Platform-CLE-specific
 steps. Infrastructure (host, domain, DNS, SSL) is owner-provided; this document
 is the runbook and go-live checklist.
 
@@ -11,7 +11,7 @@ is the runbook and go-live checklist.
 - A production host: managed WordPress hosting or a VPS with **PHP 8.1+**,
   **MySQL 5.7+/MariaDB 10.4+**, and **HTTPS**.
 - A domain and DNS access.
-- The repo (`github.com/rafaelcd8892/habeas-cle`) for the plugin + theme.
+- The repo (`github.com/rafaelcd8892/platform-cle`) for the plugin + theme.
 
 ## 1. Provision the host
 
@@ -35,11 +35,11 @@ Then install the plugin + theme (via the migration, or `bin/sync.sh push` /
 
 ## 3. Activate and flush
 
-1. **Activate the `habeas-cle` plugin.** Activation creates the roles, the
+1. **Activate the `platform-cle` plugin.** Activation creates the roles, the
    protected-uploads directory, schedules the reminder cron, and flushes rewrite
    rules. (If it was already active pre-migration, deactivate + reactivate once
    so these run on the new host.)
-2. **Activate the `habeas-cle-theme`.**
+2. **Activate the `platform-cle-theme`.**
 3. Confirm permalinks are **Post name** (Settings → Permalinks → Save to flush).
 
 ## 4. Plugin-specific production config
@@ -47,7 +47,7 @@ Then install the plugin + theme (via the migration, or `bin/sync.sh push` /
 - **Protected files (required).** On **nginx**, add the deny rule from
   [DEVELOPMENT.md](DEVELOPMENT.md#protected-files-uploads):
   ```nginx
-  location ^~ /wp-content/uploads/hcle-protected/ { deny all; return 404; }
+  location ^~ /wp-content/uploads/pcle-protected/ { deny all; return 404; }
   ```
   On **Apache**, the `.htaccess` the plugin drops handles it — verify `AllowOverride`
   is on.
@@ -84,17 +84,17 @@ launch. Keep off-site copies.
 
 Run these on production before announcing:
 
-- [ ] Health check: `GET https://YOURSITE/wp-json/habeas-cle/v1/health` returns
+- [ ] Health check: `GET https://YOURSITE/wp-json/platform-cle/v1/health` returns
       `"status":"ok"`. Logged in as admin, `checks` are all `true`.
 - [ ] Anonymous visit to a program URL → redirected to `wp-login.php`.
 - [ ] A non-enrolled student → redirected to "My Training" with the notice.
 - [ ] An enrolled student → sees the program, can mark a module complete.
-- [ ] Upload a file to a Template → its link goes through `?hcle_download=…`;
-      the raw `/wp-content/uploads/hcle-protected/…` URL returns 403/404.
-- [ ] REST: `curl https://YOURSITE/wp-json/wp/v2/hcle_program` (anonymous) → 401.
+- [ ] Upload a file to a Template → its link goes through `?pcle_download=…`;
+      the raw `/wp-content/uploads/pcle-protected/…` URL returns 403/404.
+- [ ] REST: `curl https://YOURSITE/wp-json/wp/v2/pcle_program` (anonymous) → 401.
 - [ ] Bulk-enroll a real test email → the confirmation email **arrives**.
 - [ ] Smoke tests pass on the server:
-      `php wp-content/plugins/habeas-cle/tests/smoke-test.php` → `exit 0`.
+      `php wp-content/plugins/platform-cle/tests/smoke-test.php` → `exit 0`.
 
 ## Rollback
 

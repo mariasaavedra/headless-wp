@@ -1,12 +1,12 @@
 <?php
 /**
- * Habeas CLE Custom Post Types.
+ * Platform CLE Custom Post Types.
  *
  * Here we register the program's 7 entities. We also define the "capability
  * groups" shared by several CPTs, to avoid repeating permissions and keep
  * everything in sync with roles.php.
  *
- * @package Habeas_CLE
+ * @package Platform_CLE
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -26,15 +26,15 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * @return array<string, array{singular:string, plural:string}>
  */
-function hcle_capability_types() {
+function pcle_capability_types() {
 	return array(
 		'content'     => array(
-			'singular' => 'hcle_content',
-			'plural'   => 'hcle_contents',
+			'singular' => 'pcle_content',
+			'plural'   => 'pcle_contents',
 		),
 		'case_update' => array(
-			'singular' => 'hcle_case_update',
-			'plural'   => 'hcle_case_updates',
+			'singular' => 'pcle_case_update',
+			'plural'   => 'pcle_case_updates',
 		),
 	);
 }
@@ -47,11 +47,11 @@ function hcle_capability_types() {
  * map_meta_cap => true, WordPress automatically translates "can they edit THIS
  * post?" using these primitives.
  *
- * @param string $singular Singular capability name (e.g. hcle_content).
- * @param string $plural   Plural capability name (e.g. hcle_contents).
+ * @param string $singular Singular capability name (e.g. pcle_content).
+ * @param string $plural   Plural capability name (e.g. pcle_contents).
  * @return array<string, string>
  */
-function hcle_build_caps( $singular, $plural ) {
+function pcle_build_caps( $singular, $plural ) {
 	return array(
 		// Meta caps (evaluated per concrete post via map_meta_cap).
 		'edit_post'              => "edit_{$singular}",
@@ -82,7 +82,7 @@ function hcle_build_caps( $singular, $plural ) {
  * @param string $plural Plural capability name.
  * @return string[]
  */
-function hcle_primitive_caps( $plural ) {
+function pcle_primitive_caps( $plural ) {
 	return array(
 		"edit_{$plural}",
 		"edit_others_{$plural}",
@@ -101,67 +101,67 @@ function hcle_primitive_caps( $plural ) {
  * Definition of the 7 CPTs.
  *
  * Each entry states which capability group it belongs to and that it appears
- * under the admin's "Habeas CLE" parent menu.
+ * under the admin's "Platform CLE" parent menu.
  *
  * @return array<string, array<string, mixed>>
  */
-function hcle_post_type_definitions() {
+function pcle_post_type_definitions() {
 	return array(
 		// 1) PROGRAM — the top-level container (the 4-week program).
-		'hcle_program'     => array(
+		'pcle_program'     => array(
 			'group'    => 'content',
-			'singular' => __( 'Program', 'habeas-cle' ),
-			'plural'   => __( 'Programs', 'habeas-cle' ),
+			'singular' => __( 'Program', 'platform-cle' ),
+			'plural'   => __( 'Programs', 'platform-cle' ),
 			'icon'     => 'dashicons-welcome-learn-more',
 			'slug'     => 'program',
 			'supports' => array( 'title', 'editor', 'thumbnail', 'excerpt', 'custom-fields', 'page-attributes' ),
 		),
 
 		// 2) WEEK — each of the program's 4 weeks.
-		'hcle_week'        => array(
+		'pcle_week'        => array(
 			'group'    => 'content',
-			'singular' => __( 'Week', 'habeas-cle' ),
-			'plural'   => __( 'Weeks', 'habeas-cle' ),
+			'singular' => __( 'Week', 'platform-cle' ),
+			'plural'   => __( 'Weeks', 'platform-cle' ),
 			'icon'     => 'dashicons-calendar-alt',
 			'slug'     => 'week',
 			'supports' => array( 'title', 'editor', 'thumbnail', 'excerpt', 'custom-fields', 'page-attributes' ),
 		),
 
 		// 3) MODULE — lessons/units within a week.
-		'hcle_module'      => array(
+		'pcle_module'      => array(
 			'group'    => 'content',
-			'singular' => __( 'Module', 'habeas-cle' ),
-			'plural'   => __( 'Modules', 'habeas-cle' ),
+			'singular' => __( 'Module', 'platform-cle' ),
+			'plural'   => __( 'Modules', 'platform-cle' ),
 			'icon'     => 'dashicons-book',
 			'slug'     => 'module',
 			'supports' => array( 'title', 'editor', 'thumbnail', 'excerpt', 'custom-fields', 'page-attributes' ),
 		),
 
 		// 4) PRACTICE SCENARIO — exercises with a "model answer".
-		'hcle_scenario'    => array(
+		'pcle_scenario'    => array(
 			'group'    => 'content',
-			'singular' => __( 'Practice Scenario', 'habeas-cle' ),
-			'plural'   => __( 'Practice Scenarios', 'habeas-cle' ),
+			'singular' => __( 'Practice Scenario', 'platform-cle' ),
+			'plural'   => __( 'Practice Scenarios', 'platform-cle' ),
 			'icon'     => 'dashicons-clipboard',
 			'slug'     => 'practice-scenario',
 			'supports' => array( 'title', 'editor', 'thumbnail', 'excerpt', 'custom-fields', 'page-attributes' ),
 		),
 
 		// 5) TEMPLATE — downloadable templates (briefs, forms, etc.).
-		'hcle_template'    => array(
+		'pcle_template'    => array(
 			'group'    => 'content',
-			'singular' => __( 'Template', 'habeas-cle' ),
-			'plural'   => __( 'Templates', 'habeas-cle' ),
+			'singular' => __( 'Template', 'platform-cle' ),
+			'plural'   => __( 'Templates', 'platform-cle' ),
 			'icon'     => 'dashicons-media-document',
 			'slug'     => 'template',
 			'supports' => array( 'title', 'editor', 'thumbnail', 'excerpt', 'custom-fields' ),
 		),
 
 		// 6) SCHEDULE EVENT — live sessions / calendar dates.
-		'hcle_event'       => array(
+		'pcle_event'       => array(
 			'group'    => 'content',
-			'singular' => __( 'Schedule Event', 'habeas-cle' ),
-			'plural'   => __( 'Schedule Events', 'habeas-cle' ),
+			'singular' => __( 'Schedule Event', 'platform-cle' ),
+			'plural'   => __( 'Schedule Events', 'platform-cle' ),
 			'icon'     => 'dashicons-clock',
 			'slug'     => 'schedule-event',
 			'supports' => array( 'title', 'editor', 'custom-fields' ),
@@ -169,10 +169,10 @@ function hcle_post_type_definitions() {
 
 		// 7) CASE UPDATE — case-law updates published by instructors.
 		//    Has its own permission group.
-		'hcle_case_update' => array(
+		'pcle_case_update' => array(
 			'group'    => 'case_update',
-			'singular' => __( 'Case Update', 'habeas-cle' ),
-			'plural'   => __( 'Case Updates', 'habeas-cle' ),
+			'singular' => __( 'Case Update', 'platform-cle' ),
+			'plural'   => __( 'Case Updates', 'platform-cle' ),
 			'icon'     => 'dashicons-megaphone',
 			'slug'     => 'case-update',
 			'supports' => array( 'title', 'editor', 'thumbnail', 'excerpt', 'custom-fields' ),
@@ -187,39 +187,39 @@ function hcle_post_type_definitions() {
  * @param string $plural   Plural label.
  * @return array<string, string>
  */
-function hcle_build_labels( $singular, $plural ) {
+function pcle_build_labels( $singular, $plural ) {
 	return array(
 		'name'               => $plural,
 		'singular_name'      => $singular,
 		'menu_name'          => $plural,
-		'add_new'            => __( 'Add New', 'habeas-cle' ),
+		'add_new'            => __( 'Add New', 'platform-cle' ),
 		/* translators: %s: singular post type name. */
-		'add_new_item'       => sprintf( __( 'Add New %s', 'habeas-cle' ), $singular ),
+		'add_new_item'       => sprintf( __( 'Add New %s', 'platform-cle' ), $singular ),
 		/* translators: %s: singular post type name. */
-		'edit_item'          => sprintf( __( 'Edit %s', 'habeas-cle' ), $singular ),
+		'edit_item'          => sprintf( __( 'Edit %s', 'platform-cle' ), $singular ),
 		/* translators: %s: singular post type name. */
-		'new_item'           => sprintf( __( 'New %s', 'habeas-cle' ), $singular ),
+		'new_item'           => sprintf( __( 'New %s', 'platform-cle' ), $singular ),
 		/* translators: %s: singular post type name. */
-		'view_item'          => sprintf( __( 'View %s', 'habeas-cle' ), $singular ),
+		'view_item'          => sprintf( __( 'View %s', 'platform-cle' ), $singular ),
 		/* translators: %s: plural post type name. */
-		'search_items'       => sprintf( __( 'Search %s', 'habeas-cle' ), $plural ),
+		'search_items'       => sprintf( __( 'Search %s', 'platform-cle' ), $plural ),
 		/* translators: %s: plural post type name (lowercased). */
-		'not_found'          => sprintf( __( 'No %s found', 'habeas-cle' ), strtolower( $plural ) ),
+		'not_found'          => sprintf( __( 'No %s found', 'platform-cle' ), strtolower( $plural ) ),
 		/* translators: %s: plural post type name (lowercased). */
-		'not_found_in_trash' => sprintf( __( 'No %s found in Trash', 'habeas-cle' ), strtolower( $plural ) ),
+		'not_found_in_trash' => sprintf( __( 'No %s found in Trash', 'platform-cle' ), strtolower( $plural ) ),
 		'all_items'          => $plural,
 	);
 }
 
 /**
- * Registers all of Habeas CLE's CPTs.
+ * Registers all of Platform CLE's CPTs.
  *
  * Hooked to `init`. Also called directly on plugin activation (before
  * flush_rewrite_rules) so the URLs work right away.
  */
-function hcle_register_post_types() {
-	$cap_types   = hcle_capability_types();
-	$definitions = hcle_post_type_definitions();
+function pcle_register_post_types() {
+	$cap_types   = pcle_capability_types();
+	$definitions = pcle_post_type_definitions();
 
 	foreach ( $definitions as $post_type => $def ) {
 		$caps = $cap_types[ $def['group'] ];
@@ -227,7 +227,7 @@ function hcle_register_post_types() {
 		register_post_type(
 			$post_type,
 			array(
-				'labels'              => hcle_build_labels( $def['singular'], $def['plural'] ),
+				'labels'              => pcle_build_labels( $def['singular'], $def['plural'] ),
 				'public'              => false, // Doesn't appear in public archives/search...
 				'publicly_queryable'  => true,  // ...but DOES have an individual URL on the frontend.
 				                                // Who sees it is decided by access-control.php (the login gate),
@@ -243,32 +243,32 @@ function hcle_register_post_types() {
 					'with_front' => false,
 				),
 				'menu_icon'       => $def['icon'],
-				'show_in_menu'    => 'habeas-cle', // They all hang off the parent menu.
+				'show_in_menu'    => 'platform-cle', // They all hang off the parent menu.
 				'supports'        => $def['supports'],
 
 				// Custom permissions: map_meta_cap translates the meta caps
 				// (edit_post, etc.) using the `capability_type` array.
 				'capability_type' => array( $caps['singular'], $caps['plural'] ),
 				'map_meta_cap'    => true,
-				'capabilities'    => hcle_build_caps( $caps['singular'], $caps['plural'] ),
+				'capabilities'    => pcle_build_caps( $caps['singular'], $caps['plural'] ),
 			)
 		);
 	}
 }
-add_action( 'init', 'hcle_register_post_types' );
+add_action( 'init', 'pcle_register_post_types' );
 
 /**
- * Creates the "Habeas CLE" parent menu in the admin, under which the CPTs are grouped.
+ * Creates the "Platform CLE" parent menu in the admin, under which the CPTs are grouped.
  *
  * Requires the 'view_cle_content' capability to see it (Student/Instructor/Admin).
  */
-function hcle_register_admin_menu() {
+function pcle_register_admin_menu() {
 	add_menu_page(
-		__( 'Habeas CLE', 'habeas-cle' ),
-		__( 'Habeas CLE', 'habeas-cle' ),
+		__( 'Platform CLE', 'platform-cle' ),
+		__( 'Platform CLE', 'platform-cle' ),
 		'view_cle_content',
-		'habeas-cle',
-		'hcle_render_admin_dashboard',
+		'platform-cle',
+		'pcle_render_admin_dashboard',
 		'dashicons-shield',
 		25
 	);
@@ -277,29 +277,29 @@ function hcle_register_admin_menu() {
 	// first CPT registered under it (Programs), making the dashboard page
 	// (with the Seed Demo Data button) unreachable. Re-adding a submenu with
 	// the SAME slug as the parent restores a direct link to it, and WordPress
-	// de-duplicates it against the auto-added "Habeas CLE" submenu item.
+	// de-duplicates it against the auto-added "Platform CLE" submenu item.
 	add_submenu_page(
-		'habeas-cle',
-		__( 'Habeas CLE', 'habeas-cle' ),
-		__( 'Dashboard', 'habeas-cle' ),
+		'platform-cle',
+		__( 'Platform CLE', 'platform-cle' ),
+		__( 'Dashboard', 'platform-cle' ),
 		'view_cle_content',
-		'habeas-cle',
-		'hcle_render_admin_dashboard'
+		'platform-cle',
+		'pcle_render_admin_dashboard'
 	);
 }
-add_action( 'admin_menu', 'hcle_register_admin_menu' );
+add_action( 'admin_menu', 'pcle_register_admin_menu' );
 
 /**
  * Simple parent-menu screen (placeholder for now).
  */
-function hcle_render_admin_dashboard() {
+function pcle_render_admin_dashboard() {
 	echo '<div class="wrap">';
-	echo '<h1>' . esc_html__( 'Habeas CLE', 'habeas-cle' ) . '</h1>';
-	echo '<p>' . esc_html__( 'Continuing Legal Education platform — Immigration Habeas Corpus.', 'habeas-cle' ) . '</p>';
-	echo '<p>' . esc_html__( 'Use the submenus to manage the curriculum: Programs, Weeks, Modules, Practice Scenarios, Templates, Schedule Events and Case Updates.', 'habeas-cle' ) . '</p>';
+	echo '<h1>' . esc_html__( 'Platform CLE', 'platform-cle' ) . '</h1>';
+	echo '<p>' . esc_html__( 'Continuing Legal Education platform — Immigration Habeas Corpus.', 'platform-cle' ) . '</p>';
+	echo '<p>' . esc_html__( 'Use the submenus to manage the curriculum: Programs, Weeks, Modules, Practice Scenarios, Templates, Schedule Events and Case Updates.', 'platform-cle' ) . '</p>';
 
 	if ( current_user_can( 'manage_options' ) ) {
-		hcle_render_seed_demo_data_section();
+		pcle_render_seed_demo_data_section();
 	}
 
 	echo '</div>';
@@ -309,17 +309,17 @@ function hcle_render_admin_dashboard() {
  * Renders the "Seed Demo Data" section: a button that (re)creates a full
  * sample program, useful on hosts without shell/WP-CLI access.
  */
-function hcle_render_seed_demo_data_section() {
-	if ( isset( $_GET['hcle_seeded'] ) ) {
-		$counts = get_transient( 'hcle_seed_demo_result' );
+function pcle_render_seed_demo_data_section() {
+	if ( isset( $_GET['pcle_seeded'] ) ) {
+		$counts = get_transient( 'pcle_seed_demo_result' );
 		if ( $counts ) {
-			delete_transient( 'hcle_seed_demo_result' );
+			delete_transient( 'pcle_seed_demo_result' );
 			printf(
 				'<div class="notice notice-success"><p>%s</p></div>',
 				esc_html(
 					sprintf(
 						/* translators: 1: weeks, 2: modules, 3: scenarios, 4: templates, 5: events, 6: case updates */
-						__( 'Demo data seeded: 1 program, %1$d weeks, %2$d modules, %3$d scenarios, %4$d templates, %5$d events, %6$d case updates.', 'habeas-cle' ),
+						__( 'Demo data seeded: 1 program, %1$d weeks, %2$d modules, %3$d scenarios, %4$d templates, %5$d events, %6$d case updates.', 'platform-cle' ),
 						$counts['week'],
 						$counts['module'],
 						$counts['scenario'],
@@ -333,13 +333,13 @@ function hcle_render_seed_demo_data_section() {
 	}
 	?>
 	<hr />
-	<h2><?php esc_html_e( 'Sample Data', 'habeas-cle' ); ?></h2>
-	<p><?php esc_html_e( 'Creates a full sample program (4 weeks, 9 modules, scenarios, templates, events, and case updates) so you can see the platform populated with realistic content. Safe to run more than once: it replaces only the previously seeded demo content.', 'habeas-cle' ); ?></p>
-	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" onsubmit="return confirm('<?php echo esc_js( __( 'This will replace any existing demo data with a fresh sample program. Continue?', 'habeas-cle' ) ); ?>');">
-		<?php wp_nonce_field( 'hcle_seed_demo_data', 'hcle_seed_demo_nonce' ); ?>
-		<input type="hidden" name="action" value="hcle_seed_demo_data" />
-		<input type="hidden" name="hcle_seed_demo_data" value="1" />
-		<?php submit_button( __( 'Seed Demo Data', 'habeas-cle' ), 'secondary' ); ?>
+	<h2><?php esc_html_e( 'Sample Data', 'platform-cle' ); ?></h2>
+	<p><?php esc_html_e( 'Creates a full sample program (4 weeks, 9 modules, scenarios, templates, events, and case updates) so you can see the platform populated with realistic content. Safe to run more than once: it replaces only the previously seeded demo content.', 'platform-cle' ); ?></p>
+	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" onsubmit="return confirm('<?php echo esc_js( __( 'This will replace any existing demo data with a fresh sample program. Continue?', 'platform-cle' ) ); ?>');">
+		<?php wp_nonce_field( 'pcle_seed_demo_data', 'pcle_seed_demo_nonce' ); ?>
+		<input type="hidden" name="action" value="pcle_seed_demo_data" />
+		<input type="hidden" name="pcle_seed_demo_data" value="1" />
+		<?php submit_button( __( 'Seed Demo Data', 'platform-cle' ), 'secondary' ); ?>
 	</form>
 	<?php
 }

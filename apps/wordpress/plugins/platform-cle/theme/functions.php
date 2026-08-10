@@ -1,10 +1,10 @@
 <?php
 /**
- * Habeas CLE theme (child of Twenty Twenty-Five).
+ * Platform CLE theme (child of Twenty Twenty-Five).
  *
- * Presentation only. The logic lives in the habeas-cle plugin.
+ * Presentation only. The logic lives in the platform-cle plugin.
  *
- * @package Habeas_CLE_Theme
+ * @package Platform_CLE_Theme
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -14,12 +14,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Ensures the child theme's style.css is loaded on the frontend.
  */
-function hcle_theme_enqueue_styles() {
+function pcle_theme_enqueue_styles() {
 	wp_enqueue_style(
-		'habeas-cle-theme',
+		'platform-cle-theme',
 		get_stylesheet_uri(),
 		array(),
 		wp_get_theme()->get( 'Version' )
 	);
 }
-add_action( 'wp_enqueue_scripts', 'hcle_theme_enqueue_styles' );
+add_action( 'wp_enqueue_scripts', 'pcle_theme_enqueue_styles' );

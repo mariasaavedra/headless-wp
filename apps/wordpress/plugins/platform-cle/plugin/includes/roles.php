@@ -1,16 +1,16 @@
 <?php
 /**
- * Habeas CLE roles and capabilities.
+ * Platform CLE roles and capabilities.
  *
  * Three roles per the brief:
- *   - hcle_student    : views content, tracks progress, reveals model answers.
- *   - hcle_instructor : creates/edits curriculum, publishes case updates, sees progress.
+ *   - pcle_student    : views content, tracks progress, reveals model answers.
+ *   - pcle_instructor : creates/edits curriculum, publishes case updates, sees progress.
  *   - administrator   : full access (native WP role; we add our caps to it).
  *
- * The CPT capabilities are read from hcle_capability_types() (in post-types.php)
+ * The CPT capabilities are read from pcle_capability_types() (in post-types.php)
  * to avoid duplicating names.
  *
- * @package Habeas_CLE
+ * @package Platform_CLE
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -28,7 +28,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *     view_progress: string
  * }
  */
-function hcle_custom_caps() {
+function pcle_custom_caps() {
 	return array(
 		'view_content'   => 'view_cle_content',          // Gate: being inside the program.
 		'reveal_answers' => 'reveal_model_answers',       // Reveal model answers.
@@ -41,12 +41,12 @@ function hcle_custom_caps() {
  *
  * @return string[]
  */
-function hcle_all_content_caps() {
-	$cap_types = hcle_capability_types();
+function pcle_all_content_caps() {
+	$cap_types = pcle_capability_types();
 	$caps      = array();
 
 	foreach ( $cap_types as $type ) {
-		$caps = array_merge( $caps, hcle_primitive_caps( $type['plural'] ) );
+		$caps = array_merge( $caps, pcle_primitive_caps( $type['plural'] ) );
 	}
 
 	return $caps;
@@ -55,13 +55,13 @@ function hcle_all_content_caps() {
 /**
  * Creates/updates the roles and their capabilities.
  *
- * Runs on plugin ACTIVATION (see hcle_activate in the main file). add_role() is
+ * Runs on plugin ACTIVATION (see pcle_activate in the main file). add_role() is
  * idempotent: if the role already exists it won't duplicate it, which is why we
  * remove it first to re-seed clean caps on every activation.
  */
-function hcle_register_roles() {
-	$custom  = hcle_custom_caps();
-	$content = hcle_all_content_caps();
+function pcle_register_roles() {
+	$custom  = pcle_custom_caps();
+	$content = pcle_all_content_caps();
 
 	/*
 	 * ---------------------------------------------------------------
@@ -70,10 +70,10 @@ function hcle_register_roles() {
 	 * `read` lets them enter the admin minimally and view their profile.
 	 * They receive no CPT editing cap.
 	 */
-	remove_role( 'hcle_student' );
+	remove_role( 'pcle_student' );
 	add_role(
-		'hcle_student',
-		__( 'CLE Student', 'habeas-cle' ),
+		'pcle_student',
+		__( 'CLE Student', 'platform-cle' ),
 		array(
 			'read'                     => true,
 			$custom['view_content']    => true, // Can enter the program.
@@ -98,8 +98,8 @@ function hcle_register_roles() {
 		$instructor_caps[ $cap ] = true;
 	}
 
-	remove_role( 'hcle_instructor' );
-	add_role( 'hcle_instructor', __( 'CLE Instructor', 'habeas-cle' ), $instructor_caps );
+	remove_role( 'pcle_instructor' );
+	add_role( 'pcle_instructor', __( 'CLE Instructor', 'platform-cle' ), $instructor_caps );
 
 	/*
 	 * ---------------------------------------------------------------
@@ -125,16 +125,16 @@ function hcle_register_roles() {
  * Not called on normal deactivation; only on uninstall, to avoid losing data
  * if the user only deactivates temporarily.
  */
-function hcle_remove_roles() {
-	remove_role( 'hcle_student' );
-	remove_role( 'hcle_instructor' );
+function pcle_remove_roles() {
+	remove_role( 'pcle_student' );
+	remove_role( 'pcle_instructor' );
 
 	$admin = get_role( 'administrator' );
 	if ( $admin ) {
-		foreach ( hcle_custom_caps() as $cap ) {
+		foreach ( pcle_custom_caps() as $cap ) {
 			$admin->remove_cap( $cap );
 		}
-		foreach ( hcle_all_content_caps() as $cap ) {
+		foreach ( pcle_all_content_caps() as $cap ) {
 			$admin->remove_cap( $cap );
 		}
 	}

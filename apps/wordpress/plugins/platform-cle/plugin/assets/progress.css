@@ -1,6 +1,6 @@
-/* Habeas CLE — progress styles (button + bar). */
+/* Platform CLE — progress styles (button + bar). */
 
-.hcle-complete-btn {
+.pcle-complete-btn {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.4em;
@@ -16,39 +16,39 @@
 	transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
-.hcle-complete-btn:hover {
+.pcle-complete-btn:hover {
 	background: #e6e6e8;
 }
 
-.hcle-complete-btn.is-complete {
+.pcle-complete-btn.is-complete {
 	color: #fff;
 	background: #2c7a3f;
 	border-color: #246334;
 }
 
-.hcle-complete-btn[disabled] {
+.pcle-complete-btn[disabled] {
 	opacity: 0.6;
 	cursor: progress;
 }
 
-.hcle-progress {
+.pcle-progress {
 	margin: 1em 0;
 	font-size: 0.9rem;
 }
 
-.hcle-progress__caption {
+.pcle-progress__caption {
 	margin-bottom: 0.35em;
 	color: #50575e;
 }
 
-.hcle-progress__track {
+.pcle-progress__track {
 	height: 12px;
 	background: #e2e4e7;
 	border-radius: 999px;
 	overflow: hidden;
 }
 
-.hcle-progress__fill {
+.pcle-progress__fill {
 	height: 100%;
 	background: linear-gradient(90deg, #2c7a3f, #3aa05a);
 	border-radius: 999px;
