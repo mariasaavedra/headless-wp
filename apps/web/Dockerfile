@@ -12,7 +12,6 @@ RUN npm ci --workspace=apps/web --include-workspace-root
 # ---- Build ----
 FROM base AS builder
 COPY --from=deps /repo/node_modules ./node_modules
-COPY --from=deps /repo/apps/web/node_modules ./apps/web/node_modules
 COPY . .
 RUN npm run build --workspace=apps/web
 
