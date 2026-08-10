@@ -5,7 +5,12 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "npm run dev --workspace=apps/web",
+    "dev": "docker compose up -d wordpress db && npm run dev --workspace=apps/web",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "dev:services": "docker compose up -d wordpress db",
+    "dev:logs": "docker compose logs -f wordpress db",
+    "down": "docker compose down",
+    "reset": "docker compose down -v && docker compose up -d wordpress db",
     "build": "npm run build --workspace=apps/web",
     "lint": "npm run lint --workspace=apps/web",
     "start": "npm run start --workspace=apps/web"

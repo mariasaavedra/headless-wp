@@ -3,13 +3,29 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      target: dev
     ports:
       - "3000:3000"
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
     depends_on:
       - wordpress
+    develop:
+      watch:
+        - action: sync
+          path: ./apps/web/src
+          target: /repo/apps/web/src
 
+        - action: sync
+          path: ./apps/web/public
+          target: /repo/apps/web/public
+
+        - action: rebuild
+          path: ./apps/web/package.json
+
+        - action: rebuild
+          path: ./package-lock.json
+          
   wordpress:
     build:
       context: .
