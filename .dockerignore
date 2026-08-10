@@ -1,0 +1,10 @@
+**/node_modules
+**/.next
+**/out
+**/dist
+**/build
+**/.git
+**/.env
+**/.env.*
+**/npm-debug.log*
+**/.DS_Store

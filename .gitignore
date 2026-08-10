@@ -1,0 +1,13 @@
+node_modules/
+.next/
+out/
+build/
+dist/
+.env
+.env.*
+!.env.example
+npm-debug.log*
+.DS_Store
+*.pem
+.vscode/*
+!.vscode/extensions.json
