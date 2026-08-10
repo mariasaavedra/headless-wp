@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+
+# Editores / IDE
+.idea/
+.vscode/
+*.sublime-*
+*.swp
+*~
+
+# Logs y temporales
+*.log
+/tmp/
+*.tmp
+
+# Dependencias (por si en el futuro se añade build/composer)
+node_modules/
+vendor/
+
+# Artefactos de WordPress (no deben estar en el repo del proyecto)
+wp-config.php
+*.sql

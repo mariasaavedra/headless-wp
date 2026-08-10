@@ -21,6 +21,13 @@ services:
       - WORDPRESS_DB_NAME=${WORDPRESS_DB_NAME:-wordpress}
       - WORDPRESS_DB_USER=${WORDPRESS_DB_USER:-wordpress}
       - WORDPRESS_DB_PASSWORD=${WORDPRESS_DB_PASSWORD:-wordpress}
+      - WORDPRESS_SITE_URL=${WORDPRESS_SITE_URL}
+      - WORDPRESS_SITE_TITLE=${WORDPRESS_SITE_TITLE}
+      - WORDPRESS_TAGLINE=${WORDPRESS_TAGLINE}
+      - WORDPRESS_LOCALE=${WORDPRESS_LOCALE:-en_US}
+      - WORDPRESS_ADMIN_USER=${WORDPRESS_ADMIN_USER}
+      - WORDPRESS_ADMIN_PASSWORD=${WORDPRESS_ADMIN_PASSWORD}
+      - WORDPRESS_ADMIN_EMAIL=${WORDPRESS_ADMIN_EMAIL}
     volumes:
       - wordpress_data:/var/www/html
     depends_on:
@@ -28,6 +35,7 @@ services:
 
   db:
     image: mysql:8.0
+    command: --skip-ssl
     environment:
       - MYSQL_DATABASE=${WORDPRESS_DB_NAME:-wordpress}
       - MYSQL_USER=${WORDPRESS_DB_USER:-wordpress}

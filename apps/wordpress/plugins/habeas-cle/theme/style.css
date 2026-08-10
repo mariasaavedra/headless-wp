@@ -1,0 +1,181 @@
+/*
+Theme Name:  Habeas CLE
+Theme URI:   https://github.com/sharma-crawford/habeas-cle
+Description: Presentation layer for the Habeas CLE training platform. Child theme of Twenty Twenty-Five; adds single templates for the CLE custom post types. All business logic lives in the habeas-cle plugin.
+Author:      Sharma-Crawford Attorneys at Law
+Template:    twentytwentyfive
+Version:     0.1.0
+Text Domain: habeas-cle-theme
+*/
+
+/* ---- Curriculum (child lists rendered by the plugin block) ---- */
+
+.hcle-curriculum {
+	margin-top: 2.5rem;
+}
+
+.hcle-curriculum__section + .hcle-curriculum__section {
+	margin-top: 2rem;
+}
+
+.hcle-curriculum__title {
+	font-size: 1.25rem;
+	margin: 0 0 0.75rem;
+	padding-bottom: 0.4rem;
+	border-bottom: 2px solid currentColor;
+}
+
+.hcle-curriculum__list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: grid;
+	gap: 0.5rem;
+}
+
+.hcle-curriculum__item {
+	padding: 0.85rem 1rem;
+	background: rgba(0, 0, 0, 0.03);
+	border: 1px solid rgba(0, 0, 0, 0.08);
+	border-radius: 8px;
+	transition: background 0.15s ease;
+}
+
+.hcle-curriculum__item:hover {
+	background: rgba(0, 0, 0, 0.06);
+}
+
+.hcle-curriculum__item a {
+	text-decoration: none;
+	font-weight: 600;
+}
+
+.hcle-curriculum__check {
+	color: #2c7a3f;
+	font-weight: 700;
+	margin-right: 0.25rem;
+}
+
+.hcle-curriculum__when {
+	display: block;
+	margin-top: 0.2rem;
+	font-size: 0.85rem;
+	color: #50575e;
+}
+
+/* Compact progress bar inside a week in the list. */
+.hcle-curriculum__item .hcle-progress {
+	margin: 0.5rem 0 0;
+}
+
+.hcle-event-datetime {
+	font-size: 1.05rem;
+	font-weight: 600;
+	color: #2c7a3f;
+	margin: 0 0 1rem;
+}
+
+/* ---- Breadcrumbs ---- */
+
+.hcle-breadcrumbs {
+	margin: 0 0 1rem;
+	font-size: 0.9rem;
+}
+
+.hcle-breadcrumbs__list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.4rem;
+}
+
+.hcle-breadcrumbs__item {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	color: #50575e;
+}
+
+.hcle-breadcrumbs__item + .hcle-breadcrumbs__item::before {
+	content: "›";
+	color: #a7aaad;
+	margin-right: 0.15rem;
+}
+
+.hcle-breadcrumbs__item a {
+	text-decoration: none;
+	color: #2c7a3f;
+}
+
+.hcle-breadcrumbs__item a:hover {
+	text-decoration: underline;
+}
+
+.hcle-breadcrumbs__item[aria-current="page"] span {
+	color: #1d2327;
+	font-weight: 600;
+}
+
+/* ---- Front door: program cards ---- */
+
+.hcle-myprograms {
+	display: grid;
+	gap: 1.5rem;
+	margin: 2rem 0;
+}
+
+.hcle-myprograms__card {
+	padding: 1.5rem;
+	border: 1px solid rgba(0, 0, 0, 0.1);
+	border-radius: 12px;
+	background: rgba(0, 0, 0, 0.02);
+}
+
+.hcle-myprograms__title {
+	margin: 0 0 0.5rem;
+	font-size: 1.4rem;
+}
+
+.hcle-myprograms__title a {
+	text-decoration: none;
+}
+
+.hcle-myprograms__excerpt {
+	margin: 0 0 0.75rem;
+	color: #50575e;
+}
+
+.hcle-myprograms__cta {
+	display: inline-block;
+	margin-top: 0.75rem;
+	padding: 0.55em 1.25em;
+	font-weight: 600;
+	text-decoration: none;
+	color: #fff;
+	background: #2c7a3f;
+	border-radius: 6px;
+}
+
+.hcle-myprograms__cta:hover {
+	background: #246334;
+}
+
+.hcle-myprograms--guest {
+	padding: 1.5rem;
+	border: 1px dashed rgba(0, 0, 0, 0.2);
+	border-radius: 12px;
+	text-align: center;
+}
+
+.hcle-myprograms__notice {
+	padding: 0.85rem 1.1rem;
+	margin: 0 0 1.5rem;
+	background: #fef8e7;
+	border: 1px solid #f0c33c;
+	border-left-width: 4px;
+	border-radius: 6px;
+	color: #5a4a14;
+}
