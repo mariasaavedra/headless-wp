@@ -24,3 +24,107 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/*
+ * Typography for HTML rendered by WordPress (see components/wp-content.tsx).
+ * Tailwind's preflight strips the browser defaults, so markup we do not author
+ * — paragraphs, lists, headings coming out of the block editor — arrives
+ * completely unstyled unless it is given these back.
+ *
+ * Kept as plain CSS rather than pulling in @tailwindcss/typography: this is a
+ * short, known set of tags from one editor, not arbitrary web content.
+ */
+.wp-content {
+  color: var(--color-zinc-700);
+  line-height: 1.7;
+}
+
+.wp-content > * + * {
+  margin-top: 1rem;
+}
+
+.wp-content h2,
+.wp-content h3,
+.wp-content h4 {
+  color: var(--color-zinc-950);
+  font-weight: 600;
+  line-height: 1.3;
+  margin-top: 2rem;
+}
+
+.wp-content h2 {
+  font-size: 1.5rem;
+}
+
+.wp-content h3 {
+  font-size: 1.25rem;
+}
+
+.wp-content h4 {
+  font-size: 1.125rem;
+}
+
+.wp-content a {
+  color: var(--color-zinc-950);
+  text-decoration: underline;
+}
+
+.wp-content ul,
+.wp-content ol {
+  padding-left: 1.5rem;
+}
+
+.wp-content ul {
+  list-style: disc;
+}
+
+.wp-content ol {
+  list-style: decimal;
+}
+
+.wp-content li + li {
+  margin-top: 0.25rem;
+}
+
+.wp-content blockquote {
+  border-left: 3px solid var(--color-zinc-300);
+  padding-left: 1rem;
+  font-style: italic;
+}
+
+.wp-content code {
+  background: var(--color-zinc-100);
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.25rem;
+  font-family: var(--font-mono), monospace;
+  font-size: 0.875em;
+}
+
+.wp-content img {
+  max-width: 100%;
+  height: auto;
+}
+
+.wp-content table {
+  display: block;
+  overflow-x: auto;
+  width: 100%;
+}
+
+/*
+ * The model answer arrives as a <details> from [pcle_model_answer]. It is only
+ * ever in the markup when the reader is entitled to it, so this is presentation
+ * only — the hiding that matters happened on the server.
+ */
+.wp-content details.pcle-model-answer {
+  border: 1px solid var(--color-zinc-200);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  background: var(--color-zinc-50);
+}
+
+.wp-content details.pcle-model-answer > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--color-zinc-900);
+}
