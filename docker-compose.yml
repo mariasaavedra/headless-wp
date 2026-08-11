@@ -46,8 +46,17 @@ services:
       - WORDPRESS_ADMIN_PASSWORD=${WORDPRESS_ADMIN_PASSWORD}
       - WORDPRESS_ADMIN_EMAIL=${WORDPRESS_ADMIN_EMAIL}
       - JWT_AUTH_SECRET_KEY=${JWT_AUTH_SECRET_KEY}
+      # Opt-in: when set, the demo seeder also creates the demo accounts.
+      # Leave it unset anywhere that isn't a local machine.
+      - PCLE_DEMO_USER_PASSWORD=${PCLE_DEMO_USER_PASSWORD:-}
     volumes:
       - wordpress_data:/var/www/html
+      # The image bakes the plugin and theme in, but wordpress_data shadows
+      # /var/www/html from the first run onwards, so a rebuild alone never
+      # reaches the running site. Bind-mounting the sources keeps plugin and
+      # theme edits live, the way `develop.watch` does for the web service.
+      - ./apps/wordpress/plugins/platform-cle/plugin:/var/www/html/wp-content/plugins/platform-cle
+      - ./apps/wordpress/plugins/platform-cle/theme:/var/www/html/wp-content/themes/platform-cle
     depends_on:
       - db
 
