@@ -14,7 +14,9 @@ WordPress REST API
 Next.js / React / TypeScript
 ```
 
-The Next.js app (`apps/web`) does not yet consume the WordPress REST API — that integration is the next boundary to build, not something already in place. Until then, the existing WordPress theme/plugin remains the live interface while `apps/web` is developed in parallel.
+That boundary now exists, but it is thin. `apps/web` authenticates against WordPress over JWT (`/jwt-auth/v1/token`), keeps the token in an httpOnly cookie, and reads two things: the site name/tagline for the home page, and the signed-in user's programs and progress from `/platform-cle/v1/my-training`. Nothing else is wired up yet — there are no screens for browsing a program, week or module, so **the WordPress-rendered site remains the live interface** while `apps/web` is built out in parallel.
+
+The curriculum itself is readable headlessly (`/wp/v2/pcle_*`, with the parent-child relationships exposed in `meta`), so the remaining work is frontend, not API.
 
 ## Repository structure
 
@@ -110,6 +112,40 @@ docker compose up --build
 docker compose up --build -d
 ```
 
+### Editing the plugin or theme
+
+`apps/wordpress/plugins/platform-cle/plugin` and `.../theme` are bind-mounted
+into the container, so edits to them take effect immediately — no rebuild.
+
+This matters because the `wordpress_data` volume shadows `/var/www/html` from
+the first run onwards: the plugin copy baked into the image is only ever used
+to populate that volume once. Without the bind mounts, `docker compose build`
+appears to succeed while the running site keeps serving the old code.
+
+### Running the plugin test suite
+
+```bash
+docker compose exec wordpress php /var/www/html/wp-content/plugins/platform-cle/tests/smoke-test.php
+```
+
+Dependency-free, exits non-zero on failure, and runs in CI on every push
+(`.github/workflows/ci.yml`).
+
+### Demo accounts
+
+When `PCLE_DEMO_USER_PASSWORD` is set in `.env`, the sample-data seeder also
+creates three accounts, so the enrolled / not-enrolled / staff paths can all be
+exercised without hand-building fixtures:
+
+| Login | Role | Enrolled |
+|---|---|---|
+| `demo.student` | CLE Student | yes |
+| `demo.outsider` | CLE Student | no |
+| `demo.instructor` | CLE Instructor | n/a (staff) |
+
+Leave `PCLE_DEMO_USER_PASSWORD` empty anywhere that isn't a local machine and
+no demo accounts are created at all.
+
 ### Logs
 
 ```bash
@@ -182,9 +218,20 @@ Note: that plugin repository's own docs refer to the theme's source directory as
 - Location: `apps/web`
 - Stack: Next.js (App Router, under `src/app`), TypeScript, Tailwind CSS
 - Built with `output: "standalone"` for the Docker image (`apps/web/Dockerfile` runs a multi-stage `npm ci` → `next build` → standalone runtime).
-- In `docker-compose.yml`, `web` builds from `apps/web/Dockerfile`, runs on port `3000`, and depends on the `wordpress` service starting first (no runtime coupling exists between them yet — no REST API calls are made from `apps/web` to WordPress at this time).
+- In `docker-compose.yml`, `web` builds from `apps/web/Dockerfile`, runs on port `3000`, and depends on the `wordpress` service. It reaches WordPress over the compose network at `WORDPRESS_API_URL=http://wordpress/wp-json`; running the app outside Docker needs that pointed at `http://localhost:8080/wp-json` instead.
 
-Fetching content from the WordPress REST API is the planned next step for `apps/web`, not an implemented feature.
+### Routes
+
+| Route | What it does |
+|---|---|
+| `/` | Site name and tagline from `/wp-json/`. |
+| `/login` | Posts to `/jwt-auth/v1/token`; stores the token in an httpOnly cookie. |
+| `/my-training` | Requires the cookie, calls `/platform-cle/v1/my-training`. Currently renders the raw JSON — the programme cards and progress bars are still to build. |
+
+Two things worth knowing before adding screens:
+
+- **Decode entities on text you render.** WordPress returns HTML-encoded strings (`Pen &amp; Sword`), and React escapes them again, so the entity shows up on screen. Pass plain-text fields through `decodeEntities()` (`src/lib/html.ts`). Never apply it to `content.rendered` — that is real HTML, and decoding it would turn an escaped `&lt;script&gt;` back into a live tag.
+- **The token lasts 7 days and cannot be revoked.** Logging out deletes the cookie, but the token stays valid until it expires. Shorten it and add refresh before any of this is exposed publicly.
 
 ## Troubleshooting
 
