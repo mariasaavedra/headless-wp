@@ -1,46 +1,58 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { renderAccessError } from "@/components/access-error";
+import PageShell from "@/components/page-shell";
+import ProgressBar from "@/components/progress-bar";
 import { isAuthenticated } from "@/lib/auth";
-import { getMyTraining, WordPressApiError } from "@/lib/wordpress";
-import { logoutAction } from "@/app/actions/auth";
+import { decodeEntities } from "@/lib/html";
+import type { TrainingProgram } from "@/lib/types";
+import { getMyTraining } from "@/lib/wordpress";
 
 export default async function MyTrainingPage() {
   if (!(await isAuthenticated())) {
     redirect("/login");
   }
 
-  let training: unknown;
-  let error: string | undefined;
+  let programs: TrainingProgram[];
 
   try {
-    training = await getMyTraining();
-  } catch (err) {
-    error =
-      err instanceof WordPressApiError
-        ? "WordPress rejected the request. Please log in again."
-        : "Unable to load training data right now.";
+    ({ programs } = await getMyTraining());
+  } catch (error) {
+    return renderAccessError(error);
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-zinc-50 px-6">
-      <h1 className="text-2xl font-semibold text-zinc-950">My Training</h1>
+    <PageShell>
+      <h1 className="text-3xl font-semibold tracking-tight text-zinc-950">
+        My Training
+      </h1>
 
-      {error ? (
-        <p className="text-sm text-red-600">{error}</p>
+      {programs.length === 0 ? (
+        <p className="mt-4 text-zinc-600">
+          You are not enrolled in any programme yet. Once an administrator
+          enrolls you, it will appear here.
+        </p>
       ) : (
-        <pre className="max-w-2xl overflow-auto rounded bg-white p-4 text-sm text-zinc-800 shadow">
-          {JSON.stringify(training, null, 2)}
-        </pre>
-      )}
+        <ul className="mt-8 space-y-4">
+          {programs.map((program) => (
+            <li key={program.id}>
+              <Link
+                href={`/programs/${program.id}`}
+                className="block rounded-lg border border-zinc-200 bg-white p-6 transition hover:border-zinc-300 hover:shadow-sm"
+              >
+                <h2 className="text-xl font-medium text-zinc-950">
+                  {decodeEntities(program.title)}
+                </h2>
 
-      <form action={logoutAction}>
-        <button
-          type="submit"
-          className="rounded bg-zinc-950 px-3 py-2 text-white"
-        >
-          Log out
-        </button>
-      </form>
-    </main>
+                <div className="mt-4">
+                  <ProgressBar progress={program.progress} />
+                </div>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </PageShell>
   );
 }

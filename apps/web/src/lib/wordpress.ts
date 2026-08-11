@@ -1,4 +1,10 @@
 import { getAuthToken, setAuthCookie, clearAuthCookie } from "@/lib/auth";
+import type {
+  ModuleDetail,
+  Program,
+  TrainingProgram,
+  WeekDetail,
+} from "@/lib/types";
 
 const WORDPRESS_API_URL = process.env.WORDPRESS_API_URL;
 
@@ -121,8 +127,46 @@ async function logout(): Promise<void> {
   await clearAuthCookie();
 }
 
-async function getMyTraining(): Promise<unknown> {
-  return wordpressFetch("/platform-cle/v1/my-training", { auth: true });
+async function getMyTraining(): Promise<{ programs: TrainingProgram[] }> {
+  return wordpressFetch("/platform-cle/v1/my-training", {
+    auth: true,
+  }) as Promise<{ programs: TrainingProgram[] }>;
+}
+
+async function getProgram(id: number): Promise<Program> {
+  return wordpressFetch(`/platform-cle/v1/programs/${id}`, {
+    auth: true,
+  }) as Promise<Program>;
+}
+
+async function getWeek(id: number): Promise<WeekDetail> {
+  return wordpressFetch(`/platform-cle/v1/weeks/${id}`, {
+    auth: true,
+  }) as Promise<WeekDetail>;
+}
+
+async function getModule(id: number): Promise<ModuleDetail> {
+  return wordpressFetch(`/platform-cle/v1/modules/${id}`, {
+    auth: true,
+  }) as Promise<ModuleDetail>;
+}
+
+/**
+ * Records (or clears) completion of a module for the signed-in user.
+ *
+ * WordPress decides whether this is allowed — the endpoint requires access to
+ * the module's programme, not merely a signed-in participant.
+ */
+async function setModuleCompletion(
+  moduleId: number,
+  completed: boolean
+): Promise<void> {
+  await wordpressFetch("/platform-cle/v1/progress", {
+    auth: true,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ module_id: moduleId, completed }),
+  });
 }
 
 export {
@@ -130,6 +174,10 @@ export {
   login,
   logout,
   getMyTraining,
+  getProgram,
+  getWeek,
+  getModule,
+  setModuleCompletion,
   WordPressAuthError,
   WordPressApiError,
 };
