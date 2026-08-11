@@ -38,4 +38,12 @@ echo "Scenarios:      {$counts['scenario']}\n";
 echo "Templates:      {$counts['template']}\n";
 echo "Events:         {$counts['event']}\n";
 echo "Case Updates:   {$counts['case_update']}\n";
+
+if ( ! empty( $counts['users'] ) ) {
+	echo 'Demo accounts:  ' . implode( ', ', $counts['users'] ) . "\n";
+	echo "                (password from PCLE_DEMO_USER_PASSWORD)\n";
+} else {
+	echo "Demo accounts:  skipped (PCLE_DEMO_USER_PASSWORD not set)\n";
+}
+
 echo "\nDone. Sample data seeded.\n";

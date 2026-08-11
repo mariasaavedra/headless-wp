@@ -224,7 +224,100 @@ function pcle_seed_demo_data() {
 	);
 	$counts['case_update'] = 2;
 
+	// 5) Demo accounts (opt-in; see pcle_seed_demo_users()).
+	$counts['users'] = pcle_seed_demo_users( $program_id );
+
 	return $counts;
+}
+
+/**
+ * Creates the demo accounts, when — and only when — a demo password is set.
+ *
+ * The sample content is harmless anywhere; accounts with a password anyone
+ * can read out of a repo are not. So this is opt-in via the environment:
+ * with PCLE_DEMO_USER_PASSWORD unset (any real host) it does nothing, and
+ * the seeder behaves exactly as before. docker-compose sets it for local
+ * development only.
+ *
+ * Idempotent: existing demo accounts are reused, with their role, password
+ * and enrollment re-applied.
+ *
+ * Three accounts, because the interesting bugs live in the differences
+ * between them: enrolled vs. holding an account but enrolled in nothing
+ * (the "hasn't paid" case), plus staff.
+ *
+ * @param int $program_id Program to enroll the enrolled student into.
+ * @return string[] Logins that exist as a result (empty when opted out).
+ */
+function pcle_seed_demo_users( $program_id ) {
+	$password = getenv( 'PCLE_DEMO_USER_PASSWORD' );
+
+	if ( ! is_string( $password ) || '' === $password ) {
+		return array();
+	}
+
+	$accounts = array(
+		array(
+			'login'  => 'demo.student',
+			'email'  => 'demo.student@example.test',
+			'name'   => 'Demo Student (enrolled)',
+			'role'   => 'pcle_student',
+			'enroll' => true,
+		),
+		array(
+			'login'  => 'demo.outsider',
+			'email'  => 'demo.outsider@example.test',
+			'name'   => 'Demo Student (not enrolled)',
+			'role'   => 'pcle_student',
+			'enroll' => false,
+		),
+		array(
+			'login'  => 'demo.instructor',
+			'email'  => 'demo.instructor@example.test',
+			'name'   => 'Demo Instructor',
+			'role'   => 'pcle_instructor',
+			'enroll' => false,
+		),
+	);
+
+	$created = array();
+
+	foreach ( $accounts as $account ) {
+		$user = get_user_by( 'login', $account['login'] );
+
+		if ( $user ) {
+			$user_id = (int) $user->ID;
+			wp_update_user(
+				array(
+					'ID'        => $user_id,
+					'user_pass' => $password,
+					'role'      => $account['role'],
+				)
+			);
+		} else {
+			$user_id = wp_insert_user(
+				array(
+					'user_login'   => $account['login'],
+					'user_email'   => $account['email'],
+					'user_pass'    => $password,
+					'display_name' => $account['name'],
+					'role'         => $account['role'],
+				)
+			);
+
+			if ( is_wp_error( $user_id ) ) {
+				continue;
+			}
+		}
+
+		if ( $account['enroll'] && $program_id ) {
+			pcle_enroll_user( $program_id, $user_id );
+		}
+
+		$created[] = $account['login'];
+	}
+
+	return $created;
 }
 
 /**
