@@ -239,6 +239,20 @@ function pcle_rest_toggle_progress( $request ) {
 		);
 	}
 
+	/*
+	 * view_cle_content (checked in the permission callback) only says the
+	 * caller is a participant somewhere. Recording progress against a module
+	 * means claiming to be working through its program, so it takes the same
+	 * per-program access as reading it.
+	 */
+	if ( ! pcle_can_access_post( $module_id ) ) {
+		return new WP_Error(
+			'pcle_rest_forbidden',
+			__( 'You must be enrolled to track progress on this module.', 'platform-cle' ),
+			array( 'status' => 403 )
+		);
+	}
+
 	if ( $completed ) {
 		pcle_mark_module_complete( $module_id );
 	} else {
@@ -253,7 +267,7 @@ function pcle_rest_toggle_progress( $request ) {
 		array(
 			'module_id'     => $module_id,
 			'completed'     => pcle_is_module_complete( $module_id ),
-			'week_progress' => $progress,
+			'week_progress' => pcle_rest_shape_progress( $progress ),
 		)
 	);
 }

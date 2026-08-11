@@ -376,7 +376,112 @@ pcle_ok( false === strpos( pcle_render_as( 0, $scenario ), 'PCLE_SECRET_ANSWER' 
 wp_set_current_user( 0 );
 
 /* ------------------------------------------------------------------ */
-/* 10) Emails                                                         */
+/* 10) Curriculum endpoints                                           */
+/* ------------------------------------------------------------------ */
+pcle_section( '# Curriculum endpoints' );
+
+/**
+ * Runs a curriculum route as a user.
+ *
+ * @param int    $uid   User to run as (0 = anonymous).
+ * @param string $route REST route.
+ * @return WP_REST_Response
+ */
+function pcle_rest_get( $uid, $route ) {
+	wp_set_current_user( $uid );
+	return rest_do_request( new WP_REST_Request( 'GET', $route ) );
+}
+
+// Access: the whole point of these routes is that enrollment is checked once.
+foreach ( array( "/platform-cle/v1/programs/{$prog_a}", "/platform-cle/v1/weeks/{$week}", "/platform-cle/v1/modules/{$module}" ) as $route ) {
+	pcle_eq( pcle_rest_get( 0, $route )->get_status(), 401, "anonymous {$route} → 401" );
+	pcle_eq( pcle_rest_get( $outsider, $route )->get_status(), 403, "non-enrolled {$route} → 403" );
+	pcle_eq( pcle_rest_get( $student, $route )->get_status(), 200, "enrolled {$route} → 200" );
+	pcle_eq( pcle_rest_get( $admin, $route )->get_status(), 200, "staff {$route} → 200" );
+}
+
+// A program the student is not enrolled in stays closed on the new routes too.
+pcle_eq( pcle_rest_get( $student, "/platform-cle/v1/programs/{$prog_b}" )->get_status(), 403, 'enrolled student cannot open another program' );
+
+// Wrong post type for the route, and a missing id, are both 404 — not a 200
+// shaped from whatever post happened to carry that ID.
+pcle_eq( pcle_rest_get( $student, "/platform-cle/v1/programs/{$module}" )->get_status(), 404, 'module id on the programs route → 404' );
+pcle_eq( pcle_rest_get( $student, '/platform-cle/v1/modules/99999999' )->get_status(), 404, 'unknown id → 404' );
+
+// Shape: a program carries its weeks, and each week its modules and events.
+$program_data = pcle_rest_get( $student, "/platform-cle/v1/programs/{$prog_a}" )->get_data();
+pcle_eq( $program_data['id'], $prog_a, 'program response carries the id' );
+pcle_eq( count( $program_data['weeks'] ), 1, 'program response carries its weeks' );
+pcle_eq( count( $program_data['weeks'][0]['modules'] ), 2, 'week carries its modules' );
+pcle_ok( isset( $program_data['weeks'][0]['events'] ), 'week carries an events list' );
+
+// Progress is spelled the same way on every route that reports it.
+$expected_progress_keys = array( 'completed', 'total', 'percentage' );
+pcle_eq( array_keys( $program_data['progress'] ), $expected_progress_keys, 'program progress keys' );
+pcle_eq( array_keys( $program_data['weeks'][0]['progress'] ), $expected_progress_keys, 'week progress keys' );
+$my_training_data = pcle_rest_my_training( $student );
+pcle_eq( array_keys( $my_training_data->get_data()['programs'][0]['progress'] ), $expected_progress_keys, 'my-training progress keys match' );
+
+// Module detail: breadcrumb refs, children, and the completion flag.
+$module_data = pcle_rest_get( $student, "/platform-cle/v1/modules/{$module}" )->get_data();
+pcle_eq( $module_data['week']['id'], $week, 'module response points at its week' );
+pcle_eq( $module_data['program']['id'], $prog_a, 'module response points at its program' );
+pcle_eq( count( $module_data['scenarios'] ), 1, 'module carries its scenarios' );
+pcle_eq( $module_data['completed'], pcle_is_module_complete( $module, $student ), 'module completion flag matches stored progress' );
+
+/*
+ * The model answer has to survive the trip through REST. The shortcode fails
+ * closed when it cannot tell which post it is inside, so rendering without
+ * the global post set up would strip answers from everyone, silently.
+ */
+pcle_ok( false !== strpos( $module_data['scenarios'][0]['content'], 'PCLE_SECRET_ANSWER' ), 'enrolled reader receives the model answer through the API' );
+
+// Excerpts are built from stripped shortcodes, so a listing never carries an
+// answer in plain text even where the reader is allowed to see the scenario.
+$scenario_post = get_post( $scenario );
+pcle_ok( false === strpos( pcle_rest_excerpt( $scenario_post ), 'PCLE_SECRET_ANSWER' ), 'excerpts do not carry model answers' );
+wp_set_current_user( 0 );
+
+/* ------------------------------------------------------------------ */
+/* 11) Progress endpoint                                              */
+/* ------------------------------------------------------------------ */
+pcle_section( '# Progress endpoint' );
+
+/**
+ * Posts a progress toggle as a user.
+ *
+ * @param int  $uid       User to run as.
+ * @param int  $module_id Module.
+ * @param bool $completed Desired state.
+ * @return WP_REST_Response
+ */
+function pcle_rest_post_progress( $uid, $module_id, $completed ) {
+	wp_set_current_user( $uid );
+	$request = new WP_REST_Request( 'POST', '/platform-cle/v1/progress' );
+	$request->set_body_params(
+		array(
+			'module_id' => $module_id,
+			'completed' => $completed,
+		)
+	);
+	return rest_do_request( $request );
+}
+
+pcle_eq( pcle_rest_post_progress( 0, $module, true )->get_status(), 401, 'anonymous cannot record progress' );
+pcle_eq( pcle_rest_post_progress( $outsider, $module, true )->get_status(), 403, 'a reader with no access cannot record progress against the module' );
+pcle_eq( pcle_is_module_complete( $module, $outsider ), false, 'the refused write left no progress behind' );
+
+$toggle = pcle_rest_post_progress( $student, $module, true );
+pcle_eq( $toggle->get_status(), 200, 'enrolled student can record progress' );
+pcle_eq( $toggle->get_data()['completed'], true, 'response reports the new state' );
+pcle_eq( array_keys( $toggle->get_data()['week_progress'] ), $expected_progress_keys, 'progress endpoint uses the same progress keys' );
+pcle_eq( pcle_is_module_complete( $module, $student ), true, 'progress was actually stored' );
+
+pcle_rest_post_progress( $student, $module, false ); // restore fixture state
+wp_set_current_user( 0 );
+
+/* ------------------------------------------------------------------ */
+/* 12) Emails                                                         */
 /* ------------------------------------------------------------------ */
 pcle_section( '# Emails' );
 $before = count( $GLOBALS['pcle_mail'] );
