@@ -7,7 +7,17 @@
  * enrollment.php / access-control.php / progress.php and is reused here.
  *
  * Routes:
- *   - GET /platform-cle/v1/my-training : programs available to the current user.
+ *   - GET /platform-cle/v1/my-training     : programs available to the current user.
+ *   - GET /platform-cle/v1/programs/<id>   : one program with its weeks and modules.
+ *   - GET /platform-cle/v1/weeks/<id>      : one week with its modules and events.
+ *   - GET /platform-cle/v1/modules/<id>    : one module with its scenarios and templates.
+ *
+ * These exist instead of walking /wp/v2/pcle_* from the client for two
+ * reasons. The client would otherwise need one request per level and would
+ * have to filter children by meta itself; and, more importantly, every one of
+ * those requests is a separate place where per-program access has to be
+ * enforced correctly. Here it is enforced once, in the permission callback,
+ * against the post being asked for.
  *
  * @package Platform_CLE
  */
@@ -45,17 +55,300 @@ function pcle_rest_get_my_training( $request ) {
 
 	$out = array();
 	foreach ( $programs as $program ) {
-		$progress = pcle_get_program_progress( $program->ID );
-		$out[]    = array(
+		$out[] = array(
 			'id'       => (int) $program->ID,
 			'title'    => get_the_title( $program ),
-			'progress' => array(
-				'completed'  => $progress['completed'],
-				'total'      => $progress['total'],
-				'percentage' => $progress['percent'],
-			),
+			'progress' => pcle_rest_shape_progress( pcle_get_program_progress( $program->ID ) ),
 		);
 	}
 
 	return rest_ensure_response( array( 'programs' => $out ) );
+}
+
+/* =========================================================================
+ * Curriculum routes
+ * ========================================================================= */
+
+/**
+ * Renders a post's content the way the front end would.
+ *
+ * The global post has to be in place: [pcle_model_answer] resolves the post
+ * it is rendering inside via get_the_ID() to check program access, and fails
+ * closed when it cannot. Without this, model answers would silently never
+ * reach the headless client, not even for an enrolled reader.
+ *
+ * @param WP_Post $post Post to render.
+ * @return string Rendered HTML.
+ */
+function pcle_rest_rendered_content( $post ) {
+	$previous        = isset( $GLOBALS['post'] ) ? $GLOBALS['post'] : null;
+	$GLOBALS['post'] = $post;
+	setup_postdata( $post );
+
+	$html = apply_filters( 'the_content', $post->post_content );
+
+	$GLOBALS['post'] = $previous;
+
+	return $html;
+}
+
+/**
+ * A short plain-text summary, safe to show in a listing.
+ *
+ * Shortcodes are stripped rather than rendered, which matters more than it
+ * looks: an excerpt built from a scenario's raw content would otherwise carry
+ * the model answer in plain text to every reader of the list.
+ *
+ * @param WP_Post $post Post to summarise.
+ * @return string
+ */
+function pcle_rest_excerpt( $post ) {
+	if ( '' !== trim( (string) $post->post_excerpt ) ) {
+		return wp_strip_all_tags( $post->post_excerpt );
+	}
+
+	return wp_trim_words( wp_strip_all_tags( strip_shortcodes( $post->post_content ) ), 25 );
+}
+
+/**
+ * Shapes a progress struct for the API.
+ *
+ * Internally the struct is {completed, total, percent}; the API has always
+ * spelled the last one `percentage`, via /my-training. Everything goes
+ * through here so the client never has to know which spelling a given route
+ * happens to use.
+ *
+ * @param array{completed:int, total:int, percent:int} $progress Progress struct.
+ * @return array{completed:int, total:int, percentage:int}
+ */
+function pcle_rest_shape_progress( $progress ) {
+	return array(
+		'completed'  => (int) $progress['completed'],
+		'total'      => (int) $progress['total'],
+		'percentage' => (int) $progress['percent'],
+	);
+}
+
+/**
+ * Shapes a post as a bare reference (for breadcrumbs and links).
+ *
+ * @param WP_Post|null $post Post.
+ * @return array{id:int, title:string}|null
+ */
+function pcle_rest_shape_ref( $post ) {
+	if ( ! $post ) {
+		return null;
+	}
+
+	return array(
+		'id'    => (int) $post->ID,
+		'title' => get_the_title( $post ),
+	);
+}
+
+/**
+ * Shapes a module for a listing.
+ *
+ * @param WP_Post $module Module.
+ * @return array
+ */
+function pcle_rest_shape_module( $module ) {
+	return array(
+		'id'        => (int) $module->ID,
+		'title'     => get_the_title( $module ),
+		'excerpt'   => pcle_rest_excerpt( $module ),
+		'completed' => pcle_is_module_complete( $module->ID ),
+	);
+}
+
+/**
+ * Shapes a schedule event.
+ *
+ * Exposes the session time both as ISO 8601 (for the client to format in the
+ * reader's locale) and as the site's own formatted string.
+ *
+ * @param WP_Post $event Event.
+ * @return array
+ */
+function pcle_rest_shape_event( $event ) {
+	$raw = pcle_get_event_datetime( $event->ID );
+	$iso = '';
+
+	if ( $raw ) {
+		$datetime = date_create_immutable_from_format( 'Y-m-d H:i:s', $raw, wp_timezone() );
+		$iso      = $datetime ? $datetime->format( DATE_ATOM ) : '';
+	}
+
+	return array(
+		'id'        => (int) $event->ID,
+		'title'     => get_the_title( $event ),
+		'starts_at' => $iso,
+		'formatted' => $raw ? pcle_format_event_datetime( $event->ID ) : '',
+	);
+}
+
+/**
+ * Shapes a week, optionally with its modules and events.
+ *
+ * @param WP_Post $week     Week.
+ * @param bool    $children Whether to include modules and events.
+ * @return array
+ */
+function pcle_rest_shape_week( $week, $children = true ) {
+	$shaped = array(
+		'id'       => (int) $week->ID,
+		'title'    => get_the_title( $week ),
+		'excerpt'  => pcle_rest_excerpt( $week ),
+		'progress' => pcle_rest_shape_progress( pcle_get_week_progress( $week->ID ) ),
+	);
+
+	if ( $children ) {
+		$shaped['modules'] = array_map( 'pcle_rest_shape_module', pcle_get_modules( $week->ID ) );
+		$shaped['events']  = array_map( 'pcle_rest_shape_event', pcle_get_events( $week->ID ) );
+	}
+
+	return $shaped;
+}
+
+/**
+ * Permission callback for the single-item curriculum routes.
+ *
+ * Anonymous → 401, wrong post type → 404, no access to that program → 403.
+ * This is the ONE place per-program access is decided for these routes.
+ *
+ * @param WP_REST_Request $request   Request.
+ * @param string          $post_type Post type the route expects.
+ * @return true|WP_Error
+ */
+function pcle_rest_guard_item( $request, $post_type ) {
+	if ( ! is_user_logged_in() ) {
+		return new WP_Error(
+			'pcle_not_authenticated',
+			__( 'You must be signed in.', 'platform-cle' ),
+			array( 'status' => 401 )
+		);
+	}
+
+	$id = (int) $request['id'];
+
+	if ( $post_type !== get_post_type( $id ) || 'publish' !== get_post_status( $id ) ) {
+		return new WP_Error(
+			'pcle_not_found',
+			__( 'Not found.', 'platform-cle' ),
+			array( 'status' => 404 )
+		);
+	}
+
+	if ( ! pcle_can_access_post( $id ) ) {
+		return new WP_Error(
+			'pcle_rest_forbidden',
+			__( 'You must be enrolled to access this content.', 'platform-cle' ),
+			array( 'status' => 403 )
+		);
+	}
+
+	return true;
+}
+
+/**
+ * Registers the curriculum routes.
+ */
+function pcle_register_curriculum_routes() {
+	$routes = array(
+		'programs' => array( 'pcle_program', 'pcle_rest_get_program' ),
+		'weeks'    => array( 'pcle_week', 'pcle_rest_get_week' ),
+		'modules'  => array( 'pcle_module', 'pcle_rest_get_module' ),
+	);
+
+	foreach ( $routes as $slug => list( $post_type, $callback ) ) {
+		register_rest_route(
+			'platform-cle/v1',
+			'/' . $slug . '/(?P<id>\d+)',
+			array(
+				'methods'             => 'GET',
+				'callback'            => $callback,
+				'permission_callback' => function ( $request ) use ( $post_type ) {
+					return pcle_rest_guard_item( $request, $post_type );
+				},
+				'args'                => array(
+					'id' => array(
+						'required'          => true,
+						'type'              => 'integer',
+						'sanitize_callback' => 'absint',
+					),
+				),
+			)
+		);
+	}
+}
+add_action( 'rest_api_init', 'pcle_register_curriculum_routes' );
+
+/**
+ * GET /programs/<id> — a program with every week and module under it.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return WP_REST_Response
+ */
+function pcle_rest_get_program( $request ) {
+	$program = get_post( (int) $request['id'] );
+
+	return rest_ensure_response(
+		array(
+			'id'       => (int) $program->ID,
+			'title'    => get_the_title( $program ),
+			'content'  => pcle_rest_rendered_content( $program ),
+			'progress' => pcle_rest_shape_progress( pcle_get_program_progress( $program->ID ) ),
+			'weeks'    => array_map( 'pcle_rest_shape_week', pcle_get_weeks( $program->ID ) ),
+		)
+	);
+}
+
+/**
+ * GET /weeks/<id> — a week with its modules and sessions.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return WP_REST_Response
+ */
+function pcle_rest_get_week( $request ) {
+	$week    = get_post( (int) $request['id'] );
+	$program = get_post( pcle_get_program_for_post( $week->ID ) );
+
+	$shaped            = pcle_rest_shape_week( $week );
+	$shaped['content'] = pcle_rest_rendered_content( $week );
+	$shaped['program'] = pcle_rest_shape_ref( $program );
+
+	return rest_ensure_response( $shaped );
+}
+
+/**
+ * GET /modules/<id> — a module with its practice scenarios and templates.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return WP_REST_Response
+ */
+function pcle_rest_get_module( $request ) {
+	$module  = get_post( (int) $request['id'] );
+	$week    = get_post( pcle_get_parent_id( $module->ID ) );
+	$program = get_post( pcle_get_program_for_post( $module->ID ) );
+
+	$shape_child = function ( $child ) {
+		return array(
+			'id'      => (int) $child->ID,
+			'title'   => get_the_title( $child ),
+			'content' => pcle_rest_rendered_content( $child ),
+		);
+	};
+
+	return rest_ensure_response(
+		array(
+			'id'        => (int) $module->ID,
+			'title'     => get_the_title( $module ),
+			'content'   => pcle_rest_rendered_content( $module ),
+			'completed' => pcle_is_module_complete( $module->ID ),
+			'week'      => pcle_rest_shape_ref( $week ),
+			'program'   => pcle_rest_shape_ref( $program ),
+			'scenarios' => array_map( $shape_child, pcle_get_scenarios( $module->ID ) ),
+			'templates' => array_map( $shape_child, pcle_get_templates( $module->ID ) ),
+		)
+	);
 }
