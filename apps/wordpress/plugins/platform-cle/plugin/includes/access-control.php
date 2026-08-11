@@ -175,7 +175,14 @@ function pcle_guard_rest_reads( $result, $server, $request ) {
 			return pcle_can_access_post( (int) $m['id'] ) ? $result : pcle_rest_forbidden();
 		}
 
-		// Collection listing → require at least a participant (or an editor).
+		/*
+		 * Collection listing → this is only the coarse gate (a stranger gets
+		 * 401 here). It deliberately does NOT decide which items come back:
+		 * a participant enrolled in one program still must not receive
+		 * another program's items. That narrowing happens per query, in
+		 * pcle_restrict_rest_collection() below, because at pre_dispatch
+		 * time the query hasn't run yet and there is nothing to filter.
+		 */
 		if ( pcle_user_can_access() || current_user_can( 'edit_posts' ) ) {
 			return $result;
 		}
@@ -185,6 +192,101 @@ function pcle_guard_rest_reads( $result, $server, $request ) {
 	return $result;
 }
 add_filter( 'rest_pre_dispatch', 'pcle_guard_rest_reads', 10, 3 );
+
+/**
+ * IDs of a protected post type that a user is allowed to read.
+ *
+ * Deliberately reuses pcle_can_access_post() per post rather than rebuilding
+ * the rule as a meta_query: access depends on walking module → week →
+ * program, and a second implementation of that rule is exactly how the
+ * per-item guard and the listing guard drifted apart in the first place.
+ * That costs one access check per post, which is in line with the rest of
+ * the plugin at its intended scale (tens–low hundreds of items).
+ *
+ * @param string $post_type Post type to enumerate.
+ * @param int    $user_id   User (defaults to the current one).
+ * @return int[] Accessible post IDs.
+ */
+function pcle_accessible_post_ids( $post_type, $user_id = 0 ) {
+	$ids = get_posts(
+		array(
+			'post_type'      => $post_type,
+			'post_status'    => 'publish',
+			'posts_per_page' => -1,
+			'fields'         => 'ids',
+			'no_found_rows'  => true,
+		)
+	);
+
+	$allowed = array();
+	foreach ( $ids as $id ) {
+		if ( pcle_can_access_post( (int) $id, $user_id ) ) {
+			$allowed[] = (int) $id;
+		}
+	}
+
+	return $allowed;
+}
+
+/**
+ * Narrows a REST collection listing to the items the reader may actually see.
+ *
+ * Without this, GET /wp/v2/pcle_module (no ID) returns every module with its
+ * rendered content to anyone holding a student account, regardless of which
+ * program they paid for — the per-item guard never runs, because listing a
+ * collection is a different route.
+ *
+ * @param array           $args    WP_Query args the REST controller will run.
+ * @param WP_REST_Request $request Incoming request.
+ * @return array Adjusted args.
+ */
+function pcle_restrict_rest_collection( $args, $request ) {
+	// Staff read everything (the block editor depends on it).
+	if ( pcle_user_is_staff() ) {
+		return $args;
+	}
+
+	$post_type = isset( $args['post_type'] ) ? $args['post_type'] : '';
+	if ( ! is_string( $post_type ) || ! in_array( $post_type, pcle_protected_post_types(), true ) ) {
+		return $args;
+	}
+
+	$allowed = pcle_accessible_post_ids( $post_type );
+
+	/*
+	 * WP_Query ignores an EMPTY post__in and happily returns everything, so
+	 * "nothing is allowed" has to be spelled with an ID that cannot match.
+	 */
+	if ( empty( $allowed ) ) {
+		$args['post__in'] = array( 0 );
+		return $args;
+	}
+
+	// Respect a caller's ?include= by intersecting with it, never widening it.
+	if ( ! empty( $args['post__in'] ) ) {
+		$allowed = array_intersect( (array) $args['post__in'], $allowed );
+		if ( empty( $allowed ) ) {
+			$allowed = array( 0 );
+		}
+	}
+
+	$args['post__in'] = array_values( $allowed );
+
+	return $args;
+}
+
+/**
+ * Hooks the collection filter for every protected type.
+ *
+ * Registered on rest_api_init (not at load time) so that any filter on
+ * pcle_protected_post_types() has already been added.
+ */
+function pcle_register_rest_collection_filters() {
+	foreach ( pcle_protected_post_types() as $post_type ) {
+		add_filter( "rest_{$post_type}_query", 'pcle_restrict_rest_collection', 10, 2 );
+	}
+}
+add_action( 'rest_api_init', 'pcle_register_rest_collection_filters' );
 
 /**
  * The standard "forbidden" REST error for CLE content.
@@ -219,6 +321,20 @@ function pcle_model_answer_shortcode( $atts, $content = '' ) {
 
 	// No permission: we return absolutely none of the protected content.
 	if ( ! current_user_can( $caps['reveal_answers'] ) ) {
+		return '';
+	}
+
+	/*
+	 * The capability travels with the student ROLE, so on its own it only
+	 * says "this kind of user may reveal answers" — never "this user belongs
+	 * in this program". Both have to hold, or a student from another cohort
+	 * reads the answers straight out of the scenario body.
+	 *
+	 * If we cannot tell which post we are rendering inside, fail closed:
+	 * for protected content, an unknown context is not a reason to reveal.
+	 */
+	$post_id = get_the_ID();
+	if ( ! $post_id || ! pcle_can_access_post( $post_id ) ) {
 		return '';
 	}
 

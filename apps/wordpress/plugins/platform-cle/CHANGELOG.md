@@ -8,6 +8,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and the proje
 
 ### Security
 
+- **Closed a per-program leak in REST collection listings.** The `rest_pre_dispatch`
+  guard below enforced enrollment on single items (`/wp/v2/pcle_module/<id>`) but
+  answered *listings* (`/wp/v2/pcle_module`) with only "is this a participant?".
+  Any account holding the CLE Student role — including one enrolled in nothing —
+  could therefore read every program's weeks, modules, scenarios, templates and
+  events, with rendered content, in a single request. Listings are now narrowed
+  per query to the items the reader may actually see (`pcle_restrict_rest_collection()`,
+  hooked on `rest_{$post_type}_query`). Case Updates stay visible to all
+  participants, as designed. Verified against a live install: non-enrolled
+  student → 0 items, enrolled student → their program only, staff → everything,
+  anonymous → 401.
+- **Model answers are now gated on program access, not just capability.**
+  `[pcle_model_answer]` checked `reveal_model_answers`, which every CLE Student
+  holds by virtue of the role, so a student from another cohort received the
+  answers rendered inside the scenario body. It now also requires access to the
+  post being rendered, and fails closed when that post cannot be determined.
 - **Protected file delivery.** Files attached to CLE content are stored in
   `uploads/pcle-protected/` and served only through a guarded endpoint
   (`?pcle_download=<id>`) that enforces per-program access; attachment URLs are

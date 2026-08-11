@@ -21,6 +21,13 @@ Severity: 🔴 blocker · 🟡 important · 🟢 fine.
   gate. **Fixed** (protected file delivery — see ARCHITECTURE §9).
 - 🔴→✅ REST guard hooked a non-existent filter (no-op); published CPT items were
   readable via `/wp-json/` by anyone. **Fixed** (`rest_pre_dispatch` guard).
+- 🔴→✅ That fix covered single items only: **collection listings** still went out
+  to any participant, so a student enrolled in nothing could read every
+  program's content — model answers included — from `/wp/v2/pcle_module` and
+  friends. **Fixed** (per-query narrowing + model answers gated on program
+  access). Worth remembering as a pattern: in the REST API, "one item" and "a
+  list of items" are separate routes, and a guard written for one is not a
+  guard on the other.
 - 🟡 No brute-force / rate limiting on login (standard WP concern).
 
 **Domain / CLE-specific (largest product gaps)**

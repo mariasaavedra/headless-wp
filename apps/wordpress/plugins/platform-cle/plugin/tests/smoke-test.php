@@ -75,12 +75,13 @@ add_filter(
 /* Fixtures                                                            */
 /* ------------------------------------------------------------------ */
 
-function pcle_make_post( $type, $title, $meta = array() ) {
+function pcle_make_post( $type, $title, $meta = array(), $content = '' ) {
 	$id = wp_insert_post(
 		array(
-			'post_type'   => $type,
-			'post_title'  => $title,
-			'post_status' => 'publish',
+			'post_type'    => $type,
+			'post_title'   => $title,
+			'post_content' => $content,
+			'post_status'  => 'publish',
 		)
 	);
 	update_post_meta( $id, '_pcle_test', 1 );
@@ -101,19 +102,44 @@ $week    = pcle_make_post( 'pcle_week', 'TEST Week 1', array( '_pcle_program_id'
 $module  = pcle_make_post( 'pcle_module', 'TEST Module 1', array( '_pcle_week_id' => $week ) );
 $module2 = pcle_make_post( 'pcle_module', 'TEST Module 2', array( '_pcle_week_id' => $week ) );
 $case    = pcle_make_post( 'pcle_case_update', 'TEST Case Update' );
-$created_posts = array( $prog_a, $prog_b, $week, $module, $module2, $case );
+
+// A scenario carrying a model answer, so we can assert it never reaches a
+// reader without access to the program it belongs to.
+$scenario = pcle_make_post(
+	'pcle_scenario',
+	'TEST Scenario',
+	array( '_pcle_module_id' => $module ),
+	'The prompt. [pcle_model_answer]PCLE_SECRET_ANSWER[/pcle_model_answer]'
+);
+$created_posts = array( $prog_a, $prog_b, $week, $module, $module2, $case, $scenario );
+
+/**
+ * Creates a throwaway CLE student.
+ *
+ * @return int User ID.
+ */
+function pcle_make_student() {
+	return wp_insert_user(
+		array(
+			'user_login' => 'pcle_test_student_' . wp_generate_password( 5, false ),
+			'user_email' => 'test+' . wp_generate_password( 6, false ) . '@example.test',
+			'user_pass'  => wp_generate_password( 20 ),
+			'role'       => 'pcle_student',
+		)
+	);
+}
 
 // A student enrolled in Program A only, and an admin.
-$student = wp_insert_user(
-	array(
-		'user_login' => 'pcle_test_student_' . wp_generate_password( 5, false ),
-		'user_email' => 'test+' . wp_generate_password( 6, false ) . '@example.test',
-		'user_pass'  => wp_generate_password( 20 ),
-		'role'       => 'pcle_student',
-	)
-);
+$student         = pcle_make_student();
 $created_users[] = $student;
 pcle_enroll_user( $prog_a, $student );
+
+// A student enrolled in NOTHING — the "has an account but hasn't paid /
+// isn't in this cohort" case. They hold view_cle_content and
+// reveal_model_answers by virtue of the role, so they are the sharpest test
+// of whether access is really decided by enrollment.
+$outsider        = pcle_make_student();
+$created_users[] = $outsider;
 
 $admins = get_users( array( 'role' => 'administrator', 'number' => 1, 'fields' => 'ID' ) );
 $admin  = $admins ? (int) $admins[0] : 0;
@@ -255,7 +281,102 @@ pcle_ok( count( $admin_data['programs'] ) >= 2, 'staff sees all programs, not ju
 wp_set_current_user( 0 );
 
 /* ------------------------------------------------------------------ */
-/* 8) Emails                                                          */
+/* 8) REST guard: collection listings                                 */
+/* ------------------------------------------------------------------ */
+/*
+ * The per-item guard (section 6) is not enough on its own: /wp/v2/pcle_module
+ * without an ID is a different route, and answering it with "is this a
+ * participant?" hands the whole curriculum to anyone holding a student
+ * account. These assert that a listing is narrowed to what the reader is
+ * actually enrolled in.
+ */
+pcle_section( '# REST guard (collections)' );
+
+/**
+ * Requests a collection route and returns the post IDs it yielded, or the
+ * HTTP status when the request was refused outright.
+ *
+ * @param int    $uid   User to run as (0 = anonymous).
+ * @param string $route REST route.
+ * @return int[]|int
+ */
+function pcle_rest_collection( $uid, $route ) {
+	wp_set_current_user( $uid );
+	$request = new WP_REST_Request( 'GET', $route );
+	$request->set_param( 'per_page', 100 );
+	$response = rest_do_request( $request );
+
+	if ( 200 !== $response->get_status() ) {
+		return $response->get_status();
+	}
+
+	return wp_list_pluck( $response->get_data(), 'id' );
+}
+
+/**
+ * Number of items a listing returned, or the refusal status.
+ *
+ * @param int[]|int $result Result of pcle_rest_collection().
+ * @return int
+ */
+function pcle_rest_count( $result ) {
+	return is_array( $result ) ? count( $result ) : $result;
+}
+
+pcle_eq( pcle_rest_collection( 0, '/wp/v2/pcle_program' ), 401, 'anonymous program listing → 401' );
+
+$student_programs = pcle_rest_collection( $student, '/wp/v2/pcle_program' );
+pcle_ok( is_array( $student_programs ) && in_array( $prog_a, $student_programs, true ), 'student listing includes their enrolled program' );
+pcle_ok( is_array( $student_programs ) && ! in_array( $prog_b, $student_programs, true ), 'student listing EXCLUDES a program they are not enrolled in' );
+
+$student_modules = pcle_rest_collection( $student, '/wp/v2/pcle_module' );
+pcle_ok( is_array( $student_modules ) && in_array( $module, $student_modules, true ), 'student listing includes modules of their own program' );
+
+pcle_eq( pcle_rest_count( pcle_rest_collection( $outsider, '/wp/v2/pcle_module' ) ), 0, 'student enrolled in nothing gets an empty module listing' );
+pcle_eq( pcle_rest_count( pcle_rest_collection( $outsider, '/wp/v2/pcle_scenario' ) ), 0, 'student enrolled in nothing gets an empty scenario listing' );
+pcle_eq( pcle_rest_count( pcle_rest_collection( $outsider, '/wp/v2/pcle_program' ) ), 0, 'student enrolled in nothing gets an empty program listing' );
+
+$admin_programs = pcle_rest_collection( $admin, '/wp/v2/pcle_program' );
+pcle_ok( is_array( $admin_programs ) && in_array( $prog_b, $admin_programs, true ), 'staff listing still sees every program' );
+wp_set_current_user( 0 );
+
+/* ------------------------------------------------------------------ */
+/* 9) Model answers                                                   */
+/* ------------------------------------------------------------------ */
+/*
+ * reveal_model_answers comes with the student role, so the capability alone
+ * says nothing about whether this reader belongs in this program.
+ */
+pcle_section( '# Model answers' );
+
+/**
+ * Renders a post's content as a given user, the way the_content would.
+ *
+ * @param int $uid     User to run as (0 = anonymous).
+ * @param int $post_id Post to render.
+ * @return string Rendered HTML.
+ */
+function pcle_render_as( $uid, $post_id ) {
+	wp_set_current_user( $uid );
+
+	$post            = get_post( $post_id );
+	$GLOBALS['post'] = $post;
+	setup_postdata( $post );
+
+	$html = apply_filters( 'the_content', $post->post_content );
+
+	$GLOBALS['post'] = null;
+	return $html;
+}
+
+pcle_ok( false !== strpos( pcle_render_as( $student, $scenario ), 'PCLE_SECRET_ANSWER' ), 'enrolled student still sees the model answer' );
+pcle_ok( false !== strpos( pcle_render_as( $admin, $scenario ), 'PCLE_SECRET_ANSWER' ), 'staff still sees the model answer' );
+pcle_ok( false === strpos( pcle_render_as( $outsider, $scenario ), 'PCLE_SECRET_ANSWER' ), 'student without access to the program does NOT receive the model answer' );
+pcle_ok( false === strpos( pcle_render_as( 0, $scenario ), 'PCLE_SECRET_ANSWER' ), 'anonymous does not receive the model answer' );
+wp_set_current_user( 0 );
+
+/* ------------------------------------------------------------------ */
+/* 10) Emails                                                         */
 /* ------------------------------------------------------------------ */
 pcle_section( '# Emails' );
 $before = count( $GLOBALS['pcle_mail'] );
