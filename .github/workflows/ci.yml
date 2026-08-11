@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A run is only useful against the latest commit of a branch; cancel the rest.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke-tests:
+    name: Platform CLE smoke tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write a .env for the stack
+        # docker-compose has no defaults for the WORDPRESS_SITE_* / ADMIN_*
+        # values, so without this the bootstrap installs WordPress with blank
+        # ones and never finishes.
+        run: |
+          cp .env.example .env
+          sed -i "s|^JWT_AUTH_SECRET_KEY=.*|JWT_AUTH_SECRET_KEY=$(openssl rand -hex 32)|" .env
+
+      - name: Start WordPress and MySQL
+        run: docker compose up --build --detach wordpress
+
+      - name: Wait for the bootstrap to finish
+        # The health endpoint only answers once WP is installed and the plugin
+        # is active, which is exactly the condition the tests need.
+        run: |
+          for _ in $(seq 1 60); do
+            if curl -fsS http://localhost:8080/wp-json/platform-cle/v1/health > /dev/null; then
+              echo "WordPress is up."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::WordPress did not come up within 5 minutes."
+          exit 1
+
+      - name: Run the smoke tests
+        run: |
+          docker compose exec -T wordpress \
+            php /var/www/html/wp-content/plugins/platform-cle/tests/smoke-test.php
+
+      - name: Container logs
+        if: failure()
+        run: docker compose logs --no-color
+
+  web:
+    name: Web lint and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - name: Build
+        # The app reads the WordPress API at request time, not at build time,
+        # so a placeholder is enough to satisfy the env check here.
+        env:
+          WORDPRESS_API_URL: http://localhost:8080/wp-json
+        run: npm run build
