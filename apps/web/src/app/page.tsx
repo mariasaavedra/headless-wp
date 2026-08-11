@@ -1,3 +1,4 @@
+import { decodeEntities } from "@/lib/html";
 import { wordpressFetch } from "@/lib/wordpress";
 
 type WordPressSite = {
@@ -16,11 +17,11 @@ export default async function Home() {
     <main className="flex min-h-screen items-center justify-center bg-zinc-50 px-6">
       <div className="max-w-3xl text-center">
         <h1 className="text-5xl font-semibold tracking-tight text-zinc-950">
-          {site.name}
+          {decodeEntities(site.name)}
         </h1>
 
         <p className="mt-4 text-xl text-zinc-600">
-          {site.description}
+          {decodeEntities(site.description)}
         </p>
       </div>
     </main>
