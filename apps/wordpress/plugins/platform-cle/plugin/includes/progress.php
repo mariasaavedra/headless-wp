@@ -2,8 +2,8 @@
 /**
  * Platform CLE progress tracking (MVP, via user meta).
  *
- * Model: a single user meta `_pcle_completed_modules` per user, storing an array
- * of completed module IDs. Week/program progress is COMPUTED over the hierarchy
+ * Model: one row per (user, module) in the `pcle_progress` table, carrying the
+ * completion timestamp. Week/program progress is COMPUTED over the hierarchy
  * (relationships.php), not stored: that way it never drifts if the curriculum
  * changes.
  *
@@ -21,7 +21,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-/** User meta key where we store the completed modules. */
+/**
+ * Legacy user meta key, kept only so the migration in schema.php can find it.
+ * Nothing reads it as a source of truth any more.
+ */
 const PCLE_PROGRESS_META = '_pcle_completed_modules';
 
 /* =========================================================================
@@ -45,18 +48,54 @@ function pcle_resolve_user_id( $user_id = null ) {
  * @return int[]
  */
 function pcle_get_completed_modules( $user_id = null ) {
+	global $wpdb;
+
 	$user_id = pcle_resolve_user_id( $user_id );
 	if ( ! $user_id ) {
 		return array();
 	}
 
-	$completed = get_user_meta( $user_id, PCLE_PROGRESS_META, true );
-	if ( ! is_array( $completed ) ) {
-		return array();
+	$table = pcle_progress_table();
+
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom table.
+	$ids = $wpdb->get_col(
+		$wpdb->prepare( "SELECT module_id FROM {$table} WHERE user_id = %d", $user_id )
+	);
+
+	return array_map( 'intval', $ids );
+}
+
+/**
+ * When a user completed a module.
+ *
+ * Rows carried over from the old user-meta model have no date: that model
+ * never recorded one. NULL there means "before this was tracked", which a
+ * credit report has to be able to say rather than guess at.
+ *
+ * @param int      $module_id Module ID.
+ * @param int|null $user_id   User ID (defaults to the current user).
+ * @return string|null MySQL datetime in site time, or null.
+ */
+function pcle_get_module_completed_at( $module_id, $user_id = null ) {
+	global $wpdb;
+
+	$user_id = pcle_resolve_user_id( $user_id );
+	if ( ! $user_id ) {
+		return null;
 	}
 
-	// Normalize to unique integers.
-	return array_values( array_unique( array_map( 'intval', $completed ) ) );
+	$table = pcle_progress_table();
+
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom table.
+	$value = $wpdb->get_var(
+		$wpdb->prepare(
+			"SELECT completed_at FROM {$table} WHERE user_id = %d AND module_id = %d",
+			$user_id,
+			(int) $module_id
+		)
+	);
+
+	return null === $value ? null : (string) $value;
 }
 
 /**
@@ -67,7 +106,23 @@ function pcle_get_completed_modules( $user_id = null ) {
  * @return bool
  */
 function pcle_is_module_complete( $module_id, $user_id = null ) {
-	return in_array( (int) $module_id, pcle_get_completed_modules( $user_id ), true );
+	global $wpdb;
+
+	$user_id = pcle_resolve_user_id( $user_id );
+	if ( ! $user_id ) {
+		return false;
+	}
+
+	$table = pcle_progress_table();
+
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom table.
+	return (bool) $wpdb->get_var(
+		$wpdb->prepare(
+			"SELECT 1 FROM {$table} WHERE user_id = %d AND module_id = %d",
+			$user_id,
+			(int) $module_id
+		)
+	);
 }
 
 /**
@@ -90,11 +145,26 @@ function pcle_mark_module_complete( $module_id, $user_id = null ) {
 		return false;
 	}
 
-	$completed = pcle_get_completed_modules( $user_id );
-	if ( ! in_array( $module_id, $completed, true ) ) {
-		$completed[] = $module_id;
-		update_user_meta( $user_id, PCLE_PROGRESS_META, $completed );
-	}
+	global $wpdb;
+
+	$table = pcle_progress_table();
+
+	/*
+	 * INSERT IGNORE against the UNIQUE (user_id, module_id): completing an
+	 * already-complete module is a no-op that preserves the ORIGINAL date.
+	 * Re-stamping it on every click would quietly move a completion record
+	 * forward in time, which is the sort of thing a credit audit notices.
+	 */
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom table.
+	$wpdb->query(
+		$wpdb->prepare(
+			"INSERT IGNORE INTO {$table} (user_id, module_id, completed_at) VALUES (%d, %d, %s)",
+			$user_id,
+			$module_id,
+			current_time( 'mysql' )
+		)
+	);
+
 	return true;
 }
 
@@ -112,12 +182,18 @@ function pcle_unmark_module_complete( $module_id, $user_id = null ) {
 		return false;
 	}
 
-	$completed = pcle_get_completed_modules( $user_id );
-	$filtered  = array_values( array_diff( $completed, array( $module_id ) ) );
+	global $wpdb;
 
-	if ( count( $filtered ) !== count( $completed ) ) {
-		update_user_meta( $user_id, PCLE_PROGRESS_META, $filtered );
-	}
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom table.
+	$wpdb->delete(
+		pcle_progress_table(),
+		array(
+			'user_id'   => $user_id,
+			'module_id' => $module_id,
+		),
+		array( '%d', '%d' )
+	);
+
 	return true;
 }
 
@@ -170,18 +246,33 @@ function pcle_get_week_progress( $week_id, $user_id = null ) {
  */
 function pcle_get_program_progress( $program_id, $user_id = null ) {
 	$completed = pcle_get_completed_modules( $user_id );
-	$total     = 0;
-	$done      = 0;
+	$modules   = pcle_get_program_module_ids( $program_id );
+
+	$done = count( array_intersect( $modules, $completed ) );
+
+	return pcle_progress_struct( $done, count( $modules ) );
+}
+
+/**
+ * Every module ID under a program, in curriculum order.
+ *
+ * Walking program → weeks → modules is the expensive part of any progress
+ * computation, and it does not depend on the user. Pulled out so a report
+ * over a cohort walks the hierarchy once instead of once per participant.
+ *
+ * @param int $program_id Program ID.
+ * @return int[]
+ */
+function pcle_get_program_module_ids( $program_id ) {
+	$ids = array();
 
 	foreach ( pcle_get_weeks( $program_id ) as $week ) {
 		foreach ( pcle_get_modules( $week->ID ) as $module ) {
-			$total++;
-			if ( in_array( (int) $module->ID, $completed, true ) ) {
-				$done++;
-			}
+			$ids[] = (int) $module->ID;
 		}
 	}
-	return pcle_progress_struct( $done, $total );
+
+	return $ids;
 }
 
 /* =========================================================================
@@ -407,16 +498,49 @@ add_action( 'wp_enqueue_scripts', 'pcle_enqueue_progress_assets' );
  * @return array<int, array{user:WP_User, progress:array}> Indexed by user ID.
  */
 function pcle_get_participant_progress( $program_id ) {
-	$students = get_users( array( 'role' => 'pcle_student' ) );
-	$rows     = array();
+	global $wpdb;
 
+	$students = get_users( array( 'role' => 'pcle_student' ) );
+	$modules  = pcle_get_program_module_ids( $program_id );
+	$total    = count( $modules );
+
+	/*
+	 * One grouped count for the whole cohort, rather than recomputing each
+	 * participant's progress from scratch — which meant re-walking the
+	 * curriculum once per student on a screen that lists all of them.
+	 */
+	$counts = array();
+	if ( $modules && $students ) {
+		$table        = pcle_progress_table();
+		$placeholders = implode( ',', array_fill( 0, count( $modules ), '%d' ) );
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT user_id, COUNT(*) AS done
+				 FROM {$table}
+				 WHERE module_id IN ({$placeholders})
+				 GROUP BY user_id",
+				$modules
+			)
+		);
+
+		foreach ( $rows as $row ) {
+			$counts[ (int) $row->user_id ] = (int) $row->done;
+		}
+	}
+
+	$out = array();
 	foreach ( $students as $student ) {
-		$rows[ $student->ID ] = array(
+		$done = isset( $counts[ $student->ID ] ) ? $counts[ $student->ID ] : 0;
+
+		$out[ $student->ID ] = array(
 			'user'     => $student,
-			'progress' => pcle_get_program_progress( $program_id, $student->ID ),
+			'progress' => pcle_progress_struct( $done, $total ),
 		);
 	}
-	return $rows;
+
+	return $out;
 }
 
 /**

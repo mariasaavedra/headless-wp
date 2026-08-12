@@ -26,6 +26,7 @@ define( 'PLATFORM_CLE_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
  *   - roles.php          : defines roles and capabilities (who can do what).
  *   - access-control.php : protects the content (who can SEE what).
  */
+require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/schema.php';
 require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/post-types.php';
 require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/roles.php';
 require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/access-control.php';
@@ -49,6 +50,7 @@ require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/demo-data.php';
  * which is why it ONLY runs on activation, never on every page load.
  */
 function pcle_activate() {
+	pcle_maybe_upgrade_schema();    // defined in includes/schema.php
 	pcle_register_roles();          // defined in includes/roles.php
 	pcle_register_post_types();     // defined in includes/post-types.php
 	pcle_ensure_protected_dir();    // defined in includes/protected-files.php

@@ -18,5 +18,17 @@ require_once plugin_dir_path( __FILE__ ) . 'includes/roles.php';
 
 pcle_remove_roles();
 
-// Note: we do NOT delete the curriculum posts or the progress user meta here,
-// to avoid destroying data by accident. If desired, it would be done explicitly.
+/*
+ * Note: we deliberately do NOT delete participant data here, to avoid
+ * destroying it by accident. That now means three things, not one:
+ *
+ *   - the curriculum posts,
+ *   - the `pcle_enrollments` and `pcle_progress` tables,
+ *   - the legacy `_pcle_enrolled_programs` / `_pcle_completed_modules` user
+ *     meta, which the plugin no longer reads but which is still the only
+ *     record of anything predating the move to tables.
+ *
+ * Enrollment and completion records are the evidence behind a CLE credit
+ * claim, so dropping them on an uninstall — which can be a mis-click — is not
+ * a decision this file should make. Removing them stays explicit and manual.
+ */

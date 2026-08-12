@@ -6,7 +6,8 @@
  * student saw every program). Here we make it "per program": a student must be
  * ENROLLED in the specific program.
  *
- * Model: user meta `_pcle_enrolled_programs` = array of program IDs.
+ * Model: one row per (user, program) in the `pcle_enrollments` table,
+ * carrying the enrollment timestamp.
  * Teaching staff (instructor/admin) need no enrollment: their content-management
  * capability gives them full access.
  *
@@ -17,7 +18,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-/** User meta key with the programs the user is enrolled in. */
+/**
+ * Legacy user meta key, kept only so the migration in schema.php can find
+ * it. Nothing reads it as a source of truth any more.
+ */
 const PCLE_ENROLLMENT_META = '_pcle_enrolled_programs';
 
 /* =========================================================================
@@ -31,15 +35,53 @@ const PCLE_ENROLLMENT_META = '_pcle_enrolled_programs';
  * @return int[]
  */
 function pcle_get_enrolled_programs( $user_id = 0 ) {
+	global $wpdb;
+
 	$user_id = $user_id ? (int) $user_id : get_current_user_id();
 	if ( ! $user_id ) {
 		return array();
 	}
-	$value = get_user_meta( $user_id, PCLE_ENROLLMENT_META, true );
-	if ( ! is_array( $value ) ) {
-		return array();
+
+	$table = pcle_enrollments_table();
+
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom table.
+	$ids = $wpdb->get_col(
+		$wpdb->prepare( "SELECT program_id FROM {$table} WHERE user_id = %d", $user_id )
+	);
+
+	return array_map( 'intval', $ids );
+}
+
+/**
+ * When a user was enrolled in a program.
+ *
+ * NULL for enrollments carried over from the old user-meta model, which never
+ * recorded a date.
+ *
+ * @param int $program_id Program ID.
+ * @param int $user_id    User ID (defaults to the current user).
+ * @return string|null MySQL datetime in site time, or null.
+ */
+function pcle_get_enrolled_at( $program_id, $user_id = 0 ) {
+	global $wpdb;
+
+	$user_id = $user_id ? (int) $user_id : get_current_user_id();
+	if ( ! $user_id ) {
+		return null;
 	}
-	return array_values( array_unique( array_map( 'intval', $value ) ) );
+
+	$table = pcle_enrollments_table();
+
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom table.
+	$value = $wpdb->get_var(
+		$wpdb->prepare(
+			"SELECT enrolled_at FROM {$table} WHERE user_id = %d AND program_id = %d",
+			$user_id,
+			(int) $program_id
+		)
+	);
+
+	return null === $value ? null : (string) $value;
 }
 
 /**
@@ -50,7 +92,23 @@ function pcle_get_enrolled_programs( $user_id = 0 ) {
  * @return bool
  */
 function pcle_is_enrolled( $program_id, $user_id = 0 ) {
-	return in_array( (int) $program_id, pcle_get_enrolled_programs( $user_id ), true );
+	global $wpdb;
+
+	$user_id = $user_id ? (int) $user_id : get_current_user_id();
+	if ( ! $user_id ) {
+		return false;
+	}
+
+	$table = pcle_enrollments_table();
+
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom table.
+	return (bool) $wpdb->get_var(
+		$wpdb->prepare(
+			"SELECT 1 FROM {$table} WHERE user_id = %d AND program_id = %d",
+			$user_id,
+			(int) $program_id
+		)
+	);
 }
 
 /**
@@ -66,11 +124,28 @@ function pcle_enroll_user( $program_id, $user_id ) {
 	if ( ! $user_id || 'pcle_program' !== get_post_type( $program_id ) ) {
 		return false;
 	}
-	$list = pcle_get_enrolled_programs( $user_id );
-	if ( ! in_array( $program_id, $list, true ) ) {
-		$list[] = $program_id;
-		update_user_meta( $user_id, PCLE_ENROLLMENT_META, $list );
+	global $wpdb;
 
+	$table = pcle_enrollments_table();
+
+	/*
+	 * INSERT IGNORE against UNIQUE (user_id, program_id). The affected-row
+	 * count is what tells us this was a NEW enrollment rather than a re-save,
+	 * which is what the action below depends on — and it is now decided by
+	 * the database rather than by a read-then-write that two concurrent
+	 * requests could both win.
+	 */
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom table.
+	$inserted = (int) $wpdb->query(
+		$wpdb->prepare(
+			"INSERT IGNORE INTO {$table} (user_id, program_id, enrolled_at) VALUES (%d, %d, %s)",
+			$user_id,
+			$program_id,
+			current_time( 'mysql' )
+		)
+	);
+
+	if ( $inserted > 0 ) {
 		/**
 		 * Fires when a user is newly enrolled in a program.
 		 *
@@ -98,11 +173,18 @@ function pcle_unenroll_user( $program_id, $user_id ) {
 	if ( ! $user_id ) {
 		return false;
 	}
-	$list     = pcle_get_enrolled_programs( $user_id );
-	$filtered = array_values( array_diff( $list, array( (int) $program_id ) ) );
-	if ( count( $filtered ) !== count( $list ) ) {
-		update_user_meta( $user_id, PCLE_ENROLLMENT_META, $filtered );
-	}
+	global $wpdb;
+
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom table.
+	$wpdb->delete(
+		pcle_enrollments_table(),
+		array(
+			'user_id'    => $user_id,
+			'program_id' => (int) $program_id,
+		),
+		array( '%d', '%d' )
+	);
+
 	return true;
 }
 
@@ -171,34 +253,52 @@ function pcle_user_is_staff( $user_id = 0 ) {
 /**
  * List of students (role pcle_student), optionally filtered by program.
  *
- * The meta is a serialized array, so we filter in PHP (enough for this
- * program's scale).
+ * Filtering is done by the database now. It used to load every student and
+ * test them one at a time in PHP, which was one enrollment lookup per user
+ * on a screen that already shows all of them.
  *
  * @param int  $program_id    Program ID (to filter by enrolled).
  * @param bool $only_enrolled If true, only those enrolled in $program_id.
  * @return WP_User[]
  */
 function pcle_get_program_students( $program_id = 0, $only_enrolled = false ) {
-	$students = get_users(
-		array(
-			'role'    => 'pcle_student',
-			'orderby' => 'display_name',
-			'order'   => 'ASC',
-		)
+	$args = array(
+		'role'    => 'pcle_student',
+		'orderby' => 'display_name',
+		'order'   => 'ASC',
 	);
 
-	if ( ! $only_enrolled || ! $program_id ) {
-		return $students;
+	if ( $only_enrolled && $program_id ) {
+		$enrolled = pcle_get_program_enrollee_ids( $program_id );
+		if ( ! $enrolled ) {
+			return array();
+		}
+		$args['include'] = $enrolled;
 	}
 
-	return array_values(
-		array_filter(
-			$students,
-			function ( $user ) use ( $program_id ) {
-				return pcle_is_enrolled( $program_id, $user->ID );
-			}
-		)
+	return get_users( $args );
+}
+
+/**
+ * IDs of every user enrolled in a program.
+ *
+ * The query the old model could not express, and the one every roster,
+ * report and certificate run needs.
+ *
+ * @param int $program_id Program ID.
+ * @return int[]
+ */
+function pcle_get_program_enrollee_ids( $program_id ) {
+	global $wpdb;
+
+	$table = pcle_enrollments_table();
+
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom table.
+	$ids = $wpdb->get_col(
+		$wpdb->prepare( "SELECT user_id FROM {$table} WHERE program_id = %d", (int) $program_id )
 	);
+
+	return array_map( 'intval', $ids );
 }
 
 /* =========================================================================
