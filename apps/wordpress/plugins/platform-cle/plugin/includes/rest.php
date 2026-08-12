@@ -298,6 +298,9 @@ function pcle_rest_get_program( $request ) {
 			'title'    => get_the_title( $program ),
 			'content'  => pcle_rest_rendered_content( $program ),
 			'progress' => pcle_rest_shape_progress( pcle_get_program_progress( $program->ID ) ),
+			// Approved hours per jurisdiction. Not summable — see
+			// pcle_get_credit_hours().
+			'credits'  => pcle_rest_shape_credit_hours( $program->ID ),
 			'weeks'    => array_map( 'pcle_rest_shape_week', pcle_get_weeks( $program->ID ) ),
 		)
 	);

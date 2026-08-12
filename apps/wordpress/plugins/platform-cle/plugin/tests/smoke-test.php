@@ -564,7 +564,148 @@ pcle_eq(
 );
 
 /* ------------------------------------------------------------------ */
-/* 13) Emails                                                         */
+/* 13) Credit hours                                                   */
+/* ------------------------------------------------------------------ */
+pcle_section( '# Credit hours' );
+
+pcle_eq( array_keys( pcle_jurisdictions() ), array( 'ks', 'mo' ), 'jurisdictions are Kansas and Missouri' );
+pcle_eq( pcle_has_credit_hours( $prog_a ), false, 'a programme starts with no hours entered' );
+
+update_post_meta( $prog_a, pcle_credit_hours_meta_key( 'ks' ), 3.0 );
+update_post_meta( $prog_a, pcle_credit_hours_meta_key( 'mo' ), 2.5 );
+
+pcle_eq( pcle_get_credit_hours( $prog_a ), array( 'ks' => 3.0, 'mo' => 2.5 ), 'hours are stored per jurisdiction' );
+pcle_eq( pcle_has_credit_hours( $prog_a ), true, 'a programme with hours reports having them' );
+pcle_eq( pcle_get_credit_hours( $prog_b )['ks'], 0.0, 'an unaccredited programme reports zero, not null' );
+
+// Bars award in quarter hours; anything finer is a typo.
+pcle_eq( pcle_sanitize_credit_hours( 1.30 ), 1.25, 'hours round to the quarter' );
+pcle_eq( pcle_sanitize_credit_hours( 1.9 ), 2.0, 'hours round up to the quarter' );
+pcle_eq( pcle_sanitize_credit_hours( -4 ), 0.0, 'negative hours become zero' );
+pcle_eq( pcle_sanitize_credit_hours( 'abc' ), 0.0, 'non-numeric hours become zero' );
+
+/*
+ * The two figures describe the same seat time approved by two bars. There is
+ * deliberately no helper that adds them, because a total would be hours
+ * nobody sat.
+ */
+pcle_eq( function_exists( 'pcle_get_total_credit_hours' ), false, 'no helper invites summing hours across jurisdictions' );
+
+$program_payload = pcle_rest_get( $student, "/platform-cle/v1/programs/{$prog_a}" )->get_data();
+pcle_eq( count( $program_payload['credits'] ), 2, 'the programme endpoint reports both jurisdictions' );
+pcle_eq( $program_payload['credits'][0]['hours'], 3.0, 'the endpoint reports the Kansas hours' );
+wp_set_current_user( 0 );
+
+/* ------------------------------------------------------------------ */
+/* 14) Attendance                                                     */
+/* ------------------------------------------------------------------ */
+pcle_section( '# Attendance' );
+
+$session         = pcle_make_post( 'pcle_event', 'TEST Session A', array( '_pcle_week_id' => $week ) );
+$created_posts[] = $session;
+
+pcle_eq( pcle_has_attended( $session, $student ), false, 'nobody is present until marked' );
+pcle_eq( pcle_mark_attendance( $module, $student, $admin ), false, 'cannot mark attendance against a non-event' );
+
+pcle_mark_attendance( $session, $student, $admin );
+pcle_eq( pcle_has_attended( $session, $student ), true, 'marking records attendance' );
+pcle_eq( pcle_get_event_attendee_ids( $session ), array( $student ), 'the session roster lists who was there' );
+
+/*
+ * Attendance is one person vouching for another, so the record keeps who
+ * asserted it — and re-marking must not silently reattribute it to whoever
+ * saved the screen last.
+ */
+global $wpdb;
+$attendance_table = pcle_attendance_table();
+$marked_by        = (int) $wpdb->get_var( $wpdb->prepare( "SELECT marked_by FROM {$attendance_table} WHERE user_id = %d AND event_id = %d", $student, $session ) );
+pcle_eq( $marked_by, $admin, 'the record keeps which instructor marked it' );
+
+pcle_mark_attendance( $session, $student, $outsider );
+pcle_eq(
+	(int) $wpdb->get_var( $wpdb->prepare( "SELECT marked_by FROM {$attendance_table} WHERE user_id = %d AND event_id = %d", $student, $session ) ),
+	$admin,
+	're-marking does not reattribute the original assertion'
+);
+
+$program_attendance = pcle_get_program_attendance( $prog_a, $student );
+pcle_eq( $program_attendance['attended'], 1, 'programme attendance counts the sessions attended' );
+pcle_eq( $program_attendance['total'], count( pcle_get_program_event_ids( $prog_a ) ), 'programme attendance counts every session' );
+
+/*
+ * The two must stay unlinked: attendance is a record of presence, credit
+ * hours are what a bar approved. Wiring one to the other would invent a
+ * credit rule nobody approved.
+ */
+$hours_before = pcle_get_credit_hours( $prog_a );
+pcle_unmark_attendance( $session, $student );
+pcle_eq( pcle_has_attended( $session, $student ), false, 'unmarking removes attendance' );
+pcle_eq( pcle_get_credit_hours( $prog_a ), $hours_before, 'changing attendance does not change credit hours' );
+pcle_mark_attendance( $session, $student, $admin );
+
+/* ------------------------------------------------------------------ */
+/* 15) Certificates                                                   */
+/* ------------------------------------------------------------------ */
+/*
+ * The safety property of the scaffold: while the accreditation identity is
+ * missing, NOTHING may render as a valid certificate. An attorney can rely on
+ * one of these to show a bar they met an obligation.
+ */
+pcle_section( '# Certificates' );
+
+pcle_ok( count( pcle_certificate_blockers( $prog_a ) ) > 0, 'certificates are blocked while accreditation is unset' );
+pcle_eq( pcle_certificate_is_issuable( $prog_a ), false, 'and are therefore not issuable' );
+
+$draft = pcle_render_certificate( $prog_a, $student );
+pcle_ok( false !== strpos( $draft, 'DRAFT' ), 'the draft says so in the document title' );
+pcle_ok( false !== strpos( $draft, 'this document is not valid' ), 'the draft carries the warning banner' );
+pcle_ok( false !== strpos( $draft, 'NOT VALID FOR CREDIT' ), 'the draft carries the watermark' );
+
+// It still states the truth about the participant.
+$cert = pcle_get_certificate_data( $prog_a, $student );
+pcle_eq( $cert['program_id'], $prog_a, 'certificate data names the programme' );
+pcle_eq( $cert['credit_hours']['ks'], 3.0, 'certificate data carries the approved hours' );
+pcle_eq( $cert['attendance']['attended'], 1, 'certificate data carries attendance' );
+pcle_eq( $cert['finished'], true, 'a participant who completed every module is reported finished' );
+pcle_eq( pcle_get_certificate_data( $prog_a, $outsider )['finished'], false, 'a participant who completed nothing is not' );
+
+/*
+ * A completion carried over from the old storage has no date, and the
+ * certificate has to say so rather than substitute a plausible one.
+ */
+pcle_eq( $cert['dates_complete'], true, 'all completions in this fixture have dates' );
+$wpdb->query( $wpdb->prepare( "UPDATE {$progress_table} SET completed_at = NULL WHERE user_id = %d AND module_id = %d", $student, $module ) );
+pcle_eq( pcle_get_certificate_data( $prog_a, $student )['dates_complete'], false, 'a completion with no date is flagged, not invented' );
+pcle_mark_module_complete( $module, $student );
+
+// And the gate must open once the details exist, or it is not a gate.
+$fake_accreditation = function () {
+	return array(
+		'provider_name'    => 'TEST Provider',
+		'provider_numbers' => array( 'ks' => 'KS-TEST' ),
+		'signatory_name'   => 'TEST Signatory',
+		'signatory_title'  => 'Director',
+	);
+};
+add_filter( 'pcle_certificate_accreditation', $fake_accreditation );
+
+pcle_eq( pcle_certificate_blockers( $prog_a ), array(), 'complete accreditation clears every blocker' );
+pcle_eq( pcle_certificate_is_issuable( $prog_a ), true, 'and the certificate becomes issuable' );
+
+$issued = pcle_render_certificate( $prog_a, $student );
+pcle_ok( false === strpos( $issued, 'this document is not valid' ), 'an issuable certificate drops the warning banner' );
+pcle_ok( false === strpos( $issued, 'NOT VALID FOR CREDIT' ), 'an issuable certificate drops the watermark' );
+pcle_ok( false !== strpos( $issued, 'KS-TEST' ), 'an issuable certificate prints the provider number' );
+
+// A programme with no hours stays blocked even with full accreditation:
+// hours are what the credit claim rests on.
+pcle_ok( count( pcle_certificate_blockers( $prog_b ) ) > 0, 'a programme with no approved hours stays blocked' );
+
+remove_filter( 'pcle_certificate_accreditation', $fake_accreditation );
+pcle_eq( pcle_certificate_is_issuable( $prog_a ), false, 'removing the accreditation blocks issuing again' );
+
+/* ------------------------------------------------------------------ */
+/* 16) Emails                                                         */
 /* ------------------------------------------------------------------ */
 pcle_section( '# Emails' );
 $before = count( $GLOBALS['pcle_mail'] );
