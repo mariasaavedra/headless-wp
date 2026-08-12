@@ -2,8 +2,16 @@
 /**
  * Sample data seeder for Platform CLE.
  *
- * Creates a full 4-week program with modules, scenarios, templates, events, and
- * case updates, all linked through the plugin's relationships.
+ * Builds a populated site rather than a single example: three programmes at
+ * different stages and a roster of participants at different points in them.
+ * That matters because most of this platform's screens only say anything with
+ * a cohort behind them — a report with one row is not a report, and "enrolled
+ * in this programme but not that one" cannot be shown at all with a single
+ * programme.
+ *
+ * Dates are relative to seeding time, not fixed, so a demo run months from now
+ * still shows a finished course, a course in progress, and sessions that have
+ * not happened yet.
  *
  * It is IDEMPOTENT: every created post is marked with the `_pcle_demo` meta. On
  * re-run, it first deletes the previous demos and recreates them, without
@@ -48,9 +56,251 @@ function pcle_seed_post( $type, $title, $content, $order, $author_id, $parent_me
 }
 
 /**
- * Seeds (or re-seeds) the sample program, returning a summary of what was created.
+ * The programmes to build.
  *
- * @return array{removed:int, program:int, week:int, module:int, scenario:int, template:int, event:int, case_update:int}
+ * `starts_in_weeks` is relative to now: negative is a course that already ran,
+ * zero or positive one that is running or about to. Each carries the credit
+ * hours it is approved for, so certificates and reports have something real to
+ * show.
+ *
+ * @return array<string,array>
+ */
+function pcle_demo_programs() {
+	return array(
+		// Already finished: the only way to demonstrate a completed
+		// participant, a completion date, and an issuable certificate.
+		'asylum' => array(
+			'title'           => 'Asylum Merits Hearings',
+			'summary'         => 'Preparing and presenting an asylum case before the immigration court.',
+			'starts_in_weeks' => -20,
+			'credits'         => array( 'ks' => 3.0, 'mo' => 3.0 ),
+			'weeks'           => array(
+				array(
+					'title'   => 'Building the Record',
+					'desc'    => 'Declarations, country conditions, and corroboration.',
+					'modules' => array( 'The Client Declaration', 'Country Conditions Evidence' ),
+				),
+				array(
+					'title'   => 'The Hearing',
+					'desc'    => 'Direct, cross, and preserving issues for appeal.',
+					'modules' => array( 'Direct Examination', 'Preserving the Record for Appeal' ),
+				),
+			),
+		),
+
+		// The flagship course, mid-flight.
+		'habeas' => array(
+			'title'           => 'Immigration Habeas Corpus',
+			'summary'         => 'A four-week virtual CLE program on litigating immigration habeas corpus petitions in federal court.',
+			'starts_in_weeks' => -2,
+			'credits'         => array( 'ks' => 6.0, 'mo' => 6.0 ),
+			'weeks'           => array(
+				array(
+					'title'   => 'Foundations of the Great Writ',
+					'desc'    => 'History and statutory basis of habeas corpus in the immigration context (28 U.S.C. § 2241).',
+					'modules' => array(
+						'The Suspension Clause and § 2241',
+						'Habeas vs. the REAL ID Act channeling',
+					),
+				),
+				array(
+					'title'   => 'Jurisdiction and Custody',
+					'desc'    => 'Who is the proper respondent, where to file, and what "in custody" means.',
+					'modules' => array(
+						'Immediate Custodian Rule & Proper Respondent',
+						'District of Confinement and Venue',
+						'Establishing "In Custody" Status',
+					),
+				),
+				array(
+					'title'   => 'Drafting the Petition',
+					'desc'    => 'Building a persuasive § 2241 petition and supporting record.',
+					'modules' => array(
+						'Anatomy of a Habeas Petition',
+						'Exhaustion and Procedural Posture',
+					),
+				),
+				array(
+					'title'   => 'Litigation and Hearings',
+					'desc'    => 'Briefing, the return, traverse, and bond/release remedies.',
+					'modules' => array(
+						'The Government Return and Your Traverse',
+						'Remedies: Release, Bond Hearings, and Stays',
+					),
+				),
+			),
+		),
+
+		// A second live programme, so per-programme access is demonstrable
+		// with a real participant rather than only with someone enrolled in
+		// nothing.
+		'bond'   => array(
+			'title'           => 'Bond & Detention Practice',
+			'summary'         => 'Custody redeterminations, bond hearings, and release advocacy.',
+			'starts_in_weeks' => 1,
+			'credits'         => array( 'ks' => 4.5, 'mo' => 4.0 ),
+			'weeks'           => array(
+				array(
+					'title'   => 'Custody Determinations',
+					'desc'    => 'Mandatory detention, discretionary custody, and the initial decision.',
+					'modules' => array( 'Mandatory Detention under § 1226(c)', 'Discretionary Custody Decisions' ),
+				),
+				array(
+					'title'   => 'The Bond Hearing',
+					'desc'    => 'Burden, evidence, and presenting a release plan.',
+					'modules' => array( 'Burden and Standard of Proof', 'Building a Release Plan' ),
+				),
+				array(
+					'title'   => 'After the Decision',
+					'desc'    => 'Appeals, redeterminations, and changed circumstances.',
+					'modules' => array( 'Appealing to the BIA', 'Changed Circumstances and Re-filing' ),
+				),
+			),
+		),
+	);
+}
+
+/**
+ * The participants to create, and where each one stands.
+ *
+ * Between them these cover the states the screens are meant to distinguish:
+ * finished, mid-way, barely started, enrolled in two programmes, enrolled in
+ * one but not another, strong and weak attendance — and one whose completions
+ * carry no date, which is what a real site looks like after migrating from the
+ * old storage.
+ *
+ * `progress` and `attendance` are fractions of each programme, 0.0 to 1.0.
+ *
+ * @return array<string,array>
+ */
+function pcle_demo_participants() {
+	return array(
+		'demo.student'   => array(
+			'name'       => 'Demo Student (enrolled)',
+			'progress'   => array( 'habeas' => 0.0 ),
+			'attendance' => array( 'habeas' => 0.0 ),
+		),
+		'demo.outsider'  => array(
+			'name'       => 'Demo Student (not enrolled)',
+			'progress'   => array(),
+			'attendance' => array(),
+		),
+		'ana.delgado'    => array(
+			'name'       => 'Ana Delgado',
+			'progress'   => array( 'asylum' => 1.0, 'habeas' => 0.6 ),
+			'attendance' => array( 'asylum' => 1.0, 'habeas' => 0.5 ),
+		),
+		'marcus.webb'    => array(
+			'name'       => 'Marcus Webb',
+			'progress'   => array( 'habeas' => 1.0 ),
+			'attendance' => array( 'habeas' => 1.0 ),
+		),
+		'priya.raman'    => array(
+			'name'       => 'Priya Raman',
+			'progress'   => array( 'habeas' => 0.3 ),
+			'attendance' => array( 'habeas' => 0.25 ),
+		),
+		'tom.okafor'     => array(
+			'name'       => 'Tom Okafor',
+			'progress'   => array( 'bond' => 0.0 ),
+			'attendance' => array( 'bond' => 0.0 ),
+		),
+		'sofia.nunes'    => array(
+			'name'       => 'Sofia Nunes',
+			'progress'   => array( 'habeas' => 0.45, 'bond' => 0.15 ),
+			'attendance' => array( 'habeas' => 0.75, 'bond' => 0.0 ),
+		),
+		'lena.fischer'   => array(
+			'name'       => 'Lena Fischer',
+			'progress'   => array( 'habeas' => 0.8 ),
+			'attendance' => array( 'habeas' => 0.75 ),
+		),
+		// Finished the course, but before completion dates were recorded.
+		// This is the row that makes the reports caveat visible.
+		'james.boyd'     => array(
+			'name'       => 'James Boyd',
+			'progress'   => array( 'asylum' => 1.0 ),
+			'attendance' => array( 'asylum' => 0.5 ),
+			'undated'    => true,
+		),
+	);
+}
+
+/**
+ * Backdates a demo progress row to a plausible moment.
+ *
+ * The date is derived from the programme's own calendar — roughly when that
+ * week ran — rather than from "now", so a course that finished in April does
+ * not show completions dated August. A per-participant jitter keeps a cohort
+ * from finishing in lockstep.
+ *
+ * Only ever applied to demo content: every record here is invented, so a
+ * plausible spread of dates is the honest representation. Real completions are
+ * stamped when they happen and migrated ones are left NULL — see schema.php.
+ *
+ * @param int $user_id      Participant.
+ * @param int $module_id    Module.
+ * @param int $weeks_offset Week offset of the module relative to now.
+ * @param int $jitter_days  Per-participant spread, in days.
+ * @return void
+ */
+function pcle_seed_backdate_progress( $user_id, $module_id, $weeks_offset, $jitter_days ) {
+	global $wpdb;
+
+	$when = strtotime( "{$weeks_offset} weeks" ) + ( $jitter_days * DAY_IN_SECONDS );
+
+	// Nobody completed anything tomorrow. Programmes that have not started yet
+	// still allow a little pre-reading, so clamp to just before now rather
+	// than refusing.
+	$latest = time() - HOUR_IN_SECONDS;
+	if ( $when > $latest ) {
+		$when = $latest;
+	}
+
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- seeding demo content.
+	$wpdb->update(
+		pcle_progress_table(),
+		array( 'completed_at' => gmdate( 'Y-m-d H:i:s', $when ) ),
+		array(
+			'user_id'   => (int) $user_id,
+			'module_id' => (int) $module_id,
+		),
+		array( '%s' ),
+		array( '%d', '%d' )
+	);
+}
+
+/**
+ * Clears the completion date on a demo progress row.
+ *
+ * Reproduces what a site looks like after migrating from the old serialized
+ * storage, so the reports screen has something to show its "completions
+ * without a date" column for.
+ *
+ * @param int $user_id   Participant.
+ * @param int $module_id Module.
+ * @return void
+ */
+function pcle_seed_undate_progress( $user_id, $module_id ) {
+	global $wpdb;
+
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- seeding demo content.
+	$wpdb->update(
+		pcle_progress_table(),
+		array( 'completed_at' => null ),
+		array(
+			'user_id'   => (int) $user_id,
+			'module_id' => (int) $module_id,
+		),
+		array( '%s' ),
+		array( '%d', '%d' )
+	);
+}
+
+/**
+ * Seeds (or re-seeds) the sample programmes, returning a summary.
+ *
+ * @return array{removed:int, program:int, week:int, module:int, scenario:int, template:int, event:int, case_update:int, users:string[]}
  */
 function pcle_seed_demo_data() {
 	$admins    = get_users( array( 'role' => 'administrator', 'number' => 1, 'fields' => 'ID' ) );
@@ -72,142 +322,140 @@ function pcle_seed_demo_data() {
 		wp_delete_post( $oid, true );
 	}
 
-	// 2) Program.
-	$program_id = pcle_seed_post(
-		'pcle_program',
-		'Immigration Habeas Corpus — Spring 2026',
-		'<p>A four-week virtual CLE program on litigating immigration habeas corpus petitions in federal court.</p>',
-		1,
-		$author_id
-	);
-
-	// 3) Weeks, modules, scenarios, templates, and events.
-	$weeks = array(
-		array(
-			'title'   => 'Week 1 — Foundations of the Great Writ',
-			'desc'    => 'History and statutory basis of habeas corpus in the immigration context (28 U.S.C. § 2241).',
-			'modules' => array(
-				'The Suspension Clause and § 2241',
-				'Habeas vs. the REAL ID Act channeling',
-			),
-		),
-		array(
-			'title'   => 'Week 2 — Jurisdiction and Custody',
-			'desc'    => 'Who is the proper respondent, where to file, and what "in custody" means.',
-			'modules' => array(
-				'Immediate Custodian Rule & Proper Respondent',
-				'District of Confinement and Venue',
-				'Establishing "In Custody" Status',
-			),
-		),
-		array(
-			'title'   => 'Week 3 — Drafting the Petition',
-			'desc'    => 'Building a persuasive § 2241 petition and supporting record.',
-			'modules' => array(
-				'Anatomy of a Habeas Petition',
-				'Exhaustion and Procedural Posture',
-			),
-		),
-		array(
-			'title'   => 'Week 4 — Litigation and Hearings',
-			'desc'    => 'Briefing, the return, traverse, and bond/release remedies.',
-			'modules' => array(
-				'The Government Return and Your Traverse',
-				'Remedies: Release, Bond Hearings, and Stays',
-			),
-		),
-	);
-
-	// Reusable meta keys (must match relationships.php).
 	$meta_program = '_pcle_program_id';
 	$meta_week    = '_pcle_week_id';
 	$meta_module  = '_pcle_module_id';
 
 	$counts = array(
 		'removed'     => count( $old ),
-		'program'     => $program_id ? 1 : 0,
+		'program'     => 0,
 		'week'        => 0,
 		'module'      => 0,
 		'scenario'    => 0,
 		'template'    => 0,
 		'event'       => 0,
 		'case_update' => 0,
+		'users'       => array(),
 	);
 
-	foreach ( $weeks as $w => $week ) {
-		$week_id = pcle_seed_post(
-			'pcle_week',
-			$week['title'],
-			'<p>' . esc_html( $week['desc'] ) . '</p>',
-			$w + 1,
-			$author_id,
-			$meta_program,
-			$program_id
-		);
-		$counts['week']++;
+	// Programme key => built IDs, for the enrollment pass below.
+	$built = array();
 
-		// The week's live session.
-		$event_id = pcle_seed_post(
-			'pcle_event',
-			'Live Session — ' . $week['title'],
-			'<p>Weekly live discussion and Q&amp;A with faculty.</p>',
-			$w + 1,
-			$author_id,
-			$meta_week,
-			$week_id
+	foreach ( pcle_demo_programs() as $key => $program ) {
+		$year = (int) gmdate( 'Y', strtotime( $program['starts_in_weeks'] . ' weeks' ) );
+
+		$program_id = pcle_seed_post(
+			'pcle_program',
+			sprintf( '%s — %s', $program['title'], $year ),
+			'<p>' . esc_html( $program['summary'] ) . '</p>',
+			$counts['program'] + 1,
+			$author_id
 		);
-		if ( $event_id ) {
-			// Event date: consecutive Tuesdays at 18:00.
-			update_post_meta( $event_id, '_pcle_event_datetime', gmdate( 'Y-m-d 18:00:00', strtotime( "2026-03-03 +{$w} week" ) ) );
-			$counts['event']++;
+
+		if ( ! $program_id ) {
+			continue;
 		}
 
-		foreach ( $week['modules'] as $m => $module_title ) {
-			$module_id = pcle_seed_post(
-				'pcle_module',
-				$module_title,
-				'<p>Module content for: ' . esc_html( $module_title ) . '.</p>',
-				$m + 1,
+		$counts['program']++;
+
+		foreach ( $program['credits'] as $code => $hours ) {
+			update_post_meta( $program_id, pcle_credit_hours_meta_key( $code ), (float) $hours );
+		}
+
+		$built[ $key ] = array(
+			'id'      => $program_id,
+			'starts'  => (int) $program['starts_in_weeks'],
+			'modules' => array(),
+			'events'  => array(),
+		);
+
+		foreach ( $program['weeks'] as $w => $week ) {
+			$week_id = pcle_seed_post(
+				'pcle_week',
+				sprintf( 'Week %d — %s', $w + 1, $week['title'] ),
+				'<p>' . esc_html( $week['desc'] ) . '</p>',
+				$w + 1,
+				$author_id,
+				$meta_program,
+				$program_id
+			);
+			$counts['week']++;
+
+			$event_id = pcle_seed_post(
+				'pcle_event',
+				sprintf( 'Live Session — Week %d', $w + 1 ),
+				'<p>Weekly live discussion and Q&amp;A with faculty.</p>',
+				$w + 1,
 				$author_id,
 				$meta_week,
 				$week_id
 			);
-			$counts['module']++;
 
-			// Add a scenario and a template to the first module of each week.
-			if ( 0 === $m ) {
-				$scenario_body = "<p>Your client has been detained for 7 months without a bond hearing. "
-					. "Draft the core jurisdictional argument for a § 2241 petition.</p>\n"
-					. "[pcle_model_answer]<p><strong>Model answer:</strong> Frame the prolonged detention "
-					. "as raising due-process concerns and establish jurisdiction under § 2241 in the district "
-					. "of confinement, naming the immediate custodian (the facility warden) as respondent.</p>[/pcle_model_answer]";
-
-				pcle_seed_post(
-					'pcle_scenario',
-					'Scenario: Prolonged Detention Without a Bond Hearing',
-					$scenario_body,
-					1,
-					$author_id,
-					$meta_module,
-					$module_id
+			if ( $event_id ) {
+				// One session per week from the programme's start date.
+				$offset = $program['starts_in_weeks'] + $w;
+				update_post_meta(
+					$event_id,
+					'_pcle_event_datetime',
+					gmdate( 'Y-m-d 18:00:00', strtotime( "{$offset} weeks" ) )
 				);
-				$counts['scenario']++;
+				$counts['event']++;
+				$built[ $key ]['events'][] = $event_id;
+			}
 
-				pcle_seed_post(
-					'pcle_template',
-					'Template: § 2241 Petition Skeleton',
-					'<p>Fill-in-the-blank skeleton for a federal habeas petition under 28 U.S.C. § 2241.</p>',
-					1,
+			foreach ( $week['modules'] as $m => $module_title ) {
+				$module_id = pcle_seed_post(
+					'pcle_module',
+					$module_title,
+					'<p>Module content for: ' . esc_html( $module_title ) . '.</p>',
+					$m + 1,
 					$author_id,
-					$meta_module,
-					$module_id
+					$meta_week,
+					$week_id
 				);
-				$counts['template']++;
+				$counts['module']++;
+				// Keep the week each module sits in: the seeded completion
+				// dates are derived from the programme calendar, not from now.
+				$built[ $key ]['modules'][] = array(
+					'id'   => $module_id,
+					'week' => $w,
+				);
+
+				// A scenario and a template on the first module of each week.
+				if ( 0 === $m ) {
+					$scenario_body = "<p>Your client has been detained for 7 months without a bond hearing. "
+						. "Draft the core jurisdictional argument for a § 2241 petition.</p>\n"
+						. "[pcle_model_answer]<p><strong>Model answer:</strong> Frame the prolonged detention "
+						. "as raising due-process concerns and establish jurisdiction under § 2241 in the district "
+						. "of confinement, naming the immediate custodian (the facility warden) as respondent.</p>[/pcle_model_answer]";
+
+					pcle_seed_post(
+						'pcle_scenario',
+						sprintf( 'Scenario: %s in Practice', $week['title'] ),
+						$scenario_body,
+						1,
+						$author_id,
+						$meta_module,
+						$module_id
+					);
+					$counts['scenario']++;
+
+					pcle_seed_post(
+						'pcle_template',
+						sprintf( 'Template: %s Checklist', $week['title'] ),
+						'<p>Fill-in-the-blank starting point you can adapt for a real filing.</p>',
+						1,
+						$author_id,
+						$meta_module,
+						$module_id
+					);
+					$counts['template']++;
+				}
 			}
 		}
 	}
 
-	// 4) Case Updates (independent of the hierarchy).
+	// 2) Case Updates (independent of the hierarchy).
 	pcle_seed_post(
 		'pcle_case_update',
 		'Case Update: Circuit Split on Immediate Custodian Rule',
@@ -224,100 +472,144 @@ function pcle_seed_demo_data() {
 	);
 	$counts['case_update'] = 2;
 
-	// 5) Demo accounts (opt-in; see pcle_seed_demo_users()).
-	$counts['users'] = pcle_seed_demo_users( $program_id );
+	// 3) Demo accounts and their standing (opt-in; see pcle_seed_demo_users()).
+	$counts['users'] = pcle_seed_demo_users( $built );
 
 	return $counts;
 }
 
 /**
- * Creates the demo accounts, when — and only when — a demo password is set.
+ * Creates the demo accounts and puts each one where its profile says.
  *
- * The sample content is harmless anywhere; accounts with a password anyone
- * can read out of a repo are not. So this is opt-in via the environment:
- * with PCLE_DEMO_USER_PASSWORD unset (any real host) it does nothing, and
- * the seeder behaves exactly as before. docker-compose sets it for local
- * development only.
+ * Opt-in via PCLE_DEMO_USER_PASSWORD. The sample content is harmless
+ * anywhere; accounts with a password anyone can read out of a repo are not, so
+ * with that variable unset — any real host — this does nothing at all.
  *
- * Idempotent: existing demo accounts are reused, with their role, password
- * and enrollment re-applied.
+ * Idempotent: existing accounts are reused, with role, password, enrollment
+ * and standing re-applied.
  *
- * Three accounts, because the interesting bugs live in the differences
- * between them: enrolled vs. holding an account but enrolled in nothing
- * (the "hasn't paid" case), plus staff.
- *
- * @param int $program_id Program to enroll the enrolled student into.
+ * @param array<string,array> $built Programme key => {id, modules, events}.
  * @return string[] Logins that exist as a result (empty when opted out).
  */
-function pcle_seed_demo_users( $program_id ) {
+function pcle_seed_demo_users( $built ) {
 	$password = getenv( 'PCLE_DEMO_USER_PASSWORD' );
 
 	if ( ! is_string( $password ) || '' === $password ) {
 		return array();
 	}
 
-	$accounts = array(
-		array(
-			'login'  => 'demo.student',
-			'email'  => 'demo.student@example.test',
-			'name'   => 'Demo Student (enrolled)',
-			'role'   => 'pcle_student',
-			'enroll' => true,
-		),
-		array(
-			'login'  => 'demo.outsider',
-			'email'  => 'demo.outsider@example.test',
-			'name'   => 'Demo Student (not enrolled)',
-			'role'   => 'pcle_student',
-			'enroll' => false,
-		),
-		array(
-			'login'  => 'demo.instructor',
-			'email'  => 'demo.instructor@example.test',
-			'name'   => 'Demo Instructor',
-			'role'   => 'pcle_instructor',
-			'enroll' => false,
-		),
-	);
+	// Seeding is not a reason to email anybody: enrolling fires the
+	// confirmation notice, and a demo run would otherwise send one per
+	// participant per programme.
+	$silence = function () {
+		return true;
+	};
+	add_filter( 'pre_wp_mail', $silence, 99 );
 
 	$created = array();
 
-	foreach ( $accounts as $account ) {
-		$user = get_user_by( 'login', $account['login'] );
-
-		if ( $user ) {
-			$user_id = (int) $user->ID;
-			wp_update_user(
-				array(
-					'ID'        => $user_id,
-					'user_pass' => $password,
-					'role'      => $account['role'],
-				)
-			);
-		} else {
-			$user_id = wp_insert_user(
-				array(
-					'user_login'   => $account['login'],
-					'user_email'   => $account['email'],
-					'user_pass'    => $password,
-					'display_name' => $account['name'],
-					'role'         => $account['role'],
-				)
-			);
-
-			if ( is_wp_error( $user_id ) ) {
-				continue;
-			}
-		}
-
-		if ( $account['enroll'] && $program_id ) {
-			pcle_enroll_user( $program_id, $user_id );
-		}
-
-		$created[] = $account['login'];
+	// Staff first, so there is somebody to attribute attendance to.
+	$instructor_id = pcle_seed_demo_user( 'demo.instructor', 'Demo Instructor', 'pcle_instructor', $password );
+	if ( $instructor_id ) {
+		$created[] = 'demo.instructor';
 	}
 
+	foreach ( pcle_demo_participants() as $login => $profile ) {
+		$user_id = pcle_seed_demo_user( $login, $profile['name'], 'pcle_student', $password );
+
+		if ( ! $user_id ) {
+			continue;
+		}
+
+		$created[] = $login;
+
+		// A stable per-participant offset so a cohort does not finish in
+		// lockstep. Derived from the login, so re-seeding reproduces it.
+		$jitter = ( crc32( $login ) % 5 ) + 1;
+
+		foreach ( $profile['progress'] as $program_key => $fraction ) {
+			if ( ! isset( $built[ $program_key ] ) ) {
+				continue;
+			}
+
+			$program = $built[ $program_key ];
+			pcle_enroll_user( $program['id'], $user_id );
+
+			// Complete the first N modules, so progress reads as someone
+			// working through the course in order rather than at random.
+			$modules = $program['modules'];
+			$take    = (int) round( count( $modules ) * (float) $fraction );
+
+			foreach ( array_slice( $modules, 0, $take ) as $module ) {
+				pcle_mark_module_complete( $module['id'], $user_id );
+
+				if ( ! empty( $profile['undated'] ) ) {
+					pcle_seed_undate_progress( $user_id, $module['id'] );
+					continue;
+				}
+
+				pcle_seed_backdate_progress(
+					$user_id,
+					$module['id'],
+					$program['starts'] + $module['week'],
+					$jitter
+				);
+			}
+
+			$attendance_fraction = isset( $profile['attendance'][ $program_key ] )
+				? (float) $profile['attendance'][ $program_key ]
+				: 0.0;
+
+			$events = $program['events'];
+			$attend = (int) round( count( $events ) * $attendance_fraction );
+
+			foreach ( array_slice( $events, 0, $attend ) as $event_id ) {
+				pcle_mark_attendance( $event_id, $user_id, $instructor_id );
+			}
+		}
+	}
+
+	remove_filter( 'pre_wp_mail', $silence, 99 );
+
 	return $created;
+}
+
+/**
+ * Creates or refreshes one demo account.
+ *
+ * @param string $login    Login name.
+ * @param string $name     Display name.
+ * @param string $role     Role slug.
+ * @param string $password Shared demo password.
+ * @return int User ID, or 0 on failure.
+ */
+function pcle_seed_demo_user( $login, $name, $role, $password ) {
+	$user = get_user_by( 'login', $login );
+
+	if ( $user ) {
+		wp_update_user(
+			array(
+				'ID'           => $user->ID,
+				'user_pass'    => $password,
+				'role'         => $role,
+				'display_name' => $name,
+			)
+		);
+
+		return (int) $user->ID;
+	}
+
+	$user_id = wp_insert_user(
+		array(
+			'user_login'   => $login,
+			'user_email'   => $login . '@example.test',
+			'user_pass'    => $password,
+			'display_name' => $name,
+			'role'         => $role,
+		)
+	);
+
+	return is_wp_error( $user_id ) ? 0 : (int) $user_id;
 }
 
 /**
