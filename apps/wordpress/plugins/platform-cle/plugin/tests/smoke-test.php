@@ -481,7 +481,90 @@ pcle_rest_post_progress( $student, $module, false ); // restore fixture state
 wp_set_current_user( 0 );
 
 /* ------------------------------------------------------------------ */
-/* 12) Emails                                                         */
+/* 12) Storage: tables, timestamps and migration                      */
+/* ------------------------------------------------------------------ */
+pcle_section( '# Storage' );
+
+global $wpdb;
+$enrollments_table = pcle_enrollments_table();
+$progress_table    = pcle_progress_table();
+
+// Writes through the public helpers land in the tables, not in user meta.
+pcle_eq(
+	(int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$enrollments_table} WHERE user_id = %d AND program_id = %d", $student, $prog_a ) ),
+	1,
+	'enrollment is stored as a row'
+);
+pcle_eq( get_user_meta( $student, PCLE_ENROLLMENT_META, true ), '', 'enrolling no longer writes the legacy user meta' );
+
+// A new completion is timestamped; that is the whole point of the move.
+pcle_mark_module_complete( $module, $student );
+$completed_at = pcle_get_module_completed_at( $module, $student );
+pcle_ok( is_string( $completed_at ) && '' !== $completed_at, 'a new completion records when it happened' );
+
+/*
+ * Re-marking must not move the date. A completion record that silently
+ * advances every time a student revisits the page is worthless as evidence
+ * of when they did the work.
+ */
+pcle_mark_module_complete( $module, $student );
+pcle_eq( pcle_get_module_completed_at( $module, $student ), $completed_at, 're-marking preserves the original completion date' );
+
+// And unmark/remark is a genuinely new record, not a resurrected one.
+pcle_unmark_module_complete( $module, $student );
+pcle_eq( pcle_get_module_completed_at( $module, $student ), null, 'unmarking removes the row' );
+pcle_mark_module_complete( $module, $student );
+
+// The unique keys, not the callers, are what make double writes harmless.
+pcle_enroll_user( $prog_a, $student );
+pcle_eq(
+	(int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$enrollments_table} WHERE user_id = %d AND program_id = %d", $student, $prog_a ) ),
+	1,
+	'enrolling twice cannot create a second row'
+);
+
+// Migration: a user carrying only legacy meta is brought across, with the
+// timestamps left NULL rather than invented.
+$legacy_user     = pcle_make_student();
+$created_users[] = $legacy_user;
+update_user_meta( $legacy_user, PCLE_ENROLLMENT_META, array( $prog_b ) );
+update_user_meta( $legacy_user, PCLE_PROGRESS_META, array( $module, $module2 ) );
+
+$migrated = pcle_migrate_legacy_meta();
+pcle_ok( $migrated['enrollments'] >= 1, 'migration reports the enrollment it moved' );
+pcle_ok( $migrated['progress'] >= 2, 'migration reports the completions it moved' );
+pcle_eq( pcle_is_enrolled( $prog_b, $legacy_user ), true, 'legacy enrollment is readable after migration' );
+pcle_eq( pcle_is_module_complete( $module, $legacy_user ), true, 'legacy completion is readable after migration' );
+pcle_eq( pcle_get_module_completed_at( $module, $legacy_user ), null, 'a migrated completion has no invented date' );
+pcle_eq( pcle_get_enrolled_at( $prog_b, $legacy_user ), null, 'a migrated enrollment has no invented date' );
+
+// Running it again must change nothing: it runs on every version bump.
+$again = pcle_migrate_legacy_meta();
+pcle_eq( $again['enrollments'], 0, 'a second migration pass inserts no enrollments' );
+pcle_eq( $again['progress'], 0, 'a second migration pass inserts no completions' );
+pcle_eq( count( pcle_get_enrolled_programs( $legacy_user ) ), 1, 'the migrated user is not enrolled twice' );
+
+// The query the old model could not answer at all.
+$enrollees = pcle_get_program_enrollee_ids( $prog_b );
+pcle_ok( in_array( $legacy_user, $enrollees, true ), 'program roster includes the enrolled user' );
+pcle_ok( ! in_array( $outsider, $enrollees, true ), 'program roster excludes a user enrolled in nothing' );
+
+// The cohort view must agree with the per-user computation it replaced.
+$participants = pcle_get_participant_progress( $prog_a );
+pcle_ok( isset( $participants[ $student ] ), 'participant progress includes the student' );
+pcle_eq(
+	$participants[ $student ]['progress'],
+	pcle_get_program_progress( $prog_a, $student ),
+	'cohort progress agrees with the single-user computation'
+);
+pcle_eq(
+	$participants[ $outsider ]['progress']['completed'],
+	0,
+	'a participant with no completions reports zero rather than being absent'
+);
+
+/* ------------------------------------------------------------------ */
+/* 13) Emails                                                         */
 /* ------------------------------------------------------------------ */
 pcle_section( '# Emails' );
 $before = count( $GLOBALS['pcle_mail'] );
