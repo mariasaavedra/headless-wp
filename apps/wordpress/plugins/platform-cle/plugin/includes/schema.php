@@ -214,6 +214,42 @@ function pcle_migrate_legacy_meta() {
 }
 
 /**
+ * Removes a deleted user's rows from the plugin's tables.
+ *
+ * WordPress cleans up its own usermeta when a user is deleted, which is why
+ * the old serialized model needed nothing here. Custom tables are not part of
+ * that, so without this a deleted account leaves enrollment, progress and
+ * attendance rows behind — and those rows would keep turning up in cohort
+ * reports as participants who no longer exist.
+ *
+ * Hooked on `deleted_user`, which fires after the deletion has succeeded.
+ *
+ * @param int $user_id Deleted user.
+ */
+function pcle_delete_user_records( $user_id ) {
+	global $wpdb;
+
+	$user_id = (int) $user_id;
+	if ( ! $user_id ) {
+		return;
+	}
+
+	foreach ( array( pcle_enrollments_table(), pcle_progress_table(), pcle_attendance_table() ) as $table ) {
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom table.
+		$wpdb->delete( $table, array( 'user_id' => $user_id ), array( '%d' ) );
+	}
+
+	/*
+	 * `marked_by` points at the instructor who vouched, not the participant.
+	 * Their leaving does not undo the assertion, so the row stays; the
+	 * reference is zeroed so it cannot later resolve to a recycled ID.
+	 */
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom table.
+	$wpdb->update( pcle_attendance_table(), array( 'marked_by' => 0 ), array( 'marked_by' => $user_id ), array( '%d' ), array( '%d' ) );
+}
+add_action( 'deleted_user', 'pcle_delete_user_records' );
+
+/**
  * Brings the database up to PCLE_DB_VERSION if it isn't already.
  *
  * Runs on every load but costs one option read in the normal case.
