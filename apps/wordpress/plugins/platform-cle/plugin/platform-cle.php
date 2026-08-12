@@ -39,6 +39,9 @@ require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/event-meta.php';
 require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/protected-files.php';
 require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/emails.php';
 require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/health.php';
+require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/credits.php';
+require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/attendance.php';
+require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/certificates.php';
 require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/demo-data.php';
 
 /*

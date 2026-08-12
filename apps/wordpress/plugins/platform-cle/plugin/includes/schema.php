@@ -29,7 +29,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * deployed by copying files, so waiting for activation would leave sites on
  * the old schema indefinitely.
  */
-const PCLE_DB_VERSION = 1;
+const PCLE_DB_VERSION = 2;
 
 /** Option holding the installed schema version. */
 const PCLE_DB_VERSION_OPTION = 'pcle_db_version';
@@ -52,6 +52,16 @@ function pcle_enrollments_table() {
 function pcle_progress_table() {
 	global $wpdb;
 	return $wpdb->prefix . 'pcle_progress';
+}
+
+/**
+ * Fully-qualified name of the attendance table.
+ *
+ * @return string
+ */
+function pcle_attendance_table() {
+	global $wpdb;
+	return $wpdb->prefix . 'pcle_attendance';
 }
 
 /**
@@ -99,6 +109,27 @@ function pcle_install_schema() {
 			PRIMARY KEY  (id),
 			UNIQUE KEY user_module (user_id,module_id),
 			KEY module_id (module_id)
+		) {$charset_collate};"
+	);
+
+	/*
+	 * Attendance at live sessions. `marked_by` records WHICH instructor
+	 * asserted it: unlike progress, which a participant records about
+	 * themselves, this is one person vouching for another, and a credit
+	 * record should be able to say who.
+	 */
+	$attendance = pcle_attendance_table();
+
+	dbDelta(
+		"CREATE TABLE {$attendance} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			user_id bigint(20) unsigned NOT NULL,
+			event_id bigint(20) unsigned NOT NULL,
+			marked_at datetime NULL DEFAULT NULL,
+			marked_by bigint(20) unsigned NOT NULL DEFAULT 0,
+			PRIMARY KEY  (id),
+			UNIQUE KEY user_event (user_id,event_id),
+			KEY event_id (event_id)
 		) {$charset_collate};"
 	);
 }
