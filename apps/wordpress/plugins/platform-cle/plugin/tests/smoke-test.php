@@ -795,6 +795,36 @@ pcle_eq(
 pcle_ok( ! isset( pcle_get_program_report( $prog_a )[ $doomed ] ), 'and they stop appearing in the report' );
 
 /*
+ * The same hole on the other side. Deleting a module used to leave its
+ * completion rows pointing at a dead ID — invisible, but WordPress reuses
+ * auto-increment IDs, so a future post could inherit somebody else's
+ * completion history.
+ */
+$throwaway = pcle_make_post( 'pcle_module', 'TEST Disposable Module', array( '_pcle_week_id' => $week ) );
+pcle_mark_module_complete( $throwaway, $student );
+pcle_eq(
+	(int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$progress_table} WHERE module_id = %d", $throwaway ) ),
+	1,
+	'a completion against a module is stored'
+);
+
+wp_delete_post( $throwaway, true );
+pcle_eq(
+	(int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$progress_table} WHERE module_id = %d", $throwaway ) ),
+	0,
+	'deleting a module removes the completions that referenced it'
+);
+
+$throwaway_event = pcle_make_post( 'pcle_event', 'TEST Disposable Session', array( '_pcle_week_id' => $week ) );
+pcle_mark_attendance( $throwaway_event, $student, $admin );
+wp_delete_post( $throwaway_event, true );
+pcle_eq(
+	(int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$attendance_table} WHERE event_id = %d", $throwaway_event ) ),
+	0,
+	'deleting a session removes the attendance that referenced it'
+);
+
+/*
  * Tear the cohort down here rather than at the end. It is enrolled in
  * Program A, and anything later that counts enrolled participants — the
  * session reminder, for one — would otherwise be measuring this fixture.
@@ -825,13 +855,50 @@ $rdt = new DateTime( 'now', wp_timezone() );
 $rdt->modify( '+2 hours' );
 update_post_meta( $rem_event, '_pcle_event_datetime', $rdt->format( 'Y-m-d H:i:s' ) );
 
-$before = count( $GLOBALS['pcle_mail'] );
-pcle_send_session_reminders();
-pcle_eq( count( $GLOBALS['pcle_mail'] ) - $before, 1, 'session reminder emails the enrolled student' );
+/*
+ * The reminder de-duplicates through post meta, which is global state another
+ * process can consume: any HTTP request to the site can spawn WP-Cron, and if
+ * that runs the reminder job first it marks this event as sent and the
+ * assertion below sees nothing. Clearing the marker here makes the test own
+ * its own state instead of racing whatever else is talking to the site.
+ */
+delete_post_meta( $rem_event, '_pcle_reminder_sent' );
+
+/**
+ * Counts captured mail addressed to one recipient.
+ *
+ * The reminder job sweeps every session on the site, so on a seeded install
+ * it legitimately mails other cohorts too. Counting the global total would
+ * make this assertion depend on whatever demo content happens to have a
+ * session due — which is exactly how it broke.
+ *
+ * @param string $email    Recipient to count.
+ * @param int    $from     Index to start counting from.
+ * @return int
+ */
+function pcle_mail_count_for( $email, $from ) {
+	$found = 0;
+
+	foreach ( array_slice( $GLOBALS['pcle_mail'], $from ) as $mail ) {
+		$to = is_array( $mail['to'] ) ? $mail['to'] : array( $mail['to'] );
+
+		if ( in_array( $email, $to, true ) ) {
+			$found++;
+		}
+	}
+
+	return $found;
+}
+
+$student_email = get_userdata( $student )->user_email;
 
 $before = count( $GLOBALS['pcle_mail'] );
 pcle_send_session_reminders();
-pcle_eq( count( $GLOBALS['pcle_mail'] ) - $before, 0, 'reminder is de-duplicated on re-run' );
+pcle_eq( pcle_mail_count_for( $student_email, $before ), 1, 'session reminder emails the enrolled student' );
+
+$before = count( $GLOBALS['pcle_mail'] );
+pcle_send_session_reminders();
+pcle_eq( pcle_mail_count_for( $student_email, $before ), 0, 'reminder is de-duplicated on re-run' );
 
 /* ------------------------------------------------------------------ */
 /* Teardown                                                           */

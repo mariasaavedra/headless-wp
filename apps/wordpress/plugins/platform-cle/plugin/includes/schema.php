@@ -250,6 +250,45 @@ function pcle_delete_user_records( $user_id ) {
 add_action( 'deleted_user', 'pcle_delete_user_records' );
 
 /**
+ * Removes a deleted post's rows from the plugin's tables.
+ *
+ * Deleting a programme, module or session used to leave enrollment, progress
+ * and attendance rows pointing at an ID that no longer exists. Those rows are
+ * invisible — nothing lists them — but they are not harmless: WordPress
+ * reuses auto-increment IDs, so a future post can inherit somebody else's
+ * completion history, and re-seeding demo content quietly accumulated
+ * thousands of them.
+ *
+ * An ID identifies exactly one post, so clearing it from all three tables is
+ * safe without knowing which type it was — which matters because the post has
+ * already gone by the time this runs.
+ *
+ * @param int $post_id Deleted post.
+ */
+function pcle_delete_post_records( $post_id ) {
+	global $wpdb;
+
+	$post_id = (int) $post_id;
+	if ( ! $post_id ) {
+		return;
+	}
+
+	$targets = array(
+		array( pcle_enrollments_table(), 'program_id' ),
+		array( pcle_progress_table(), 'module_id' ),
+		array( pcle_attendance_table(), 'event_id' ),
+	);
+
+	foreach ( $targets as $target ) {
+		list( $table, $column ) = $target;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom table.
+		$wpdb->delete( $table, array( $column => $post_id ), array( '%d' ) );
+	}
+}
+add_action( 'deleted_post', 'pcle_delete_post_records' );
+
+/**
  * Brings the database up to PCLE_DB_VERSION if it isn't already.
  *
  * Runs on every load but costs one option read in the normal case.
