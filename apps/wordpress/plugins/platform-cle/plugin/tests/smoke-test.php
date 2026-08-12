@@ -705,7 +705,108 @@ remove_filter( 'pcle_certificate_accreditation', $fake_accreditation );
 pcle_eq( pcle_certificate_is_issuable( $prog_a ), false, 'removing the accreditation blocks issuing again' );
 
 /* ------------------------------------------------------------------ */
-/* 16) Emails                                                         */
+/* 16) Reports                                                        */
+/* ------------------------------------------------------------------ */
+pcle_section( '# Reports' );
+
+$report = pcle_get_program_report( $prog_a );
+
+pcle_ok( isset( $report[ $student ] ), 'the report includes an enrolled participant' );
+pcle_ok( ! isset( $report[ $outsider ] ), 'the report excludes someone enrolled in nothing' );
+
+$student_row = $report[ $student ];
+
+// The report is built from grouped queries rather than the per-user helpers,
+// so it has to be checked against them or the two can drift apart silently.
+$student_progress = pcle_get_program_progress( $prog_a, $student );
+pcle_eq( $student_row['completed'], $student_progress['completed'], 'report progress agrees with the per-user helper' );
+pcle_eq( $student_row['total'], $student_progress['total'], 'report total agrees with the per-user helper' );
+pcle_eq( $student_row['percent'], $student_progress['percent'], 'report percentage agrees with the per-user helper' );
+pcle_eq( $student_row['attended'], pcle_get_program_attendance( $prog_a, $student )['attended'], 'report attendance agrees with the per-user helper' );
+pcle_ok( is_string( $student_row['enrolled_at'] ) && '' !== $student_row['enrolled_at'], 'the report carries when the participant enrolled' );
+
+/*
+ * A completion with no date must appear as such. A report that quietly
+ * counted it as dated would overstate what is actually known about when the
+ * work was done.
+ */
+$wpdb->query( $wpdb->prepare( "UPDATE {$progress_table} SET completed_at = NULL WHERE user_id = %d AND module_id = %d", $student, $module ) );
+$undated_row = pcle_get_program_report( $prog_a )[ $student ];
+pcle_eq( $undated_row['undated'], 1, 'a completion without a date is counted and surfaced' );
+pcle_eq( $undated_row['completed'], $student_row['completed'], 'and still counts as completed' );
+pcle_mark_module_complete( $module, $student );
+
+// CSV: a header plus one line per participant.
+$csv = pcle_get_program_report_csv( $prog_a );
+pcle_ok( count( $csv ) === count( $report ) + 1, 'the CSV has a header row plus one row per participant' );
+pcle_ok( in_array( 'Kansas credit hours', $csv[0], true ), 'the CSV names a credit-hours column per jurisdiction' );
+
+/*
+ * Display names come from people, and a spreadsheet executes any cell
+ * starting `=`, `+`, `-` or `@`. Someone named `=HYPERLINK(...)` must not run
+ * on the machine of whoever opens the export.
+ */
+pcle_eq( pcle_csv_safe( '=HYPERLINK("http://evil","x")' ), '\'=HYPERLINK("http://evil","x")', 'a formula-triggering value is neutralised' );
+pcle_eq( pcle_csv_safe( '+1' ), '\'+1', 'a leading plus is neutralised' );
+pcle_eq( pcle_csv_safe( '@sum' ), '\'@sum', 'a leading at sign is neutralised' );
+pcle_eq( pcle_csv_safe( 'Ana Ruiz' ), 'Ana Ruiz', 'an ordinary name is left alone' );
+pcle_eq( pcle_csv_safe( '' ), '', 'an empty value is left alone' );
+
+/*
+ * The point of moving to tables: a cohort costs the same as one person.
+ * Measured warm, so the curriculum walk is not counted twice.
+ */
+$cohort = array();
+for ( $i = 0; $i < 8; $i++ ) {
+	$extra    = pcle_make_student();
+	$cohort[] = $extra;
+	pcle_enroll_user( $prog_a, $extra );
+	pcle_mark_module_complete( $module, $extra );
+}
+$created_users = array_merge( $created_users, $cohort );
+
+pcle_get_program_report( $prog_a ); // warm the hierarchy cache
+$before_queries = $wpdb->num_queries;
+pcle_get_program_report( $prog_a );
+$cohort_queries = $wpdb->num_queries - $before_queries;
+
+pcle_ok( $cohort_queries <= 6, "a cohort report stays within a fixed query budget (used {$cohort_queries})" );
+pcle_eq( count( pcle_get_program_report( $prog_a ) ), count( $cohort ) + 1, 'every enrolled participant appears exactly once' );
+
+/*
+ * WordPress cleans up its own usermeta on user deletion; custom tables are
+ * not part of that. Without the deleted_user hook these rows would keep
+ * showing up as participants who no longer exist.
+ */
+$doomed = array_pop( $cohort );
+$created_users = array_values( array_diff( $created_users, array( $doomed ) ) );
+wp_delete_user( $doomed );
+
+pcle_eq(
+	(int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$enrollments_table} WHERE user_id = %d", $doomed ) ),
+	0,
+	'deleting a user removes their enrollment rows'
+);
+pcle_eq(
+	(int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$progress_table} WHERE user_id = %d", $doomed ) ),
+	0,
+	'deleting a user removes their progress rows'
+);
+pcle_ok( ! isset( pcle_get_program_report( $prog_a )[ $doomed ] ), 'and they stop appearing in the report' );
+
+/*
+ * Tear the cohort down here rather than at the end. It is enrolled in
+ * Program A, and anything later that counts enrolled participants — the
+ * session reminder, for one — would otherwise be measuring this fixture.
+ */
+foreach ( $cohort as $extra ) {
+	wp_delete_user( $extra );
+}
+$created_users = array_values( array_diff( $created_users, $cohort ) );
+pcle_eq( count( pcle_get_program_report( $prog_a ) ), 1, 'the cohort fixture is cleaned up after itself' );
+
+/* ------------------------------------------------------------------ */
+/* 17) Emails                                                         */
 /* ------------------------------------------------------------------ */
 pcle_section( '# Emails' );
 $before = count( $GLOBALS['pcle_mail'] );
