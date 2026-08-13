@@ -93,3 +93,67 @@ export type {
   ModuleDetail,
   TrainingProgram,
 };
+
+/* ------------------------------------------------------------------ */
+/* Authoring                                                           */
+/* ------------------------------------------------------------------ */
+
+/** Who is signed in, and what the app should offer them. */
+type Me = {
+  id: number;
+  display_name: string;
+  roles: string[];
+  can_author: boolean;
+  is_admin: boolean;
+};
+
+/** The curriculum post types the builder manages. */
+type NodeType =
+  | "pcle_program"
+  | "pcle_week"
+  | "pcle_module"
+  | "pcle_scenario"
+  | "pcle_template"
+  | "pcle_event";
+
+/** A programme as it appears in the builder's list. */
+type AuthoringProgram = {
+  id: number;
+  title: string;
+  status: string;
+  credits: CreditHours[];
+  weeks: number;
+  modules: number;
+  enrollees: number;
+};
+
+type CreditHours = {
+  jurisdiction: string;
+  label: string;
+  hours: number;
+};
+
+/**
+ * One node of the curriculum tree.
+ *
+ * `allowed_children` comes from the server rather than being restated here,
+ * so the add menu and any future drop rules cannot drift from what the API
+ * will actually accept.
+ */
+type TreeNode = {
+  id: number;
+  type: NodeType;
+  title: string;
+  status: string;
+  menu_order: number;
+  allowed_children: NodeType[];
+  children: TreeNode[];
+  /** Events only. */
+  starts_at?: string;
+  /** Scenarios only. */
+  has_model_answer?: boolean;
+  /** Programmes only. */
+  credits?: CreditHours[];
+};
+
+export type { Me, NodeType, AuthoringProgram, CreditHours, TreeNode };
