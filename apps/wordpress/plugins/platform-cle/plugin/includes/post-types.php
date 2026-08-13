@@ -154,7 +154,11 @@ function pcle_post_type_definitions() {
 			'plural'   => __( 'Templates', 'platform-cle' ),
 			'icon'     => 'dashicons-media-document',
 			'slug'     => 'template',
-			'supports' => array( 'title', 'editor', 'thumbnail', 'excerpt', 'custom-fields' ),
+			// page-attributes is what stores menu_order, and menu_order is
+			// what pcle_get_children() orders by. Without it a module's
+			// templates could only ever sort alphabetically, and no UI —
+			// wp-admin or otherwise — could express an order.
+			'supports' => array( 'title', 'editor', 'thumbnail', 'excerpt', 'custom-fields', 'page-attributes' ),
 		),
 
 		// 6) SCHEDULE EVENT — live sessions / calendar dates.
@@ -164,7 +168,8 @@ function pcle_post_type_definitions() {
 			'plural'   => __( 'Schedule Events', 'platform-cle' ),
 			'icon'     => 'dashicons-clock',
 			'slug'     => 'schedule-event',
-			'supports' => array( 'title', 'editor', 'custom-fields' ),
+			// Same reason as Template: a week's sessions were unorderable.
+			'supports' => array( 'title', 'editor', 'custom-fields', 'page-attributes' ),
 		),
 
 		// 7) CASE UPDATE — case-law updates published by instructors.

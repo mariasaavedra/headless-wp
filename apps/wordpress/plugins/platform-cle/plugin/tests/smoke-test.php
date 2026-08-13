@@ -836,7 +836,251 @@ $created_users = array_values( array_diff( $created_users, $cohort ) );
 pcle_eq( count( pcle_get_program_report( $prog_a ) ), 1, 'the cohort fixture is cleaned up after itself' );
 
 /* ------------------------------------------------------------------ */
-/* 17) Emails                                                         */
+/* 17) Relationship integrity                                         */
+/* ------------------------------------------------------------------ */
+/*
+ * The hierarchy is meta, and until now the only thing validating it was
+ * pcle_save_relationship() — which returns early when its nonce is absent,
+ * i.e. on every REST and WP-CLI write. So the parent of a module could be a
+ * programme, a page, a deleted post, or the module itself, and only absint
+ * ever ran.
+ *
+ * Validating on the metadata write itself covers every path at once.
+ */
+pcle_section( '# Relationship integrity' );
+
+$orphan_page = wp_insert_post(
+	array(
+		'post_type'   => 'page',
+		'post_title'  => 'TEST Unrelated Page',
+		'post_status' => 'publish',
+	)
+);
+$created_posts[] = $orphan_page;
+
+$relationship_victim = pcle_make_post( 'pcle_module', 'TEST Relationship Victim', array( '_pcle_week_id' => $week ) );
+$created_posts[]     = $relationship_victim;
+
+/**
+ * Attempts to repoint a child at a parent and reports what stuck.
+ *
+ * @param int    $child_id Child post.
+ * @param string $meta_key Relationship meta key.
+ * @param mixed  $parent   Proposed parent.
+ * @return int The parent actually stored afterwards.
+ */
+function pcle_try_reparent( $child_id, $meta_key, $parent ) {
+	update_post_meta( $child_id, $meta_key, $parent );
+	return (int) get_post_meta( $child_id, $meta_key, true );
+}
+
+pcle_eq( pcle_try_reparent( $relationship_victim, '_pcle_week_id', $prog_a ), $week, 'a module cannot be reparented onto a programme' );
+pcle_eq( pcle_try_reparent( $relationship_victim, '_pcle_week_id', $orphan_page ), $week, 'a module cannot be reparented onto a page' );
+pcle_eq( pcle_try_reparent( $relationship_victim, '_pcle_week_id', 99999999 ), $week, 'a module cannot be reparented onto a post that does not exist' );
+pcle_eq( pcle_try_reparent( $relationship_victim, '_pcle_week_id', $relationship_victim ), $week, 'a module cannot be its own parent' );
+pcle_eq( pcle_try_reparent( $relationship_victim, '_pcle_week_id', $module ), $week, 'a module cannot hang off another module' );
+
+// The legitimate paths must keep working, or this is a regression not a fix.
+$second_week     = pcle_make_post( 'pcle_week', 'TEST Week 2', array( '_pcle_program_id' => $prog_a ) );
+$created_posts[] = $second_week;
+pcle_eq( pcle_try_reparent( $relationship_victim, '_pcle_week_id', $second_week ), $second_week, 'a module CAN be moved to another week' );
+pcle_eq( pcle_try_reparent( $relationship_victim, '_pcle_week_id', 0 ), 0, 'a parent can still be cleared' );
+pcle_try_reparent( $relationship_victim, '_pcle_week_id', $week ); // restore
+
+// And the same rule has to hold through REST, which is the path that had none.
+wp_set_current_user( $admin );
+$reparent_request = new WP_REST_Request( 'POST', "/wp/v2/pcle_module/{$relationship_victim}" );
+$reparent_request->set_body_params( array( 'meta' => array( '_pcle_week_id' => $prog_a ) ) );
+rest_do_request( $reparent_request );
+pcle_eq( (int) get_post_meta( $relationship_victim, '_pcle_week_id', true ), $week, 'a REST write cannot reparent onto a programme either' );
+wp_set_current_user( 0 );
+
+/* ------------------------------------------------------------------ */
+/* 18) Credit hours over REST                                         */
+/* ------------------------------------------------------------------ */
+/*
+ * The hours were metabox-only: no register_post_meta, so a headless builder
+ * could read them but never set them. They gate certificate issuance, so an
+ * authoring UI that cannot touch them cannot finish a programme.
+ */
+pcle_section( '# Credit hours over REST' );
+
+wp_set_current_user( $admin );
+$credits_request = new WP_REST_Request( 'POST', "/wp/v2/pcle_program/{$prog_b}" );
+$credits_request->set_body_params( array( 'meta' => array( pcle_credit_hours_meta_key( 'ks' ) => 3.3 ) ) );
+$credits_response = rest_do_request( $credits_request );
+
+pcle_eq( $credits_response->get_status(), 200, 'staff can write credit hours over REST' );
+pcle_eq( pcle_get_credit_hours( $prog_b )['ks'], 3.25, 'hours written over REST are still rounded to the quarter' );
+
+$credits_read = rest_do_request( new WP_REST_Request( 'GET', "/wp/v2/pcle_program/{$prog_b}" ) )->get_data();
+pcle_ok( isset( $credits_read['meta'][ pcle_credit_hours_meta_key( 'ks' ) ] ), 'credit hours are exposed in REST' );
+
+wp_set_current_user( $student );
+$student_credits = new WP_REST_Request( 'POST', "/wp/v2/pcle_program/{$prog_b}" );
+$student_credits->set_body_params( array( 'meta' => array( pcle_credit_hours_meta_key( 'ks' ) => 99 ) ) );
+rest_do_request( $student_credits );
+pcle_eq( pcle_get_credit_hours( $prog_b )['ks'], 3.25, 'a student cannot write credit hours' );
+wp_set_current_user( 0 );
+
+// Leave the fixture as the later sections expect it.
+delete_post_meta( $prog_b, pcle_credit_hours_meta_key( 'ks' ) );
+
+/* ------------------------------------------------------------------ */
+/* 19) Ordering for templates and events                              */
+/* ------------------------------------------------------------------ */
+/*
+ * Both lacked page-attributes, so menu_order could never be set from any UI
+ * and their children always sorted alphabetically. A reorder endpoint needs
+ * somewhere to put the order.
+ */
+pcle_section( '# Ordering' );
+
+foreach ( array( 'pcle_template', 'pcle_event', 'pcle_module', 'pcle_week' ) as $ordered_type ) {
+	pcle_ok( post_type_supports( $ordered_type, 'page-attributes' ), "{$ordered_type} can carry an order" );
+}
+
+$order_b         = pcle_make_post( 'pcle_template', 'TEST Zebra Template', array( '_pcle_module_id' => $module ) );
+$order_a         = pcle_make_post( 'pcle_template', 'TEST Alpha Template', array( '_pcle_module_id' => $module ) );
+$created_posts[] = $order_b;
+$created_posts[] = $order_a;
+
+wp_update_post( array( 'ID' => $order_b, 'menu_order' => 1 ) );
+wp_update_post( array( 'ID' => $order_a, 'menu_order' => 2 ) );
+
+$ordered_templates = wp_list_pluck( pcle_get_templates( $module ), 'ID' );
+pcle_eq( array_slice( $ordered_templates, 0, 2 ), array( $order_b, $order_a ), 'templates order by menu_order, not alphabetically' );
+
+/* ------------------------------------------------------------------ */
+/* 20) Protected uploads over REST                                    */
+/* ------------------------------------------------------------------ */
+/*
+ * The upload router keyed on $_REQUEST['post_id'] — the admin async-upload
+ * parameter. The REST media controller sends 'post'. So every file uploaded
+ * through the API landed in the PUBLIC uploads root with a directly
+ * downloadable URL, defeating protected-files entirely.
+ */
+pcle_section( '# Protected uploads over REST' );
+
+wp_set_current_user( $admin );
+
+$upload_probe = function ( $params ) {
+	$saved   = $_REQUEST;
+	$_REQUEST = $params; // phpcs:ignore WordPress.Security.NonceVerification
+	$dir     = wp_upload_dir( null, false );
+	$_REQUEST = $saved;
+	return $dir['subdir'];
+};
+
+pcle_ok( false !== strpos( $upload_probe( array( 'post_id' => $module ) ), PCLE_PROTECTED_SUBDIR ), 'the admin upload parameter still routes into the protected directory' );
+pcle_ok( false !== strpos( $upload_probe( array( 'post' => $module ) ), PCLE_PROTECTED_SUBDIR ), 'the REST upload parameter routes into the protected directory' );
+pcle_eq( strpos( $upload_probe( array( 'post' => $orphan_page ) ), PCLE_PROTECTED_SUBDIR ), false, 'a non-CLE parent is left in the public uploads root' );
+pcle_eq( strpos( $upload_probe( array() ), PCLE_PROTECTED_SUBDIR ), false, 'an upload with no parent is left in the public uploads root' );
+
+wp_set_current_user( $student );
+pcle_eq( strpos( $upload_probe( array( 'post' => $module ) ), PCLE_PROTECTED_SUBDIR ), false, 'a reader who cannot edit the parent does not steer the upload' );
+wp_set_current_user( 0 );
+
+/*
+ * The routing above runs inside the `upload_dir` filter, and resolving the
+ * uploads directory from in there used to re-enter that same filter — which
+ * on a cold cache recursed until PHP died of memory exhaustion, taking the
+ * whole request with it. Reproduced before the fix.
+ *
+ * The probes above would catch a regression only by killing the test run,
+ * which is a terrible way to learn about it, so pin the mechanism directly:
+ * the basedir must be resolvable from a value the caller already holds.
+ */
+pcle_ok(
+	0 === strpos( pcle_protected_basedir( '/tmp/pcle-probe' ), '/tmp/pcle-probe' ),
+	'the protected directory can be resolved without re-entering the uploads filter'
+);
+
+/* ------------------------------------------------------------------ */
+/* 21) Authoring API                                                  */
+/* ------------------------------------------------------------------ */
+pcle_section( '# Authoring API' );
+
+// Who am I — the app has no notion of an instructor without this.
+wp_set_current_user( $student );
+$me_student = rest_do_request( new WP_REST_Request( 'GET', '/platform-cle/v1/me' ) )->get_data();
+pcle_eq( $me_student['can_author'], false, 'a participant is not offered authoring' );
+
+wp_set_current_user( $admin );
+$me_admin = rest_do_request( new WP_REST_Request( 'GET', '/platform-cle/v1/me' ) )->get_data();
+pcle_eq( $me_admin['can_author'], true, 'staff are offered authoring' );
+pcle_eq( $me_admin['id'], $admin, 'me reports the signed-in user' );
+
+pcle_eq( rest_do_request( new WP_REST_Request( 'GET', '/platform-cle/v1/me' ) )->get_status(), 200, 'me is readable when signed in' );
+wp_set_current_user( 0 );
+pcle_eq( rest_do_request( new WP_REST_Request( 'GET', '/platform-cle/v1/me' ) )->get_status(), 401, 'me is closed to anonymous callers' );
+
+// Access to the authoring routes.
+foreach ( array( '/platform-cle/v1/authoring/programs', "/platform-cle/v1/authoring/programs/{$prog_a}/tree" ) as $route ) {
+	pcle_eq( pcle_rest_get( 0, $route )->get_status(), 401, "anonymous {$route} → 401" );
+	pcle_eq( pcle_rest_get( $student, $route )->get_status(), 403, "a participant {$route} → 403" );
+	pcle_eq( pcle_rest_get( $admin, $route )->get_status(), 200, "staff {$route} → 200" );
+}
+
+// A participant enrolled in the programme still may not author it: reading and
+// editing are different questions, and enrolment answers only the first.
+pcle_eq( pcle_is_enrolled( $prog_a, $student ), true, 'the participant is genuinely enrolled' );
+pcle_eq( pcle_rest_get( $student, "/platform-cle/v1/authoring/programs/{$prog_a}/tree" )->get_status(), 403, 'being enrolled does not confer authoring' );
+
+// Wrong type and unknown ids are 404, not a 200 shaped from whatever that id was.
+pcle_eq( pcle_rest_get( $admin, "/platform-cle/v1/authoring/programs/{$module}/tree" )->get_status(), 404, 'a module id on the tree route → 404' );
+pcle_eq( pcle_rest_get( $admin, '/platform-cle/v1/authoring/programs/99999999/tree' )->get_status(), 404, 'an unknown id → 404' );
+
+// The tree itself.
+$tree = pcle_rest_get( $admin, "/platform-cle/v1/authoring/programs/{$prog_a}/tree" )->get_data();
+pcle_eq( $tree['id'], $prog_a, 'the tree is rooted at the programme' );
+pcle_eq( $tree['type'], 'pcle_program', 'the root carries its type' );
+pcle_eq( $tree['allowed_children'], array( 'pcle_week' ), 'a programme may only contain weeks' );
+pcle_ok( isset( $tree['credits'] ), 'the root carries its credit hours' );
+
+$tree_week = $tree['children'][0];
+pcle_eq( $tree_week['id'], $week, 'the tree carries the week' );
+pcle_ok( in_array( 'pcle_module', $tree_week['allowed_children'], true ), 'a week may contain modules' );
+pcle_ok( in_array( 'pcle_event', $tree_week['allowed_children'], true ), 'a week may contain sessions' );
+
+$tree_module_ids = wp_list_pluck( array_values( array_filter( $tree_week['children'], fn( $n ) => 'pcle_module' === $n['type'] ) ), 'id' );
+pcle_ok( in_array( $module, $tree_module_ids, true ), 'the tree reaches modules' );
+
+/*
+ * Drafts are the whole point of an authoring view: the participant routes
+ * refuse them, so a builder that could not see them could not build.
+ */
+$draft_week = wp_insert_post(
+	array(
+		'post_type'   => 'pcle_week',
+		'post_title'  => 'TEST Draft Week',
+		'post_status' => 'draft',
+	)
+);
+update_post_meta( $draft_week, '_pcle_program_id', $prog_a );
+update_post_meta( $draft_week, '_pcle_test', 1 );
+$created_posts[] = $draft_week;
+
+$tree_with_draft = pcle_rest_get( $admin, "/platform-cle/v1/authoring/programs/{$prog_a}/tree" )->get_data();
+pcle_ok( in_array( $draft_week, wp_list_pluck( $tree_with_draft['children'], 'id' ), true ), 'the authoring tree includes drafts' );
+pcle_eq( pcle_rest_get( $student, "/platform-cle/v1/weeks/{$draft_week}" )->get_status(), 404, 'and the participant route still refuses that draft' );
+
+// The programme list.
+$authoring_list = pcle_rest_get( $admin, '/platform-cle/v1/authoring/programs' )->get_data();
+$listed         = wp_list_pluck( $authoring_list['programs'], 'id' );
+pcle_ok( in_array( $prog_a, $listed, true ), 'the programme list includes a programme staff may edit' );
+
+$listed_a = $authoring_list['programs'][ array_search( $prog_a, $listed, true ) ];
+pcle_eq( $listed_a['enrollees'], count( pcle_get_program_enrollee_ids( $prog_a ) ), 'the list reports the enrolee count' );
+pcle_eq( $listed_a['modules'], count( pcle_get_program_module_ids( $prog_a ) ), 'the list reports the module count' );
+
+// The child-type map must come from the relationship map, not a second copy.
+pcle_eq( pcle_allowed_child_types( 'pcle_module' ), array( 'pcle_scenario', 'pcle_template' ), 'a module may contain scenarios and templates' );
+pcle_eq( pcle_allowed_child_types( 'pcle_scenario' ), array(), 'a scenario is a leaf' );
+wp_set_current_user( 0 );
+
+/* ------------------------------------------------------------------ */
+/* 22) Emails                                                         */
 /* ------------------------------------------------------------------ */
 pcle_section( '# Emails' );
 $before = count( $GLOBALS['pcle_mail'] );

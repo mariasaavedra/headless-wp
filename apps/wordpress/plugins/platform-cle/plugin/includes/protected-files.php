@@ -30,20 +30,36 @@ const PCLE_PROTECTED_SUBDIR = 'pcle-protected';
 /**
  * Absolute path to the protected uploads directory.
  *
+ * @param string $basedir Optional uploads basedir. Pass it when calling from
+ *                        inside the `upload_dir` filter — see
+ *                        pcle_ensure_protected_dir().
  * @return string
  */
-function pcle_protected_basedir() {
-	$uploads = wp_get_upload_dir();
-	return trailingslashit( $uploads['basedir'] ) . PCLE_PROTECTED_SUBDIR;
+function pcle_protected_basedir( $basedir = '' ) {
+	if ( '' === $basedir ) {
+		$uploads = wp_get_upload_dir();
+		$basedir = $uploads['basedir'];
+	}
+
+	return trailingslashit( $basedir ) . PCLE_PROTECTED_SUBDIR;
 }
 
 /**
  * Creates the protected directory with deny rules. Idempotent.
  *
- * Called on plugin activation (and defensively before routing an upload there).
+ * Called on plugin activation, and before routing an upload there.
+ *
+ * The $basedir argument is not a convenience: this runs from inside the
+ * `upload_dir` filter, and resolving the uploads directory there by calling
+ * wp_get_upload_dir() re-enters the very filter that is running. On a cold
+ * cache — the first wp_upload_dir() of a request, which is exactly what a REST
+ * upload hits — that recurses until PHP dies of memory exhaustion, taking the
+ * request with it. The caller already holds the basedir, so it passes it in.
+ *
+ * @param string $basedir Optional uploads basedir.
  */
-function pcle_ensure_protected_dir() {
-	$dir = pcle_protected_basedir();
+function pcle_ensure_protected_dir( $basedir = '' ) {
+	$dir = pcle_protected_basedir( $basedir );
 	if ( ! is_dir( $dir ) ) {
 		wp_mkdir_p( $dir );
 	}
@@ -79,8 +95,7 @@ function pcle_ensure_protected_dir() {
  * @return array
  */
 function pcle_route_protected_upload( $upload ) {
-	// phpcs:ignore WordPress.Security.NonceVerification.Missing -- WP core handles the upload nonce.
-	$post_id = isset( $_REQUEST['post_id'] ) ? absint( $_REQUEST['post_id'] ) : 0;
+	$post_id = pcle_protected_upload_parent();
 	if ( ! $post_id ) {
 		return $upload;
 	}
@@ -97,12 +112,64 @@ function pcle_route_protected_upload( $upload ) {
 	$upload['url']    = $upload['baseurl'] . $subdir;
 	$upload['subdir'] = $subdir;
 
-	pcle_ensure_protected_dir();
+	// Pass the basedir we already hold: resolving it again from here would
+	// re-enter this filter. See pcle_ensure_protected_dir().
+	pcle_ensure_protected_dir( $upload['basedir'] );
 	if ( ! is_dir( $upload['path'] ) ) {
 		wp_mkdir_p( $upload['path'] );
 	}
 
 	return $upload;
+}
+
+/**
+ * The post an upload is being attached to, whichever way it was submitted.
+ *
+ * WordPress has two names for the same thing. The admin async-upload and
+ * block-editor flows send `post_id`; the REST media controller sends `post`.
+ * Reading only the first meant every file uploaded through the API landed in
+ * the public uploads root with a directly downloadable URL — the exact leak
+ * this file exists to prevent, reopened by a parameter name.
+ *
+ * The explicit override lets an endpoint that already knows the parent state
+ * it, rather than depending on how the HTTP layer happens to spell it.
+ *
+ * @return int Parent post ID, or 0.
+ */
+function pcle_protected_upload_parent() {
+	$override = pcle_protected_upload_override();
+	if ( $override ) {
+		return $override;
+	}
+
+	// phpcs:disable WordPress.Security.NonceVerification -- WP core handles the upload nonce.
+	foreach ( array( 'post', 'post_id' ) as $key ) {
+		if ( isset( $_REQUEST[ $key ] ) ) {
+			$candidate = absint( $_REQUEST[ $key ] );
+			if ( $candidate ) {
+				return $candidate;
+			}
+		}
+	}
+	// phpcs:enable WordPress.Security.NonceVerification
+
+	return 0;
+}
+
+/**
+ * Reads or sets the request-scoped upload parent override.
+ *
+ * @param int|null $set Pass an ID to set it, 0 to clear, null to read.
+ * @return int
+ */
+function pcle_protected_upload_override( $set = null ) {
+	static $parent = 0;
+
+	if ( null !== $set ) {
+		$parent = (int) $set;
+	}
+
+	return $parent;
 }
 add_filter( 'upload_dir', 'pcle_route_protected_upload' );
 

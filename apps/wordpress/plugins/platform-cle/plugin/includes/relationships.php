@@ -102,6 +102,70 @@ function pcle_register_relationship_meta() {
 }
 add_action( 'init', 'pcle_register_relationship_meta' );
 
+/**
+ * Is this a parent a child of that type may actually have?
+ *
+ * @param string $child_type Child post type.
+ * @param int    $child_id   Child post being written to.
+ * @param int    $parent_id  Proposed parent.
+ * @return bool
+ */
+function pcle_is_valid_parent( $child_type, $child_id, $parent_id ) {
+	$map = pcle_relationship_map();
+	if ( ! isset( $map[ $child_type ] ) ) {
+		return false;
+	}
+
+	// 0 means "no parent", which is how the picker's "— None —" is stored.
+	if ( 0 === $parent_id ) {
+		return true;
+	}
+
+	if ( $parent_id === (int) $child_id ) {
+		return false;
+	}
+
+	return get_post_type( $parent_id ) === $map[ $child_type ]['parent'];
+}
+
+/**
+ * Refuses a relationship write that would break the hierarchy.
+ *
+ * The type check already existed — in pcle_save_relationship(), which returns
+ * early when its nonce is absent, i.e. on every REST and WP-CLI write. So the
+ * one place the rule was enforced was the one place it was least needed, and
+ * an API client could point a module at a programme, a page, a deleted post or
+ * itself, with only absint standing in the way.
+ *
+ * Hooking the metadata write itself covers every path at once: REST, the block
+ * editor, WP-CLI, and the plugin's own code.
+ *
+ * Note this cannot live in the meta `sanitize_callback`, which is not told
+ * which post is being written and therefore cannot reject a self-reference.
+ *
+ * @param mixed  $check      Short-circuit value; null means "carry on".
+ * @param int    $object_id  Post being written to.
+ * @param string $meta_key   Meta key.
+ * @param mixed  $meta_value Proposed value.
+ * @return mixed False to refuse the write, otherwise $check untouched.
+ */
+function pcle_guard_relationship_write( $check, $object_id, $meta_key, $meta_value ) {
+	$child_type = get_post_type( $object_id );
+	$map        = pcle_relationship_map();
+
+	if ( ! isset( $map[ $child_type ] ) || $map[ $child_type ]['meta_key'] !== $meta_key ) {
+		return $check;
+	}
+
+	if ( pcle_is_valid_parent( $child_type, $object_id, absint( $meta_value ) ) ) {
+		return $check;
+	}
+
+	return false;
+}
+add_filter( 'update_post_metadata', 'pcle_guard_relationship_write', 10, 4 );
+add_filter( 'add_post_metadata', 'pcle_guard_relationship_write', 10, 4 );
+
 /* =========================================================================
  * 2) META BOX (parent selector)
  * ========================================================================= */
