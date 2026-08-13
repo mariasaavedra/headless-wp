@@ -1080,7 +1080,176 @@ pcle_eq( pcle_allowed_child_types( 'pcle_scenario' ), array(), 'a scenario is a 
 wp_set_current_user( 0 );
 
 /* ------------------------------------------------------------------ */
-/* 22) Emails                                                         */
+/* 22) Authoring writes                                               */
+/* ------------------------------------------------------------------ */
+pcle_section( '# Authoring writes' );
+
+/**
+ * Runs an authoring request as a user.
+ *
+ * @param int    $uid    User to run as (0 = anonymous).
+ * @param string $method HTTP method.
+ * @param string $route  REST route.
+ * @param array  $params Body parameters.
+ * @return WP_REST_Response
+ */
+function pcle_authoring_call( $uid, $method, $route, $params = array() ) {
+	wp_set_current_user( $uid );
+	$request = new WP_REST_Request( $method, $route );
+
+	foreach ( $params as $key => $value ) {
+		$request->set_param( $key, $value );
+	}
+
+	return rest_do_request( $request );
+}
+
+// Creation is gated on the intended parent, because the post being authorised
+// does not exist yet and cannot be walked up from.
+pcle_eq(
+	pcle_authoring_call( $admin, 'POST', '/platform-cle/v1/authoring/nodes', array( 'type' => 'pcle_module', 'parent_id' => $prog_a, 'title' => 'TEST Wrong Parent' ) )->get_status(),
+	400,
+	'a module cannot be created directly inside a programme'
+);
+pcle_eq(
+	pcle_authoring_call( $admin, 'POST', '/platform-cle/v1/authoring/nodes', array( 'type' => 'pcle_module', 'parent_id' => 0, 'title' => 'TEST No Parent' ) )->get_status(),
+	400,
+	'a module cannot be created with no parent at all'
+);
+pcle_eq(
+	pcle_authoring_call( $student, 'POST', '/platform-cle/v1/authoring/nodes', array( 'type' => 'pcle_week', 'parent_id' => $prog_a, 'title' => 'TEST Student Week' ) )->get_status(),
+	403,
+	'a participant cannot create curriculum'
+);
+pcle_eq(
+	pcle_authoring_call( $student, 'POST', '/platform-cle/v1/authoring/nodes', array( 'type' => 'pcle_program', 'title' => 'TEST Student Programme' ) )->get_status(),
+	403,
+	'a participant cannot create a programme'
+);
+pcle_eq(
+	pcle_authoring_call( 0, 'POST', '/platform-cle/v1/authoring/nodes', array( 'type' => 'pcle_week', 'parent_id' => $prog_a ) )->get_status(),
+	401,
+	'an anonymous caller cannot create anything'
+);
+
+// The happy path.
+$created_week = pcle_authoring_call( $admin, 'POST', '/platform-cle/v1/authoring/nodes', array( 'type' => 'pcle_week', 'parent_id' => $prog_a, 'title' => 'TEST Authored Week' ) )->get_data();
+$created_posts[] = $created_week['id'];
+
+pcle_eq( $created_week['status'], 'draft', 'a new item starts as a draft, not visible to participants' );
+pcle_eq( pcle_get_parent_id( $created_week['id'] ), $prog_a, 'the new item is linked to the parent it was created in' );
+pcle_eq( $created_week['type'], 'pcle_week', 'the new item is of the requested type' );
+
+$first_module    = pcle_authoring_call( $admin, 'POST', '/platform-cle/v1/authoring/nodes', array( 'type' => 'pcle_module', 'parent_id' => $created_week['id'], 'title' => 'TEST Authored Module One' ) )->get_data();
+$second_module   = pcle_authoring_call( $admin, 'POST', '/platform-cle/v1/authoring/nodes', array( 'type' => 'pcle_module', 'parent_id' => $created_week['id'], 'title' => 'TEST Authored Module Two' ) )->get_data();
+$created_posts[] = $first_module['id'];
+$created_posts[] = $second_module['id'];
+
+pcle_ok( $second_module['menu_order'] > $first_module['menu_order'], 'a new sibling is appended rather than colliding' );
+
+// Updates touch only what was sent.
+pcle_authoring_call( $admin, 'PATCH', "/platform-cle/v1/authoring/nodes/{$first_module['id']}", array( 'content' => '<p>Body text</p>' ) );
+pcle_authoring_call( $admin, 'PATCH', "/platform-cle/v1/authoring/nodes/{$first_module['id']}", array( 'title' => 'TEST Renamed Module' ) );
+$after_rename = get_post( $first_module['id'] );
+
+pcle_eq( $after_rename->post_title, 'TEST Renamed Module', 'a title can be changed' );
+pcle_ok( false !== strpos( $after_rename->post_content, 'Body text' ), 'renaming did not blank the body it never sent' );
+
+// Instructors do not hold unfiltered_html, and a builder must not become the
+// way round that.
+pcle_authoring_call( $admin, 'PATCH', "/platform-cle/v1/authoring/nodes/{$first_module['id']}", array( 'content' => '<p>ok</p><script>alert(1)</script><img src=x onerror=alert(1)>' ) );
+$sanitised = get_post( $first_module['id'] )->post_content;
+pcle_eq( strpos( $sanitised, '<script' ), false, 'a script tag does not survive an authoring write' );
+pcle_eq( strpos( $sanitised, 'onerror' ), false, 'an event-handler attribute does not survive an authoring write' );
+
+pcle_eq(
+	pcle_authoring_call( $admin, 'PATCH', "/platform-cle/v1/authoring/nodes/{$first_module['id']}", array( 'status' => 'nonsense' ) )->get_status(),
+	400,
+	'an unknown status is refused'
+);
+pcle_eq(
+	pcle_authoring_call( $student, 'PATCH', "/platform-cle/v1/authoring/nodes/{$first_module['id']}", array( 'title' => 'hijacked' ) )->get_status(),
+	403,
+	'a participant cannot edit curriculum'
+);
+pcle_eq( get_post( $first_module['id'] )->post_title, 'TEST Renamed Module', 'and the refused edit changed nothing' );
+
+// Reordering is all-or-nothing: a half-applied order is one nobody chose.
+$order_before = wp_list_pluck( pcle_authoring_get_children( $created_week['id'], 'pcle_module' ), 'ID' );
+
+$reordered = pcle_authoring_call(
+	$admin,
+	'POST',
+	'/platform-cle/v1/authoring/reorder',
+	array( 'parent_id' => $created_week['id'], 'child_type' => 'pcle_module', 'ids' => array( $second_module['id'], $first_module['id'] ) )
+);
+pcle_eq( $reordered->get_status(), 200, 'a whole sibling list can be reordered' );
+pcle_eq( $reordered->get_data()['ids'], array( $second_module['id'], $first_module['id'] ), 'the response reports the canonical order' );
+
+$foreign = pcle_authoring_call(
+	$admin,
+	'POST',
+	'/platform-cle/v1/authoring/reorder',
+	array( 'parent_id' => $created_week['id'], 'child_type' => 'pcle_module', 'ids' => array( $first_module['id'], $module ) )
+);
+pcle_eq( $foreign->get_status(), 400, 'a list containing something that is not a sibling is refused' );
+pcle_eq(
+	wp_list_pluck( pcle_authoring_get_children( $created_week['id'], 'pcle_module' ), 'ID' ),
+	array( $second_module['id'], $first_module['id'] ),
+	'and the refused reorder left every sibling exactly where it was'
+);
+
+pcle_eq(
+	pcle_authoring_call( $admin, 'POST', '/platform-cle/v1/authoring/reorder', array( 'parent_id' => $created_week['id'], 'child_type' => 'pcle_module', 'ids' => array( $first_module['id'] ) ) )->get_status(),
+	400,
+	'a partial list is refused rather than silently renumbering the rest'
+);
+
+// Moving.
+$move_target     = pcle_authoring_call( $admin, 'POST', '/platform-cle/v1/authoring/nodes', array( 'type' => 'pcle_week', 'parent_id' => $prog_a, 'title' => 'TEST Move Target Week' ) )->get_data();
+$created_posts[] = $move_target['id'];
+
+pcle_eq(
+	pcle_authoring_call( $admin, 'POST', '/platform-cle/v1/authoring/move', array( 'id' => $first_module['id'], 'parent_id' => $prog_a ) )->get_status(),
+	400,
+	'an item cannot be moved somewhere it could never live'
+);
+pcle_eq(
+	pcle_authoring_call( $student, 'POST', '/platform-cle/v1/authoring/move', array( 'id' => $first_module['id'], 'parent_id' => $move_target['id'] ) )->get_status(),
+	403,
+	'a participant cannot move curriculum'
+);
+
+pcle_eq(
+	pcle_authoring_call( $admin, 'POST', '/platform-cle/v1/authoring/move', array( 'id' => $first_module['id'], 'parent_id' => $move_target['id'] ) )->get_status(),
+	200,
+	'staff can move an item to another week'
+);
+pcle_eq( pcle_get_parent_id( $first_module['id'] ), $move_target['id'], 'the move actually reparented it' );
+
+/*
+ * The move guard authorises both the source and the destination, so nobody
+ * can inject content into a programme they have no rights over. That case
+ * cannot be exercised yet: pcle_user_can_edit_program() currently means "is
+ * staff", so every author can edit every programme. It becomes testable with
+ * per-programme assignment.
+ */
+
+// Deleting takes what hangs off it, but says so first.
+$delete_refusal = pcle_authoring_call( $admin, 'DELETE', "/platform-cle/v1/authoring/nodes/{$created_week['id']}" );
+pcle_eq( $delete_refusal->get_status(), 409, 'deleting an item with contents is refused' );
+pcle_ok( ! empty( $delete_refusal->as_error()->get_error_data()['descendants'] ), 'and the refusal lists what would have gone with it' );
+pcle_ok( null !== get_post( $created_week['id'] ), 'the refused delete removed nothing' );
+
+$deleted = pcle_authoring_call( $admin, 'DELETE', "/platform-cle/v1/authoring/nodes/{$created_week['id']}", array( 'cascade' => true ) );
+pcle_eq( $deleted->get_status(), 200, 'an explicit cascade is accepted' );
+pcle_eq( get_post( $created_week['id'] ), null, 'the item is gone' );
+pcle_eq( get_post( $second_module['id'] ), null, 'and so is what it contained' );
+
+wp_set_current_user( 0 );
+
+/* ------------------------------------------------------------------ */
+/* 23) Emails                                                         */
 /* ------------------------------------------------------------------ */
 pcle_section( '# Emails' );
 $before = count( $GLOBALS['pcle_mail'] );

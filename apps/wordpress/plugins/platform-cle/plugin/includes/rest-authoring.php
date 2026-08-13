@@ -264,6 +264,101 @@ function pcle_register_authoring_routes() {
 			),
 		)
 	);
+
+	register_rest_route(
+		'platform-cle/v1',
+		'/authoring/nodes',
+		array(
+			'methods'             => 'POST',
+			'callback'            => 'pcle_authoring_create_node',
+			'permission_callback' => 'pcle_authoring_guard_create',
+			'args'                => array(
+				'type'      => array(
+					'required' => true,
+					'type'     => 'string',
+				),
+				'parent_id' => array(
+					'type'              => 'integer',
+					'default'           => 0,
+					'sanitize_callback' => 'absint',
+				),
+				'title'     => array(
+					'type'    => 'string',
+					'default' => '',
+				),
+			),
+		)
+	);
+
+	register_rest_route(
+		'platform-cle/v1',
+		'/authoring/nodes/(?P<id>\d+)',
+		array(
+			array(
+				'methods'             => 'PATCH',
+				'callback'            => 'pcle_authoring_update_node',
+				'permission_callback' => 'pcle_authoring_guard_node',
+			),
+			array(
+				'methods'             => 'DELETE',
+				'callback'            => 'pcle_authoring_delete_node',
+				'permission_callback' => 'pcle_authoring_guard_node',
+				'args'                => array(
+					'cascade' => array(
+						'type'    => 'boolean',
+						'default' => false,
+					),
+				),
+			),
+		)
+	);
+
+	register_rest_route(
+		'platform-cle/v1',
+		'/authoring/reorder',
+		array(
+			'methods'             => 'POST',
+			'callback'            => 'pcle_authoring_reorder',
+			'permission_callback' => 'pcle_authoring_guard_reorder',
+			'args'                => array(
+				'parent_id'  => array(
+					'required'          => true,
+					'type'              => 'integer',
+					'sanitize_callback' => 'absint',
+				),
+				'child_type' => array(
+					'required' => true,
+					'type'     => 'string',
+				),
+				'ids'        => array(
+					'required' => true,
+					'type'     => 'array',
+				),
+			),
+		)
+	);
+
+	register_rest_route(
+		'platform-cle/v1',
+		'/authoring/move',
+		array(
+			'methods'             => 'POST',
+			'callback'            => 'pcle_authoring_move',
+			'permission_callback' => 'pcle_authoring_guard_move',
+			'args'                => array(
+				'id'        => array(
+					'required'          => true,
+					'type'              => 'integer',
+					'sanitize_callback' => 'absint',
+				),
+				'parent_id' => array(
+					'required'          => true,
+					'type'              => 'integer',
+					'sanitize_callback' => 'absint',
+				),
+			),
+		)
+	);
 }
 add_action( 'rest_api_init', 'pcle_register_authoring_routes' );
 
@@ -339,4 +434,422 @@ function pcle_authoring_get_tree( $request ) {
 	$program = get_post( (int) $request['id'] );
 
 	return rest_ensure_response( pcle_authoring_build_tree( $program ) );
+}
+
+/* =========================================================================
+ * Writes
+ * ========================================================================= */
+
+/**
+ * Permission callback for creating a node.
+ *
+ * Creation cannot use pcle_authoring_guard_node(): the post does not exist
+ * yet, so pcle_get_program_for_post() has nothing to walk up from. The
+ * decision has to be made against the parent named in the request.
+ *
+ * A programme has no parent, so creating one is gated on being staff.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return true|WP_Error
+ */
+function pcle_authoring_guard_create( $request ) {
+	if ( ! is_user_logged_in() ) {
+		return new WP_Error( 'pcle_not_authenticated', __( 'You must be signed in.', 'platform-cle' ), array( 'status' => 401 ) );
+	}
+
+	$type = (string) $request['type'];
+
+	if ( ! in_array( $type, pcle_authorable_post_types(), true ) ) {
+		return new WP_Error( 'pcle_invalid_type', __( 'That is not something you can create here.', 'platform-cle' ), array( 'status' => 400 ) );
+	}
+
+	if ( 'pcle_program' === $type ) {
+		return pcle_user_is_staff()
+			? true
+			: new WP_Error( 'pcle_cannot_edit', __( 'You may not create programmes.', 'platform-cle' ), array( 'status' => 403 ) );
+	}
+
+	$parent_id = (int) $request['parent_id'];
+	$map       = pcle_relationship_map();
+
+	if ( ! $parent_id || get_post_type( $parent_id ) !== $map[ $type ]['parent'] ) {
+		return new WP_Error(
+			'pcle_invalid_parent',
+			/* translators: %s: parent post type. */
+			sprintf( __( 'A %s must be created inside its parent.', 'platform-cle' ), $type ),
+			array( 'status' => 400 )
+		);
+	}
+
+	$program_id = pcle_get_program_for_post( $parent_id );
+
+	if ( ! $program_id || ! pcle_user_can_edit_program( $program_id ) ) {
+		return new WP_Error( 'pcle_cannot_edit', __( 'You may not edit this programme.', 'platform-cle' ), array( 'status' => 403 ) );
+	}
+
+	return true;
+}
+
+/**
+ * The next free position among a parent's children of one type.
+ *
+ * @param int    $parent_id  Parent post.
+ * @param string $child_type Child post type.
+ * @return int
+ */
+function pcle_authoring_next_order( $parent_id, $child_type ) {
+	$siblings = pcle_authoring_get_children( $parent_id, $child_type );
+
+	$highest = 0;
+	foreach ( $siblings as $sibling ) {
+		$highest = max( $highest, (int) $sibling->menu_order );
+	}
+
+	return $highest + 1;
+}
+
+/**
+ * POST /authoring/nodes — create one item inside its parent.
+ *
+ * Created as a draft. Publishing is a separate, deliberate act; a half-built
+ * week appearing to participants the moment it is named would be the wrong
+ * default.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return WP_REST_Response|WP_Error
+ */
+function pcle_authoring_create_node( $request ) {
+	$type      = (string) $request['type'];
+	$parent_id = (int) $request['parent_id'];
+	$title     = sanitize_text_field( (string) $request['title'] );
+
+	$post_id = wp_insert_post(
+		array(
+			'post_type'   => $type,
+			'post_title'  => '' !== $title ? $title : __( '(untitled)', 'platform-cle' ),
+			'post_status' => 'draft',
+			'menu_order'  => $parent_id ? pcle_authoring_next_order( $parent_id, $type ) : 0,
+		),
+		true
+	);
+
+	if ( is_wp_error( $post_id ) ) {
+		return new WP_Error( 'pcle_create_failed', $post_id->get_error_message(), array( 'status' => 500 ) );
+	}
+
+	if ( $parent_id ) {
+		$map = pcle_relationship_map();
+		update_post_meta( $post_id, $map[ $type ]['meta_key'], $parent_id );
+	}
+
+	return rest_ensure_response( pcle_authoring_shape_node( get_post( $post_id ) ) );
+}
+
+/**
+ * PATCH /authoring/nodes/<id> — update one item.
+ *
+ * Only the fields present in the request are touched, so a client editing a
+ * title cannot blank a body it never loaded.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return WP_REST_Response|WP_Error
+ */
+function pcle_authoring_update_node( $request ) {
+	$id      = (int) $request['id'];
+	$changes = array( 'ID' => $id );
+
+	if ( null !== $request['title'] ) {
+		$changes['post_title'] = sanitize_text_field( (string) $request['title'] );
+	}
+
+	if ( null !== $request['excerpt'] ) {
+		$changes['post_excerpt'] = sanitize_textarea_field( (string) $request['excerpt'] );
+	}
+
+	if ( null !== $request['content'] ) {
+		/*
+		 * Instructors do not hold unfiltered_html, and relying on whichever
+		 * kses filters happen to be installed for a REST request is not
+		 * something to assume. Sanitise here, explicitly.
+		 */
+		$changes['post_content'] = wp_kses_post( (string) $request['content'] );
+	}
+
+	if ( null !== $request['status'] ) {
+		$status = (string) $request['status'];
+
+		if ( ! in_array( $status, array( 'draft', 'publish', 'pending', 'private' ), true ) ) {
+			return new WP_Error( 'pcle_invalid_status', __( 'Unknown status.', 'platform-cle' ), array( 'status' => 400 ) );
+		}
+
+		$changes['post_status'] = $status;
+	}
+
+	if ( count( $changes ) > 1 ) {
+		$updated = wp_update_post( $changes, true );
+
+		if ( is_wp_error( $updated ) ) {
+			return new WP_Error( 'pcle_update_failed', $updated->get_error_message(), array( 'status' => 500 ) );
+		}
+	}
+
+	// Type-specific fields, each validated by the sanitiser that already owns it.
+	if ( null !== $request['starts_at'] && 'pcle_event' === get_post_type( $id ) ) {
+		update_post_meta( $id, PCLE_EVENT_DATETIME_META, pcle_sanitize_event_datetime( (string) $request['starts_at'] ) );
+	}
+
+	if ( null !== $request['credits'] && 'pcle_program' === get_post_type( $id ) ) {
+		foreach ( (array) $request['credits'] as $code => $hours ) {
+			if ( ! isset( pcle_jurisdictions()[ $code ] ) ) {
+				continue;
+			}
+
+			$sanitized = pcle_sanitize_credit_hours( $hours );
+
+			if ( $sanitized > 0 ) {
+				update_post_meta( $id, pcle_credit_hours_meta_key( $code ), $sanitized );
+			} else {
+				delete_post_meta( $id, pcle_credit_hours_meta_key( $code ) );
+			}
+		}
+	}
+
+	return rest_ensure_response( pcle_authoring_shape_node( get_post( $id ) ) );
+}
+
+/**
+ * Every descendant of a node, depth-first.
+ *
+ * @param int $post_id Root post.
+ * @return WP_Post[]
+ */
+function pcle_authoring_descendants( $post_id ) {
+	$found = array();
+
+	foreach ( pcle_allowed_child_types( get_post_type( $post_id ) ) as $child_type ) {
+		foreach ( pcle_authoring_get_children( $post_id, $child_type ) as $child ) {
+			$found[] = $child;
+			$found   = array_merge( $found, pcle_authoring_descendants( $child->ID ) );
+		}
+	}
+
+	return $found;
+}
+
+/**
+ * DELETE /authoring/nodes/<id> — remove an item, and optionally what hangs off it.
+ *
+ * Refuses with the list of descendants unless the caller asked for a cascade.
+ * Deleting a week silently takes its modules, scenarios, templates and
+ * sessions with it, and "I did not realise" is not a recoverable state.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return WP_REST_Response|WP_Error
+ */
+function pcle_authoring_delete_node( $request ) {
+	$id          = (int) $request['id'];
+	$cascade     = (bool) $request['cascade'];
+	$descendants = pcle_authoring_descendants( $id );
+
+	if ( $descendants && ! $cascade ) {
+		return new WP_Error(
+			'pcle_has_descendants',
+			__( 'This item still contains other items.', 'platform-cle' ),
+			array(
+				'status'      => 409,
+				'descendants' => array_map( 'pcle_authoring_shape_node', $descendants ),
+			)
+		);
+	}
+
+	foreach ( $descendants as $descendant ) {
+		wp_delete_post( $descendant->ID, true );
+	}
+
+	wp_delete_post( $id, true );
+
+	return rest_ensure_response(
+		array(
+			'deleted' => $id,
+			'also'    => count( $descendants ),
+		)
+	);
+}
+
+/**
+ * Checks that every id really is a child of that parent, of that type.
+ *
+ * @param int    $parent_id  Parent post.
+ * @param string $child_type Child post type.
+ * @param int[]  $ids        Proposed ordering.
+ * @return true|WP_Error
+ */
+function pcle_authoring_validate_sibling_set( $parent_id, $child_type, $ids ) {
+	$map = pcle_relationship_map();
+
+	if ( ! isset( $map[ $child_type ] ) ) {
+		return new WP_Error( 'pcle_invalid_type', __( 'Unknown item type.', 'platform-cle' ), array( 'status' => 400 ) );
+	}
+
+	$actual = wp_list_pluck( pcle_authoring_get_children( $parent_id, $child_type ), 'ID' );
+	$actual = array_map( 'intval', $actual );
+
+	foreach ( $ids as $id ) {
+		if ( ! in_array( (int) $id, $actual, true ) ) {
+			return new WP_Error(
+				'pcle_not_a_sibling',
+				__( 'That list contains an item that does not belong here.', 'platform-cle' ),
+				array( 'status' => 400 )
+			);
+		}
+	}
+
+	if ( count( $ids ) !== count( $actual ) ) {
+		return new WP_Error(
+			'pcle_incomplete_order',
+			__( 'Reordering needs the whole list, not part of it.', 'platform-cle' ),
+			array( 'status' => 400 )
+		);
+	}
+
+	return true;
+}
+
+/**
+ * POST /authoring/reorder — renumber a whole sibling list in one call.
+ *
+ * Takes the complete list rather than a moved id and a position, because the
+ * whole list is what changed and sending it entire is what makes this
+ * idempotent and safe to retry.
+ *
+ * Validation happens before anything is written: a reorder that half-applies
+ * leaves the curriculum in an order nobody chose, which is worse than one
+ * that refuses.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return WP_REST_Response|WP_Error
+ */
+function pcle_authoring_reorder( $request ) {
+	$parent_id  = (int) $request['parent_id'];
+	$child_type = (string) $request['child_type'];
+	$ids        = array_map( 'absint', (array) $request['ids'] );
+
+	$valid = pcle_authoring_validate_sibling_set( $parent_id, $child_type, $ids );
+
+	if ( is_wp_error( $valid ) ) {
+		return $valid;
+	}
+
+	foreach ( $ids as $position => $id ) {
+		wp_update_post(
+			array(
+				'ID'         => $id,
+				'menu_order' => $position + 1,
+			)
+		);
+	}
+
+	return rest_ensure_response(
+		array(
+			'parent_id' => $parent_id,
+			'ids'       => wp_list_pluck( pcle_authoring_get_children( $parent_id, $child_type ), 'ID' ),
+		)
+	);
+}
+
+/**
+ * Permission callback for reorder.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return true|WP_Error
+ */
+function pcle_authoring_guard_reorder( $request ) {
+	if ( ! is_user_logged_in() ) {
+		return new WP_Error( 'pcle_not_authenticated', __( 'You must be signed in.', 'platform-cle' ), array( 'status' => 401 ) );
+	}
+
+	$program_id = pcle_get_program_for_post( (int) $request['parent_id'] );
+
+	if ( ! $program_id || ! pcle_user_can_edit_program( $program_id ) ) {
+		return new WP_Error( 'pcle_cannot_edit', __( 'You may not edit this programme.', 'platform-cle' ), array( 'status' => 403 ) );
+	}
+
+	return true;
+}
+
+/**
+ * POST /authoring/move — reparent an item, and place it among its new siblings.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return WP_REST_Response|WP_Error
+ */
+function pcle_authoring_move( $request ) {
+	$id        = (int) $request['id'];
+	$parent_id = (int) $request['parent_id'];
+	$type      = get_post_type( $id );
+	$map       = pcle_relationship_map();
+
+	if ( ! isset( $map[ $type ] ) || get_post_type( $parent_id ) !== $map[ $type ]['parent'] ) {
+		return new WP_Error(
+			'pcle_invalid_parent',
+			__( 'That item cannot live there.', 'platform-cle' ),
+			array( 'status' => 400 )
+		);
+	}
+
+	update_post_meta( $id, $map[ $type ]['meta_key'], $parent_id );
+	wp_update_post(
+		array(
+			'ID'         => $id,
+			'menu_order' => pcle_authoring_next_order( $parent_id, $type ),
+		)
+	);
+
+	// An explicit ordering for the destination is optional; without it the
+	// item simply lands at the end.
+	if ( null !== $request['ids'] ) {
+		$ids   = array_map( 'absint', (array) $request['ids'] );
+		$valid = pcle_authoring_validate_sibling_set( $parent_id, $type, $ids );
+
+		if ( is_wp_error( $valid ) ) {
+			return $valid;
+		}
+
+		foreach ( $ids as $position => $sibling ) {
+			wp_update_post(
+				array(
+					'ID'         => $sibling,
+					'menu_order' => $position + 1,
+				)
+			);
+		}
+	}
+
+	return rest_ensure_response( pcle_authoring_shape_node( get_post( $id ) ) );
+}
+
+/**
+ * Permission callback for move.
+ *
+ * Authorises against BOTH ends. Checking only the item being moved would let
+ * someone with rights over one programme drop content into another they have
+ * no business touching.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return true|WP_Error
+ */
+function pcle_authoring_guard_move( $request ) {
+	$source = pcle_authoring_guard_node( $request );
+
+	if ( is_wp_error( $source ) ) {
+		return $source;
+	}
+
+	$destination_program = pcle_get_program_for_post( (int) $request['parent_id'] );
+
+	if ( ! $destination_program || ! pcle_user_can_edit_program( $destination_program ) ) {
+		return new WP_Error( 'pcle_cannot_edit', __( 'You may not edit the destination programme.', 'platform-cle' ), array( 'status' => 403 ) );
+	}
+
+	return true;
 }
