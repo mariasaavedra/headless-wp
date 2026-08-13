@@ -53,6 +53,38 @@ function pcle_credit_hours_meta_key( $code ) {
 }
 
 /**
+ * Registers the credit-hour meta so it is readable and writable over REST.
+ *
+ * Without this the hours were metabox-only: `pcle_save_credit_hours()` runs on
+ * save_post behind a nonce, which no API client has. A headless authoring tool
+ * could therefore read the hours but never set them — and since
+ * `pcle_has_credit_hours()` gates certificate issuance, it could never finish
+ * a programme.
+ *
+ * The same sanitiser as the metabox, so a value written over REST is rounded
+ * to the quarter hour exactly like one typed into wp-admin.
+ */
+function pcle_register_credit_hours_meta() {
+	foreach ( pcle_jurisdictions() as $code => $label ) {
+		register_post_meta(
+			'pcle_program',
+			pcle_credit_hours_meta_key( $code ),
+			array(
+				'type'              => 'number',
+				'single'            => true,
+				'default'           => 0,
+				'show_in_rest'      => true,
+				'sanitize_callback' => 'pcle_sanitize_credit_hours',
+				'auth_callback'     => function ( $allowed, $meta_key, $post_id ) {
+					return current_user_can( 'edit_post', $post_id );
+				},
+			)
+		);
+	}
+}
+add_action( 'init', 'pcle_register_credit_hours_meta' );
+
+/**
  * Approved credit hours for a programme, keyed by jurisdiction.
  *
  * These are NOT additive. An attorney admitted in both states reports the
