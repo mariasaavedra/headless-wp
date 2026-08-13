@@ -1,8 +1,12 @@
 import { getAuthToken, setAuthCookie, clearAuthCookie } from "@/lib/auth";
 import type {
+  AuthoringProgram,
+  Me,
   ModuleDetail,
+  NodeType,
   Program,
   TrainingProgram,
+  TreeNode,
   WeekDetail,
 } from "@/lib/types";
 
@@ -169,6 +173,92 @@ async function setModuleCompletion(
   });
 }
 
+/* ------------------------------------------------------------------ */
+/* Authoring                                                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Who is signed in, and what they may do.
+ *
+ * The rest of the app assumes a participant; this is what lets it offer the
+ * builder to the people who have one and nobody else.
+ */
+async function getMe(): Promise<Me> {
+  return wordpressFetch("/platform-cle/v1/me", { auth: true }) as Promise<Me>;
+}
+
+async function getAuthoringPrograms(): Promise<{
+  programs: AuthoringProgram[];
+}> {
+  return wordpressFetch("/platform-cle/v1/authoring/programs", {
+    auth: true,
+  }) as Promise<{ programs: AuthoringProgram[] }>;
+}
+
+async function getProgramTree(id: number): Promise<TreeNode> {
+  return wordpressFetch(`/platform-cle/v1/authoring/programs/${id}/tree`, {
+    auth: true,
+  }) as Promise<TreeNode>;
+}
+
+async function createNode(input: {
+  type: NodeType;
+  parentId: number;
+  title: string;
+}): Promise<TreeNode> {
+  return wordpressFetch("/platform-cle/v1/authoring/nodes", {
+    auth: true,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      type: input.type,
+      parent_id: input.parentId,
+      title: input.title,
+    }),
+  }) as Promise<TreeNode>;
+}
+
+/** Only the fields present are sent, so nothing unsent gets blanked. */
+async function updateNode(
+  id: number,
+  changes: { title?: string; status?: string; content?: string }
+): Promise<TreeNode> {
+  return wordpressFetch(`/platform-cle/v1/authoring/nodes/${id}`, {
+    auth: true,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(changes),
+  }) as Promise<TreeNode>;
+}
+
+async function deleteNode(id: number, cascade: boolean): Promise<void> {
+  await wordpressFetch(
+    `/platform-cle/v1/authoring/nodes/${id}?cascade=${cascade ? "1" : "0"}`,
+    { auth: true, method: "DELETE" }
+  );
+}
+
+/**
+ * Sends the whole sibling list, which is what the endpoint expects: the list
+ * is what changed, and sending it entire makes a retry harmless.
+ */
+async function reorderChildren(input: {
+  parentId: number;
+  childType: NodeType;
+  ids: number[];
+}): Promise<void> {
+  await wordpressFetch("/platform-cle/v1/authoring/reorder", {
+    auth: true,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      parent_id: input.parentId,
+      child_type: input.childType,
+      ids: input.ids,
+    }),
+  });
+}
+
 export {
   wordpressFetch,
   login,
@@ -178,6 +268,13 @@ export {
   getWeek,
   getModule,
   setModuleCompletion,
+  getMe,
+  getAuthoringPrograms,
+  getProgramTree,
+  createNode,
+  updateNode,
+  deleteNode,
+  reorderChildren,
   WordPressAuthError,
   WordPressApiError,
 };

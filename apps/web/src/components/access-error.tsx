@@ -21,8 +21,16 @@ import { WordPressApiError } from "@/lib/wordpress";
  * which they already had.
  *
  * Anything else is a genuine fault and is rethrown for the error boundary.
+ *
+ * The 403 wording is overridable because a refusal means different things in
+ * different places: on a course page it is "you are not enrolled", in the
+ * builder it is "you do not build courses". Telling an instructor they are not
+ * enrolled would send them to ask for the wrong thing.
  */
-export function renderAccessError(error: unknown): ReactElement {
+export function renderAccessError(
+  error: unknown,
+  forbidden?: { title: string; detail: string }
+): ReactElement {
   if (!(error instanceof WordPressApiError)) {
     throw error;
   }
@@ -42,12 +50,12 @@ export function renderAccessError(error: unknown): ReactElement {
   return (
     <PageShell>
       <h1 className="text-2xl font-semibold text-zinc-950">
-        You are not enrolled in this programme
+        {forbidden?.title ?? "You are not enrolled in this programme"}
       </h1>
 
       <p className="mt-3 text-zinc-600">
-        This content is limited to enrolled participants. If you believe you
-        should have access, contact your programme administrator.
+        {forbidden?.detail ??
+          "This content is limited to enrolled participants. If you believe you should have access, contact your programme administrator."}
       </p>
 
       <Link
