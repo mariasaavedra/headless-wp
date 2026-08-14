@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import ActionForm from "@/components/builder/action-form";
 import { NODE_BADGES, NODE_LABELS } from "@/components/builder/node-labels";
 import {
@@ -103,7 +105,12 @@ export default function NodeRow({
           {NODE_BADGES[node.type]}
         </span>
 
-        <span className="font-medium text-zinc-900">{title}</span>
+        <Link
+          href={`/builder/nodes/${node.id}`}
+          className="font-medium text-zinc-900 hover:underline"
+        >
+          {title}
+        </Link>
 
         {isDraft && (
           <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">

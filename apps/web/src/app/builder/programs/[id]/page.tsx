@@ -6,7 +6,11 @@ import ActionForm from "@/components/builder/action-form";
 import { NODE_LABELS } from "@/components/builder/node-labels";
 import TreeView from "@/components/builder/tree-view";
 import PageShell from "@/components/page-shell";
-import { createNodeAction, setStatusAction } from "@/app/actions/authoring";
+import {
+  createNodeAction,
+  saveCreditsAction,
+  setStatusAction,
+} from "@/app/actions/authoring";
 import { isAuthenticated } from "@/lib/auth";
 import { decodeEntities } from "@/lib/html";
 import type { TreeNode } from "@/lib/types";
@@ -72,15 +76,63 @@ export default async function BuilderProgramPage({
         </ActionForm>
       </div>
 
-      <p className="mt-2 text-sm text-zinc-500">
-        {tree.credits
-          ?.map((credit) =>
-            credit.hours > 0
-              ? `${credit.label}: ${credit.hours} h`
-              : `${credit.label}: not accredited`
-          )
-          .join(" · ")}
-      </p>
+      {/*
+        Hours are entered from the accreditation paperwork, not calculated —
+        and the two figures are never added together: an attorney admitted in
+        both states reports the same seat time to each bar.
+      */}
+      <details className="mt-4 text-sm">
+        <summary className="cursor-pointer text-zinc-500 hover:text-zinc-900">
+          {tree.credits
+            ?.map((credit) =>
+              credit.hours > 0
+                ? `${credit.label}: ${credit.hours} h`
+                : `${credit.label}: not accredited`
+            )
+            .join(" · ")}
+        </summary>
+
+        <ActionForm
+          action={saveCreditsAction}
+          className="mt-3 flex flex-wrap items-end gap-4"
+        >
+          <input type="hidden" name="id" value={tree.id} />
+
+          {tree.credits?.map((credit) => (
+            <span key={credit.jurisdiction}>
+              <label
+                htmlFor={`credit-${credit.jurisdiction}`}
+                className="block text-xs font-medium text-zinc-600"
+              >
+                {credit.label}
+              </label>
+              <input
+                id={`credit-${credit.jurisdiction}`}
+                type="number"
+                name={`credit_${credit.jurisdiction}`}
+                defaultValue={credit.hours > 0 ? credit.hours : ""}
+                min="0"
+                step="0.25"
+                placeholder="—"
+                className="mt-1 w-24 rounded border border-zinc-300 px-2 py-1"
+              />
+            </span>
+          ))}
+
+          <button
+            type="submit"
+            className="rounded bg-zinc-950 px-3 py-1 text-white"
+          >
+            Save hours
+          </button>
+
+          <span className="w-full text-xs text-zinc-500">
+            Approved hours per jurisdiction, in quarter-hour steps. Leave blank
+            where the programme is not accredited. Certificates cannot be
+            issued for a programme with no hours.
+          </span>
+        </ActionForm>
+      </details>
 
       <div className="mt-8 rounded-lg border border-zinc-200 bg-white p-6">
         {weeks.length === 0 ? (
@@ -121,8 +173,8 @@ export default async function BuilderProgramPage({
       </div>
 
       <p className="mt-6 text-sm text-zinc-500">
-        Writing the body of a module, and attaching files, is still done in
-        WordPress for now.
+        Click any title to write its body. Attaching files and embedding video
+        are still done in WordPress for now.
       </p>
     </PageShell>
   );

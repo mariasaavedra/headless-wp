@@ -2,6 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { renderAccessError } from "@/components/access-error";
+import ActionForm from "@/components/builder/action-form";
+import { createProgramAction } from "@/app/actions/authoring";
 import PageShell from "@/components/page-shell";
 import { isAuthenticated } from "@/lib/auth";
 import { decodeEntities } from "@/lib/html";
@@ -35,6 +37,35 @@ export default async function BuilderPage() {
       <p className="mt-2 text-zinc-600">
         Programmes you can edit. Changes are drafts until you publish them.
       </p>
+
+      {/*
+        The only creation in the builder that is not made in context: a
+        programme has no parent, so this is where a course starts. Credit hours
+        are set on the programme itself once it exists, because they come off
+        accreditation paperwork rather than out of someone's head at the moment
+        of naming it.
+      */}
+      <details className="mt-6 rounded-lg border border-zinc-200 bg-white p-4 text-sm">
+        <summary className="cursor-pointer font-medium text-zinc-700">
+          New programme
+        </summary>
+
+        <ActionForm action={createProgramAction} className="mt-3 flex gap-2">
+          <input
+            type="text"
+            name="title"
+            placeholder="e.g. Immigration Habeas Corpus — Spring 2027"
+            aria-label="Title for the new programme"
+            className="w-96 max-w-full rounded border border-zinc-300 px-2 py-1"
+          />
+          <button
+            type="submit"
+            className="rounded bg-zinc-950 px-3 py-1 text-white"
+          >
+            Create
+          </button>
+        </ActionForm>
+      </details>
 
       {programs.length === 0 ? (
         <p className="mt-8 text-zinc-600">There are no programmes yet.</p>

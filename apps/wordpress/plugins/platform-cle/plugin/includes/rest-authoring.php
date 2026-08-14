@@ -295,6 +295,11 @@ function pcle_register_authoring_routes() {
 		'/authoring/nodes/(?P<id>\d+)',
 		array(
 			array(
+				'methods'             => 'GET',
+				'callback'            => 'pcle_authoring_get_node',
+				'permission_callback' => 'pcle_authoring_guard_node',
+			),
+			array(
 				'methods'             => 'PATCH',
 				'callback'            => 'pcle_authoring_update_node',
 				'permission_callback' => 'pcle_authoring_guard_node',
@@ -566,12 +571,18 @@ function pcle_authoring_update_node( $request ) {
 		$changes['post_excerpt'] = sanitize_textarea_field( (string) $request['excerpt'] );
 	}
 
-	if ( null !== $request['content'] ) {
-		/*
-		 * Instructors do not hold unfiltered_html, and relying on whichever
-		 * kses filters happen to be installed for a REST request is not
-		 * something to assume. Sanitise here, explicitly.
-		 */
+	/*
+	 * `body` is the builder's field: plain authored text, which the server
+	 * turns into block markup. The client never sends HTML.
+	 *
+	 * `content` remains for callers that legitimately hold markup already —
+	 * it is still sanitised, because instructors do not hold unfiltered_html
+	 * and relying on whichever kses filters happen to be installed for a REST
+	 * request is not something to assume.
+	 */
+	if ( null !== $request['body'] ) {
+		$changes['post_content'] = pcle_authoring_content_from_text( (string) $request['body'] );
+	} elseif ( null !== $request['content'] ) {
 		$changes['post_content'] = wp_kses_post( (string) $request['content'] );
 	}
 
@@ -852,4 +863,40 @@ function pcle_authoring_guard_move( $request ) {
 	}
 
 	return true;
+}
+
+/**
+ * GET /authoring/nodes/<id> — one item, with its body in editable form.
+ *
+ * The tree deliberately does not carry bodies; loading a programme would
+ * otherwise ship every module's prose to draw a list of titles. This is what
+ * the editor screen asks for when an author opens one thing.
+ *
+ * `editable` false means the stored content contains something the builder
+ * cannot express — a block from the WordPress inserter, or pre-block HTML. The
+ * caller must then show it read-only: re-serialising content we could not
+ * fully parse would destroy an author's work while looking like a save.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return WP_REST_Response
+ */
+function pcle_authoring_get_node( $request ) {
+	$post = get_post( (int) $request['id'] );
+	$node = pcle_authoring_shape_node( $post );
+	$body = pcle_authoring_text_from_content( $post->post_content );
+
+	$node['body']     = $body['text'];
+	$node['editable'] = $body['editable'];
+	$node['excerpt']  = $post->post_excerpt;
+
+	// What the participant will actually see, so the editor can preview it
+	// without a second round trip and without a second renderer.
+	$node['rendered'] = pcle_rest_rendered_content( $post );
+
+	$parent_id = pcle_get_parent_id( $post->ID );
+
+	$node['parent']  = $parent_id ? pcle_rest_shape_ref( get_post( $parent_id ) ) : null;
+	$node['program'] = pcle_rest_shape_ref( get_post( pcle_get_program_for_post( $post->ID ) ) );
+
+	return rest_ensure_response( $node );
 }
