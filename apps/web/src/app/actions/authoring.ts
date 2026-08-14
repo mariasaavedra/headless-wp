@@ -17,7 +17,7 @@ type BuilderActionState = {
 
 const NODE_TYPES: NodeType[] = [
   "pcle_program",
-  "pcle_week",
+  "pcle_unit",
   "pcle_module",
   "pcle_scenario",
   "pcle_template",
@@ -243,7 +243,7 @@ async function deleteNodeAction(
   }
 
   // The server refuses a cascade that was not asked for; the confirmation
-  // screen is what turns this on, so a stray click cannot take a week's
+  // screen is what turns this on, so a stray click cannot take a unit's
   // contents with it.
   const cascade = formData.get("cascade") === "true";
 

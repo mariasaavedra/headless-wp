@@ -2,7 +2,7 @@
  * Platform CLE — frontend progress.
  *
  * Handles the "mark as complete" button click, sends it to the REST endpoint,
- * and updates the UI (button + any week progress bar).
+ * and updates the UI (button + any unit progress bar).
  */
 ( function () {
 	'use strict';
@@ -51,8 +51,8 @@
 			} )
 			.then( function ( data ) {
 				updateButton( btn, data.completed );
-				if ( data.week_progress ) {
-					updateWeekBars( data.week_progress );
+				if ( data.unit_progress ) {
+					updateUnitBars( data.unit_progress );
 				}
 			} )
 			.catch( function () {
@@ -73,9 +73,9 @@
 	}
 
 	/**
-	 * Updates all visible progress bars with the week's data.
+	 * Updates all visible progress bars with the unit's data.
 	 */
-	function updateWeekBars( progress ) {
+	function updateUnitBars( progress ) {
 		var bars = document.querySelectorAll( '.pcle-progress' );
 		bars.forEach( function ( bar ) {
 			var fill = bar.querySelector( '.pcle-progress__fill' );

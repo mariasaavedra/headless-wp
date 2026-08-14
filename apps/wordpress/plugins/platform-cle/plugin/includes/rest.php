@@ -8,8 +8,8 @@
  *
  * Routes:
  *   - GET /platform-cle/v1/my-training     : programs available to the current user.
- *   - GET /platform-cle/v1/programs/<id>   : one program with its weeks and modules.
- *   - GET /platform-cle/v1/weeks/<id>      : one week with its modules and events.
+ *   - GET /platform-cle/v1/programs/<id>   : one program with its units and modules.
+ *   - GET /platform-cle/v1/units/<id>      : one unit with its modules and events.
  *   - GET /platform-cle/v1/modules/<id>    : one module with its scenarios and templates.
  *
  * These exist instead of walking /wp/v2/pcle_* from the client for two
@@ -188,23 +188,23 @@ function pcle_rest_shape_event( $event ) {
 }
 
 /**
- * Shapes a week, optionally with its modules and events.
+ * Shapes a unit, optionally with its modules and events.
  *
- * @param WP_Post $week     Week.
+ * @param WP_Post $unit     Unit.
  * @param bool    $children Whether to include modules and events.
  * @return array
  */
-function pcle_rest_shape_week( $week, $children = true ) {
+function pcle_rest_shape_unit( $unit, $children = true ) {
 	$shaped = array(
-		'id'       => (int) $week->ID,
-		'title'    => get_the_title( $week ),
-		'excerpt'  => pcle_rest_excerpt( $week ),
-		'progress' => pcle_rest_shape_progress( pcle_get_week_progress( $week->ID ) ),
+		'id'       => (int) $unit->ID,
+		'title'    => get_the_title( $unit ),
+		'excerpt'  => pcle_rest_excerpt( $unit ),
+		'progress' => pcle_rest_shape_progress( pcle_get_unit_progress( $unit->ID ) ),
 	);
 
 	if ( $children ) {
-		$shaped['modules'] = array_map( 'pcle_rest_shape_module', pcle_get_modules( $week->ID ) );
-		$shaped['events']  = array_map( 'pcle_rest_shape_event', pcle_get_events( $week->ID ) );
+		$shaped['modules'] = array_map( 'pcle_rest_shape_module', pcle_get_modules( $unit->ID ) );
+		$shaped['events']  = array_map( 'pcle_rest_shape_event', pcle_get_events( $unit->ID ) );
 	}
 
 	return $shaped;
@@ -256,7 +256,7 @@ function pcle_rest_guard_item( $request, $post_type ) {
 function pcle_register_curriculum_routes() {
 	$routes = array(
 		'programs' => array( 'pcle_program', 'pcle_rest_get_program' ),
-		'weeks'    => array( 'pcle_week', 'pcle_rest_get_week' ),
+		'units'    => array( 'pcle_unit', 'pcle_rest_get_unit' ),
 		'modules'  => array( 'pcle_module', 'pcle_rest_get_module' ),
 	);
 
@@ -284,7 +284,7 @@ function pcle_register_curriculum_routes() {
 add_action( 'rest_api_init', 'pcle_register_curriculum_routes' );
 
 /**
- * GET /programs/<id> — a program with every week and module under it.
+ * GET /programs/<id> — a program with every unit and module under it.
  *
  * @param WP_REST_Request $request Request.
  * @return WP_REST_Response
@@ -301,23 +301,23 @@ function pcle_rest_get_program( $request ) {
 			// Approved hours per jurisdiction. Not summable — see
 			// pcle_get_credit_hours().
 			'credits'  => pcle_rest_shape_credit_hours( $program->ID ),
-			'weeks'    => array_map( 'pcle_rest_shape_week', pcle_get_weeks( $program->ID ) ),
+			'units'    => array_map( 'pcle_rest_shape_unit', pcle_get_units( $program->ID ) ),
 		)
 	);
 }
 
 /**
- * GET /weeks/<id> — a week with its modules and sessions.
+ * GET /units/<id> — a unit with its modules and sessions.
  *
  * @param WP_REST_Request $request Request.
  * @return WP_REST_Response
  */
-function pcle_rest_get_week( $request ) {
-	$week    = get_post( (int) $request['id'] );
-	$program = get_post( pcle_get_program_for_post( $week->ID ) );
+function pcle_rest_get_unit( $request ) {
+	$unit    = get_post( (int) $request['id'] );
+	$program = get_post( pcle_get_program_for_post( $unit->ID ) );
 
-	$shaped            = pcle_rest_shape_week( $week );
-	$shaped['content'] = pcle_rest_rendered_content( $week );
+	$shaped            = pcle_rest_shape_unit( $unit );
+	$shaped['content'] = pcle_rest_rendered_content( $unit );
 	$shaped['program'] = pcle_rest_shape_ref( $program );
 
 	return rest_ensure_response( $shaped );
@@ -331,7 +331,7 @@ function pcle_rest_get_week( $request ) {
  */
 function pcle_rest_get_module( $request ) {
 	$module  = get_post( (int) $request['id'] );
-	$week    = get_post( pcle_get_parent_id( $module->ID ) );
+	$unit    = get_post( pcle_get_parent_id( $module->ID ) );
 	$program = get_post( pcle_get_program_for_post( $module->ID ) );
 
 	$shape_child = function ( $child ) {
@@ -348,7 +348,7 @@ function pcle_rest_get_module( $request ) {
 			'title'     => get_the_title( $module ),
 			'content'   => pcle_rest_rendered_content( $module ),
 			'completed' => pcle_is_module_complete( $module->ID ),
-			'week'      => pcle_rest_shape_ref( $week ),
+			'unit'      => pcle_rest_shape_ref( $unit ),
 			'program'   => pcle_rest_shape_ref( $program ),
 			'scenarios' => array_map( $shape_child, pcle_get_scenarios( $module->ID ) ),
 			'templates' => array_map( $shape_child, pcle_get_templates( $module->ID ) ),

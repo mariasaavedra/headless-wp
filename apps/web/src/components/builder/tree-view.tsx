@@ -5,7 +5,7 @@ import type { NodeType, TreeNode } from "@/lib/types";
 /**
  * The children of a node, grouped by type.
  *
- * Grouping is not cosmetic: ordering is per type on the server — a week's
+ * Grouping is not cosmetic: ordering is per type on the server — a unit's
  * modules and its sessions are two independent lists — so the groups here are
  * the same units the reorder endpoint works in. Rendering them mixed would
  * make "move up" mean something the API cannot express.

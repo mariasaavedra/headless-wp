@@ -63,7 +63,7 @@ Text Domain: platform-cle-theme
 	color: #50575e;
 }
 
-/* Compact progress bar inside a week in the list. */
+/* Compact progress bar inside a unit in the list. */
 .pcle-curriculum__item .pcle-progress {
 	margin: 0.5rem 0 0;
 }

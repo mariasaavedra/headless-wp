@@ -47,11 +47,11 @@ platform-cle/
 
 ## Features
 
-- **7 Custom Post Types:** Program, Week, Module, Practice Scenario, Template, Schedule Event, Case Update.
+- **7 Custom Post Types:** Program, Unit, Module, Practice Scenario, Template, Schedule Event, Case Update.
 - **3 roles:** CLE Student, CLE Instructor, and an extended Administrator.
 - **Per-program access control:** content is protected behind login and requires **enrollment** in the specific program.
-- **Hierarchy** Program → Week → Module → (Scenario | Template), with Events per week.
-- **Progress tracking** (MVP via user meta) with per-week and per-program bars.
+- **Hierarchy** Program → Unit → Module → (Scenario | Template), with Events per unit.
+- **Progress tracking** (MVP via user meta) with per-unit and per-program bars.
 - **Model answers** protected server-side (`[pcle_model_answer]`).
 - **Student enrollment** managed by instructors.
 - **Front door** ("My Training") + breadcrumbs for navigation.

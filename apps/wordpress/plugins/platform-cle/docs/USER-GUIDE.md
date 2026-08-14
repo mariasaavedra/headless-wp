@@ -19,13 +19,13 @@ To assign a role: **Users → (user) → Role**.
 The **Platform CLE** sidebar menu groups all content types. The recommended creation order follows the hierarchy top-down:
 
 1. **Program** — the program container (e.g. "Immigration Habeas Corpus — Spring 2026").
-2. **Week** — in the sidebar, select its **Parent Program**.
-3. **Module** — select its **Parent Week**.
+2. **Unit** — in the sidebar, select its **Parent Program**.
+3. **Module** — select its **Parent Unit**.
 4. **Practice Scenario** / **Template** — select its **Parent Module**.
-5. **Schedule Event** — select its **Parent Week** and set the **Session Date & Time**.
+5. **Schedule Event** — select its **Parent Unit** and set the **Session Date & Time**.
 6. **Case Update** — cross-program announcements (not attached to any program).
 
-> **Display order:** use the **Order** field (under *Page Attributes*) to order weeks and modules. They display from lowest to highest.
+> **Display order:** use the **Order** field (under *Page Attributes*) to order units and modules. They display from lowest to highest.
 
 > **"Parent" column:** the admin lists show which parent each item belongs to, with a direct link.
 
@@ -43,7 +43,7 @@ It renders inside a **"Reveal model answer"** disclosure. Users without permissi
 
 ### Session dates
 
-When editing a **Schedule Event**, use the **Session Date & Time** field in the sidebar. The date appears on the week and event pages, in the site's timezone.
+When editing a **Schedule Event**, use the **Session Date & Time** field in the sidebar. The date appears on the unit and event pages, in the site's timezone.
 
 > Set the timezone under **Settings → General → Timezone** (e.g. `America/Chicago` for Kansas City).
 
@@ -73,7 +73,7 @@ Only users with the **CLE Student** role appear in the list. The same table show
 1. Log in to the site.
 2. **My Training** appears in the menu.
 3. They see a card for each program they're enrolled in, with its progress bar.
-4. Entering a program: list of weeks (each with its progress) → modules → content.
+4. Entering a program: list of units (each with its progress) → modules → content.
 5. On each module they can click **Mark as complete**; the bar updates instantly.
 6. The **breadcrumbs** (above the title) let them jump back to any previous level.
 

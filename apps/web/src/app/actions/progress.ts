@@ -36,7 +36,7 @@ async function toggleModuleAction(
     return { error: "Your progress could not be saved. Please try again." };
   }
 
-  // Progress appears on the module, its week and its programme, and none of
+  // Progress appears on the module, its unit and its programme, and none of
   // those pages know the others' ids from here.
   revalidatePath("/", "layout");
 

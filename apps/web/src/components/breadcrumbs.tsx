@@ -10,7 +10,7 @@ type Crumb = {
 };
 
 /**
- * Trail back up the hierarchy: My Training → Program → Week → Module.
+ * Trail back up the hierarchy: My Training → Program → Unit → Module.
  *
  * The last crumb is the current page and is not a link.
  */

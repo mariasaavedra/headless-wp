@@ -5,33 +5,33 @@ import { Card, CardContent } from "@pcle/ui/components/card";
 
 import ProgressBar from "@/components/progress-bar";
 import { decodeEntities } from "@/lib/html";
-import type { Week } from "@/lib/types";
+import type { Unit } from "@/lib/types";
 
 /**
- * One week with its modules and live sessions.
+ * One unit with its modules and live sessions.
  *
- * Shared by the programme page (which lists every week) and the week page
+ * Shared by the programme page (which lists every unit) and the unit page
  * (which shows one), so the two can never drift into showing different things
- * about the same week.
+ * about the same unit.
  */
-export default function WeekSection({
-  week,
+export default function UnitSection({
+  unit,
   headingLevel = "h2",
   linkHeading = true,
 }: {
-  week: Week;
+  unit: Unit;
   headingLevel?: "h1" | "h2";
   linkHeading?: boolean;
 }) {
   const Heading = headingLevel;
-  const title = decodeEntities(week.title);
+  const title = decodeEntities(unit.title);
 
   return (
     <Card className="p-6">
       <CardContent className="p-0">
         <Heading className="text-xl font-medium text-zinc-950">
           {linkHeading ? (
-            <Link href={`/weeks/${week.id}`} className="hover:underline">
+            <Link href={`/units/${unit.id}`} className="hover:underline">
               {title}
             </Link>
           ) : (
@@ -39,19 +39,19 @@ export default function WeekSection({
           )}
         </Heading>
 
-        {week.excerpt && (
+        {unit.excerpt && (
           <p className="mt-2 text-sm text-zinc-600">
-            {decodeEntities(week.excerpt)}
+            {decodeEntities(unit.excerpt)}
           </p>
         )}
 
         <div className="mt-4">
-          <ProgressBar progress={week.progress} label="This week" />
+          <ProgressBar progress={unit.progress} label="This unit" />
         </div>
 
-        {week.modules.length > 0 && (
+        {unit.modules.length > 0 && (
           <ul className="mt-6 divide-y divide-zinc-100 border-t border-zinc-100">
-            {week.modules.map((module) => (
+            {unit.modules.map((module) => (
               <li key={module.id}>
                 <Link
                   href={`/modules/${module.id}`}
@@ -89,12 +89,12 @@ export default function WeekSection({
           </ul>
         )}
 
-        {week.events.length > 0 && (
+        {unit.events.length > 0 && (
           <div className="mt-6 rounded border border-zinc-200 bg-zinc-50 p-4">
             <h3 className="text-sm font-semibold text-zinc-700">Live sessions</h3>
 
             <ul className="mt-2 space-y-1">
-              {week.events.map((event) => (
+              {unit.events.map((event) => (
                 <li key={event.id} className="text-sm text-zinc-600">
                   <span className="font-medium text-zinc-800">
                     {decodeEntities(event.title)}

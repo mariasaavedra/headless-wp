@@ -9,8 +9,8 @@
  *
  * Blocks:
  *   - platform-cle/curriculum-children : lists the current post's children
- *     (Program→Weeks, Week→Modules+Events, Module→Scenarios+Templates).
- *   - platform-cle/progress-bar        : progress bar for the current Program/Week.
+ *     (Program→Units, Unit→Modules+Events, Module→Scenarios+Templates).
+ *   - platform-cle/progress-bar        : progress bar for the current Program/Unit.
  *   - platform-cle/complete-button     : module "mark as complete" button.
  *
  * @package Platform_CLE
@@ -131,7 +131,7 @@ function pcle_ensure_front_door_page() {
 /**
  * Render: breadcrumbs walking up the hierarchy to the current post.
  *
- * E.g.: My Training › Program › Week › Module (the last one without a link).
+ * E.g.: My Training › Program › Unit › Module (the last one without a link).
  *
  * @return string
  */
@@ -139,7 +139,7 @@ function pcle_block_breadcrumbs() {
 	$id   = get_the_ID();
 	$type = get_post_type( $id );
 
-	$hierarchy = array( 'pcle_program', 'pcle_week', 'pcle_module', 'pcle_scenario', 'pcle_template', 'pcle_event' );
+	$hierarchy = array( 'pcle_program', 'pcle_unit', 'pcle_module', 'pcle_scenario', 'pcle_template', 'pcle_event' );
 	if ( ! $id || ! in_array( $type, $hierarchy, true ) ) {
 		return '';
 	}
@@ -217,15 +217,15 @@ function pcle_block_curriculum_children() {
 	switch ( $type ) {
 		case 'pcle_program':
 			$sections[] = pcle_render_children_section(
-				__( 'Weeks', 'platform-cle' ),
-				pcle_get_weeks( $id ),
+				__( 'Units', 'platform-cle' ),
+				pcle_get_units( $id ),
 				false,
 				false,
-				true // show each week's progress bar
+				true // show each unit's progress bar
 			);
 			break;
 
-		case 'pcle_week':
+		case 'pcle_unit':
 			$sections[] = pcle_render_children_section(
 				__( 'Modules', 'platform-cle' ),
 				pcle_get_modules( $id ),
@@ -262,10 +262,10 @@ function pcle_block_curriculum_children() {
  * @param WP_Post[] $items              Child posts.
  * @param bool      $show_complete      If true, shows ✓ on completed items (modules).
  * @param bool      $show_datetime      If true, shows the event date/time.
- * @param bool      $show_week_progress If true, adds each week's progress bar.
+ * @param bool      $show_unit_progress If true, adds each unit's progress bar.
  * @return string
  */
-function pcle_render_children_section( $title, $items, $show_complete = false, $show_datetime = false, $show_week_progress = false ) {
+function pcle_render_children_section( $title, $items, $show_complete = false, $show_datetime = false, $show_unit_progress = false ) {
 	if ( empty( $items ) ) {
 		return '';
 	}
@@ -285,8 +285,8 @@ function pcle_render_children_section( $title, $items, $show_complete = false, $
 			}
 		}
 
-		if ( $show_week_progress ) {
-			$meta .= pcle_render_progress_bar( pcle_get_week_progress( $item->ID ) );
+		if ( $show_unit_progress ) {
+			$meta .= pcle_render_progress_bar( pcle_get_unit_progress( $item->ID ) );
 		}
 
 		$rows .= sprintf(
@@ -306,7 +306,7 @@ function pcle_render_children_section( $title, $items, $show_complete = false, $
 }
 
 /**
- * Render: progress bar for the current Program or Week.
+ * Render: progress bar for the current Program or Unit.
  *
  * Only shown to authenticated users with access to the program.
  *
@@ -323,9 +323,9 @@ function pcle_block_progress_bar() {
 	if ( 'pcle_program' === $type ) {
 		$progress = pcle_get_program_progress( $id );
 		$label    = __( 'Program progress:', 'platform-cle' );
-	} elseif ( 'pcle_week' === $type ) {
-		$progress = pcle_get_week_progress( $id );
-		$label    = __( 'Week progress:', 'platform-cle' );
+	} elseif ( 'pcle_unit' === $type ) {
+		$progress = pcle_get_unit_progress( $id );
+		$label    = __( 'Unit progress:', 'platform-cle' );
 	} else {
 		return '';
 	}

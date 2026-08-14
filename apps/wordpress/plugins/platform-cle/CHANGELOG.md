@@ -6,6 +6,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and the proje
 
 ## [Unreleased] — Pilot-ready hardening
 
+### Changed
+
+- **"Week" is now "Unit".** The level between a programme and its modules was
+  called a Week, which promised a shape the content does not have: a stage of a
+  course is rarely exactly seven days, and naming it after a duration invited
+  everyone to plan around one. It is now a Unit, everywhere — labels, URLs, the
+  API, the post type (`pcle_week` → `pcle_unit`) and the relationship meta
+  (`_pcle_week_id` → `_pcle_unit_id`).
+
+  Renaming only the labels was the cheaper option and was rejected: it would
+  have left the code saying one thing and the screen another, and this project
+  has already paid for that kind of drift once, in its documentation. Schema
+  v3 moves the existing rows, idempotently — without it an install would keep
+  its units as an unregistered post type, invisible in the admin, and every
+  module and session would lose its parent.
+
+  Genuine calendar arithmetic is untouched: the demo seeder still places
+  sessions a real week apart, and the duplicate feature still shifts dates by
+  whole weeks.
+
 ### Security
 
 - **Closed a per-program leak in REST collection listings.** The `rest_pre_dispatch`
