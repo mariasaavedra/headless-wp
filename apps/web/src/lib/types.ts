@@ -156,4 +156,27 @@ type TreeNode = {
   credits?: CreditHours[];
 };
 
-export type { Me, NodeType, AuthoringProgram, CreditHours, TreeNode };
+/**
+ * One node opened for editing.
+ *
+ * `body` is the authored text, not HTML — the server turns it into block
+ * markup. `editable` is false when the stored content contains something the
+ * builder cannot express, in which case it must be shown read-only.
+ */
+type NodeDetail = TreeNode & {
+  body: string;
+  editable: boolean;
+  excerpt: string;
+  rendered: string;
+  parent: Ref | null;
+  program: Ref | null;
+};
+
+export type {
+  Me,
+  NodeType,
+  AuthoringProgram,
+  CreditHours,
+  TreeNode,
+  NodeDetail,
+};

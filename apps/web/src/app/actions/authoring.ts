@@ -135,6 +135,103 @@ async function setStatusAction(
   return {};
 }
 
+/**
+ * Saves a node's title and body.
+ *
+ * The body is authored text, never HTML: the server escapes it and builds the
+ * markup. A client that could send markup would be a way around the fact that
+ * instructors do not hold unfiltered_html.
+ */
+async function saveBodyAction(
+  _prev: BuilderActionState,
+  formData: FormData
+): Promise<BuilderActionState> {
+  const id = readId(formData.get("id"));
+  const title = String(formData.get("title") ?? "").trim();
+  const body = String(formData.get("body") ?? "");
+
+  if (!id) {
+    return { error: "That item could not be identified." };
+  }
+  if (!title) {
+    return { error: "A title is required." };
+  }
+
+  try {
+    await updateNode(id, { title, body });
+  } catch (error) {
+    return { error: describe(error) };
+  }
+
+  refresh();
+  return {};
+}
+
+/**
+ * Creates a programme.
+ *
+ * A programme has no parent, so this is the one creation that is not made in
+ * context — it is where a course starts.
+ */
+async function createProgramAction(
+  _prev: BuilderActionState,
+  formData: FormData
+): Promise<BuilderActionState> {
+  const title = String(formData.get("title") ?? "").trim();
+
+  if (!title) {
+    return { error: "A title is required." };
+  }
+
+  try {
+    await createNode({ type: "pcle_program", parentId: 0, title });
+  } catch (error) {
+    return { error: describe(error) };
+  }
+
+  refresh();
+  return {};
+}
+
+/**
+ * Sets the approved credit hours for a programme.
+ *
+ * Not summable across jurisdictions, and the API rounds to the quarter hour —
+ * both decisions live on the server, so this only forwards what was typed.
+ */
+async function saveCreditsAction(
+  _prev: BuilderActionState,
+  formData: FormData
+): Promise<BuilderActionState> {
+  const id = readId(formData.get("id"));
+
+  if (!id) {
+    return { error: "That programme could not be identified." };
+  }
+
+  const credits: Record<string, number> = {};
+
+  for (const [key, value] of formData.entries()) {
+    if (!key.startsWith("credit_")) {
+      continue;
+    }
+
+    const jurisdiction = key.slice("credit_".length);
+    const hours = Number(value);
+
+    credits[jurisdiction] = Number.isFinite(hours) && hours > 0 ? hours : 0;
+  }
+
+  try {
+    await updateNode(id, { credits });
+  } catch (error) {
+    return { error: describe(error) };
+  }
+
+  refresh();
+  return {};
+}
+
 async function deleteNodeAction(
   _prev: BuilderActionState,
   formData: FormData
@@ -194,6 +291,9 @@ async function reorderAction(
 
 export {
   createNodeAction,
+  createProgramAction,
+  saveBodyAction,
+  saveCreditsAction,
   renameNodeAction,
   setStatusAction,
   deleteNodeAction,

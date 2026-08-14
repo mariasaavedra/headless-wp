@@ -1249,7 +1249,137 @@ pcle_eq( get_post( $second_module['id'] ), null, 'and so is what it contained' )
 wp_set_current_user( 0 );
 
 /* ------------------------------------------------------------------ */
-/* 23) Emails                                                         */
+/* 23) Authored content                                               */
+/* ------------------------------------------------------------------ */
+/*
+ * The builder sends plain text; the server escapes it and builds the markup.
+ * Two properties matter: the round trip must be faithful, or editing loses
+ * work, and no markup from a client may ever reach storage, because
+ * instructors do not hold unfiltered_html.
+ */
+pcle_section( '# Authored content' );
+
+$round_trips = array(
+	'a paragraph'      => 'Just a paragraph.',
+	'a heading'        => "## Foundations\n\nSome text.",
+	'a small heading'  => "### Detail\n\nSome text.",
+	'a list'           => "- first\n- second\n- third",
+	'a quotation'      => '> The writ may not be suspended.',
+	'inline emphasis'  => 'Cites **28 U.S.C. § 2241** and *the record*.',
+	'a link'           => 'See [the statute](https://example.org/2241) for detail.',
+	'the lot'          => "## Title\n\nText with **bold** and a [link](https://example.org/x).\n\n- one\n- two\n\n> Quoted.\n\nClosing.",
+);
+
+foreach ( $round_trips as $label => $text ) {
+	$stored = pcle_authoring_content_from_text( $text );
+	$back   = pcle_authoring_text_from_content( $stored );
+
+	pcle_eq( $back['editable'], true, "{$label} survives as editable" );
+	pcle_eq( trim( $back['text'] ), trim( $text ), "{$label} round-trips unchanged" );
+}
+
+// What gets stored is block markup, which is what opens cleanly in wp-admin.
+$stored_blocks = pcle_authoring_content_from_text( "## Heading\n\nText." );
+pcle_ok( false !== strpos( $stored_blocks, '<!-- wp:heading' ), 'headings are stored as blocks, not bare HTML' );
+pcle_ok( false !== strpos( $stored_blocks, '<!-- wp:paragraph' ), 'paragraphs are stored as blocks' );
+
+/*
+ * No HTML from the client, ever. Note it is ESCAPED rather than stripped: the
+ * author sees what they typed instead of it silently vanishing.
+ */
+$hostile = pcle_authoring_content_from_text( 'Hi <script>alert(1)</script> <iframe src="x"></iframe> <b>bold</b> <img src=x onerror=alert(1)>' );
+pcle_eq( strpos( $hostile, '<script' ), false, 'a script tag cannot be authored' );
+pcle_eq( strpos( $hostile, '<iframe' ), false, 'an iframe cannot be authored' );
+pcle_eq( strpos( $hostile, '<img' ), false, 'an image tag with an event handler cannot be authored' );
+pcle_ok( false !== strpos( $hostile, '&lt;img' ), 'that image tag survives only as escaped, inert text' );
+pcle_ok( false !== strpos( $hostile, '&lt;b&gt;' ), 'typed markup is escaped and shown, not silently dropped' );
+
+/*
+ * The tags above are neutralised by escaping, not by removal — so the string
+ * "onerror" is still present, as text. What must never happen is it becoming
+ * an attribute, which is what the assertions above actually check. Confirm the
+ * rendered output agrees, since that is what reaches a reader's browser.
+ */
+$hostile_rendered = apply_filters( 'the_content', $hostile );
+pcle_eq( strpos( $hostile_rendered, '<img' ), false, 'and it is still not a tag once rendered' );
+
+// A javascript: URL must not become a link.
+$scheme = pcle_authoring_content_from_text( 'Try [this](javascript:alert(1)).' );
+pcle_eq( strpos( $scheme, 'javascript:' ), false, 'a javascript URL does not become a link' );
+pcle_ok( false !== strpos( $scheme, 'this' ), 'and its label survives as plain text' );
+
+/*
+ * Content the builder cannot express is reported, not rewritten. Silently
+ * re-serialising something we could not fully parse would destroy an author's
+ * work while looking like a save.
+ */
+$unrepresentable = array(
+	'pre-block HTML' => '<p>Written before the builder existed.</p>',
+	'an image block' => "<!-- wp:image {\"id\":1} -->\n<figure class=\"wp-block-image\"><img src=\"/x.png\"/></figure>\n<!-- /wp:image -->",
+	'an embed block' => "<!-- wp:embed {\"url\":\"https://example.org/v\"} -->\n<figure class=\"wp-block-embed\"></figure>\n<!-- /wp:embed -->",
+);
+
+foreach ( $unrepresentable as $label => $content ) {
+	pcle_eq( pcle_authoring_text_from_content( $content )['editable'], false, "{$label} is reported as not editable" );
+}
+
+pcle_eq( pcle_authoring_text_from_content( '' )['editable'], true, 'empty content is editable' );
+
+/* ------------------------------------------------------------------ */
+/* 24) The node editor endpoint                                       */
+/* ------------------------------------------------------------------ */
+pcle_section( '# Node editor endpoint' );
+
+$editable_module = pcle_make_post( 'pcle_module', 'TEST Editable Module', array( '_pcle_week_id' => $week ) );
+$created_posts[] = $editable_module;
+
+pcle_eq( pcle_rest_get( 0, "/platform-cle/v1/authoring/nodes/{$editable_module}" )->get_status(), 401, 'anonymous cannot open a node for editing' );
+pcle_eq( pcle_rest_get( $student, "/platform-cle/v1/authoring/nodes/{$editable_module}" )->get_status(), 403, 'a participant cannot open a node for editing' );
+
+$saved = pcle_authoring_call(
+	$admin,
+	'PATCH',
+	"/platform-cle/v1/authoring/nodes/{$editable_module}",
+	array( 'body' => "## Section\n\nBody with **emphasis**." )
+);
+pcle_eq( $saved->get_status(), 200, 'staff can save an authored body' );
+
+$reopened = pcle_rest_get( $admin, "/platform-cle/v1/authoring/nodes/{$editable_module}" )->get_data();
+pcle_eq( $reopened['editable'], true, 'what the builder wrote, the builder can reopen' );
+pcle_eq( trim( $reopened['body'] ), "## Section\n\nBody with **emphasis**.", 'and it comes back exactly as typed' );
+pcle_ok( false !== strpos( $reopened['rendered'], '<strong>emphasis</strong>' ), 'the preview is the server rendering, with the emphasis applied' );
+pcle_ok( isset( $reopened['program'] ) && $reopened['program']['id'] === $prog_a, 'the node knows which programme it belongs to' );
+
+// A body written in WordPress is offered read-only rather than flattened.
+wp_update_post( array( 'ID' => $editable_module, 'post_content' => '<p>Legacy HTML from wp-admin.</p>' ) );
+$legacy = pcle_rest_get( $admin, "/platform-cle/v1/authoring/nodes/{$editable_module}" )->get_data();
+pcle_eq( $legacy['editable'], false, 'content the builder cannot express is flagged' );
+pcle_ok( false !== strpos( $legacy['rendered'], 'Legacy HTML' ), 'but it is still rendered for reading' );
+
+// The participant view shows what the author wrote.
+pcle_authoring_call( $admin, 'PATCH', "/platform-cle/v1/authoring/nodes/{$editable_module}", array( 'body' => '- alpha', 'status' => 'publish' ) );
+$as_participant = pcle_rest_get( $student, "/platform-cle/v1/modules/{$editable_module}" )->get_data();
+pcle_ok( false !== strpos( $as_participant['content'], '<li>alpha</li>' ), 'the participant sees the list the author wrote' );
+
+// Creating a programme: the one creation with no parent.
+$new_program = pcle_authoring_call( $admin, 'POST', '/platform-cle/v1/authoring/nodes', array( 'type' => 'pcle_program', 'title' => 'TEST Authored Programme' ) );
+pcle_eq( $new_program->get_status(), 200, 'staff can create a programme' );
+$created_posts[] = $new_program->get_data()['id'];
+pcle_eq( $new_program->get_data()['status'], 'draft', 'a new programme starts as a draft' );
+
+$with_credits = pcle_authoring_call(
+	$admin,
+	'PATCH',
+	"/platform-cle/v1/authoring/nodes/{$new_program->get_data()['id']}",
+	array( 'credits' => array( 'ks' => 2.6, 'mo' => 0 ) )
+);
+pcle_eq( $with_credits->get_status(), 200, 'credit hours can be set from the builder' );
+pcle_eq( pcle_get_credit_hours( $new_program->get_data()['id'] )['ks'], 2.5, 'and are rounded to the quarter hour' );
+pcle_eq( pcle_get_credit_hours( $new_program->get_data()['id'] )['mo'], 0.0, 'a blank jurisdiction stays unaccredited' );
+wp_set_current_user( 0 );
+
+/* ------------------------------------------------------------------ */
+/* 25) Emails                                                         */
 /* ------------------------------------------------------------------ */
 pcle_section( '# Emails' );
 $before = count( $GLOBALS['pcle_mail'] );

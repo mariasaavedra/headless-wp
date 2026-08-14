@@ -3,6 +3,7 @@ import type {
   AuthoringProgram,
   Me,
   ModuleDetail,
+  NodeDetail,
   NodeType,
   Program,
   TrainingProgram,
@@ -201,6 +202,12 @@ async function getProgramTree(id: number): Promise<TreeNode> {
   }) as Promise<TreeNode>;
 }
 
+async function getNode(id: number): Promise<NodeDetail> {
+  return wordpressFetch(`/platform-cle/v1/authoring/nodes/${id}`, {
+    auth: true,
+  }) as Promise<NodeDetail>;
+}
+
 async function createNode(input: {
   type: NodeType;
   parentId: number;
@@ -221,7 +228,14 @@ async function createNode(input: {
 /** Only the fields present are sent, so nothing unsent gets blanked. */
 async function updateNode(
   id: number,
-  changes: { title?: string; status?: string; content?: string }
+  changes: {
+    title?: string;
+    status?: string;
+    /** Authored text. The server builds the markup; we never send HTML. */
+    body?: string;
+    excerpt?: string;
+    credits?: Record<string, number>;
+  }
 ): Promise<TreeNode> {
   return wordpressFetch(`/platform-cle/v1/authoring/nodes/${id}`, {
     auth: true,
@@ -270,6 +284,7 @@ export {
   setModuleCompletion,
   getMe,
   getAuthoringPrograms,
+  getNode,
   getProgramTree,
   createNode,
   updateNode,
