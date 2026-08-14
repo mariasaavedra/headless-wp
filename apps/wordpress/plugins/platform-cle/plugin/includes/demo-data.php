@@ -74,7 +74,7 @@ function pcle_demo_programs() {
 			'summary'         => 'Preparing and presenting an asylum case before the immigration court.',
 			'starts_in_weeks' => -20,
 			'credits'         => array( 'ks' => 3.0, 'mo' => 3.0 ),
-			'weeks'           => array(
+			'units'           => array(
 				array(
 					'title'   => 'Building the Record',
 					'desc'    => 'Declarations, country conditions, and corroboration.',
@@ -94,7 +94,7 @@ function pcle_demo_programs() {
 			'summary'         => 'A four-week virtual CLE program on litigating immigration habeas corpus petitions in federal court.',
 			'starts_in_weeks' => -2,
 			'credits'         => array( 'ks' => 6.0, 'mo' => 6.0 ),
-			'weeks'           => array(
+			'units'           => array(
 				array(
 					'title'   => 'Foundations of the Great Writ',
 					'desc'    => 'History and statutory basis of habeas corpus in the immigration context (28 U.S.C. § 2241).',
@@ -139,7 +139,7 @@ function pcle_demo_programs() {
 			'summary'         => 'Custody redeterminations, bond hearings, and release advocacy.',
 			'starts_in_weeks' => 1,
 			'credits'         => array( 'ks' => 4.5, 'mo' => 4.0 ),
-			'weeks'           => array(
+			'units'           => array(
 				array(
 					'title'   => 'Custody Determinations',
 					'desc'    => 'Mandatory detention, discretionary custody, and the initial decision.',
@@ -230,7 +230,7 @@ function pcle_demo_participants() {
  * Backdates a demo progress row to a plausible moment.
  *
  * The date is derived from the programme's own calendar — roughly when that
- * week ran — rather than from "now", so a course that finished in April does
+ * unit ran — rather than from "now", so a course that finished in April does
  * not show completions dated August. A per-participant jitter keeps a cohort
  * from finishing in lockstep.
  *
@@ -240,14 +240,14 @@ function pcle_demo_participants() {
  *
  * @param int $user_id      Participant.
  * @param int $module_id    Module.
- * @param int $weeks_offset Week offset of the module relative to now.
+ * @param int $units_offset Unit offset of the module relative to now.
  * @param int $jitter_days  Per-participant spread, in days.
  * @return void
  */
-function pcle_seed_backdate_progress( $user_id, $module_id, $weeks_offset, $jitter_days ) {
+function pcle_seed_backdate_progress( $user_id, $module_id, $units_offset, $jitter_days ) {
 	global $wpdb;
 
-	$when = strtotime( "{$weeks_offset} weeks" ) + ( $jitter_days * DAY_IN_SECONDS );
+	$when = strtotime( "{$units_offset} units" ) + ( $jitter_days * DAY_IN_SECONDS );
 
 	// Nobody completed anything tomorrow. Programmes that have not started yet
 	// still allow a little pre-reading, so clamp to just before now rather
@@ -300,14 +300,14 @@ function pcle_seed_undate_progress( $user_id, $module_id ) {
 /**
  * Seeds (or re-seeds) the sample programmes, returning a summary.
  *
- * @return array{removed:int, program:int, week:int, module:int, scenario:int, template:int, event:int, case_update:int, users:string[]}
+ * @return array{removed:int, program:int, unit:int, module:int, scenario:int, template:int, event:int, case_update:int, users:string[]}
  */
 function pcle_seed_demo_data() {
 	$admins    = get_users( array( 'role' => 'administrator', 'number' => 1, 'fields' => 'ID' ) );
 	$author_id = $admins ? (int) $admins[0] : 1;
 
 	// 1) Clean up previous demos (idempotency).
-	$all_types = array( 'pcle_program', 'pcle_week', 'pcle_module', 'pcle_scenario', 'pcle_template', 'pcle_event', 'pcle_case_update' );
+	$all_types = array( 'pcle_program', 'pcle_unit', 'pcle_module', 'pcle_scenario', 'pcle_template', 'pcle_event', 'pcle_case_update' );
 	$old       = get_posts(
 		array(
 			'post_type'   => $all_types,
@@ -323,13 +323,13 @@ function pcle_seed_demo_data() {
 	}
 
 	$meta_program = '_pcle_program_id';
-	$meta_week    = '_pcle_week_id';
+	$meta_unit    = '_pcle_unit_id';
 	$meta_module  = '_pcle_module_id';
 
 	$counts = array(
 		'removed'     => count( $old ),
 		'program'     => 0,
-		'week'        => 0,
+		'unit'        => 0,
 		'module'      => 0,
 		'scenario'    => 0,
 		'template'    => 0,
@@ -369,59 +369,59 @@ function pcle_seed_demo_data() {
 			'events'  => array(),
 		);
 
-		foreach ( $program['weeks'] as $w => $week ) {
-			$week_id = pcle_seed_post(
-				'pcle_week',
-				sprintf( 'Week %d — %s', $w + 1, $week['title'] ),
-				'<p>' . esc_html( $week['desc'] ) . '</p>',
+		foreach ( $program['units'] as $w => $unit ) {
+			$unit_id = pcle_seed_post(
+				'pcle_unit',
+				sprintf( 'Unit %d — %s', $w + 1, $unit['title'] ),
+				'<p>' . esc_html( $unit['desc'] ) . '</p>',
 				$w + 1,
 				$author_id,
 				$meta_program,
 				$program_id
 			);
-			$counts['week']++;
+			$counts['unit']++;
 
 			$event_id = pcle_seed_post(
 				'pcle_event',
-				sprintf( 'Live Session — Week %d', $w + 1 ),
+				sprintf( 'Live Session — Unit %d', $w + 1 ),
 				'<p>Weekly live discussion and Q&amp;A with faculty.</p>',
 				$w + 1,
 				$author_id,
-				$meta_week,
-				$week_id
+				$meta_unit,
+				$unit_id
 			);
 
 			if ( $event_id ) {
-				// One session per week from the programme's start date.
+				// One session per unit from the programme's start date.
 				$offset = $program['starts_in_weeks'] + $w;
 				update_post_meta(
 					$event_id,
 					'_pcle_event_datetime',
-					gmdate( 'Y-m-d 18:00:00', strtotime( "{$offset} weeks" ) )
+					gmdate( 'Y-m-d 18:00:00', strtotime( "{$offset} units" ) )
 				);
 				$counts['event']++;
 				$built[ $key ]['events'][] = $event_id;
 			}
 
-			foreach ( $week['modules'] as $m => $module_title ) {
+			foreach ( $unit['modules'] as $m => $module_title ) {
 				$module_id = pcle_seed_post(
 					'pcle_module',
 					$module_title,
 					'<p>Module content for: ' . esc_html( $module_title ) . '.</p>',
 					$m + 1,
 					$author_id,
-					$meta_week,
-					$week_id
+					$meta_unit,
+					$unit_id
 				);
 				$counts['module']++;
-				// Keep the week each module sits in: the seeded completion
+				// Keep the unit each module sits in: the seeded completion
 				// dates are derived from the programme calendar, not from now.
 				$built[ $key ]['modules'][] = array(
 					'id'   => $module_id,
-					'week' => $w,
+					'unit' => $w,
 				);
 
-				// A scenario and a template on the first module of each week.
+				// A scenario and a template on the first module of each unit.
 				if ( 0 === $m ) {
 					$scenario_body = "<p>Your client has been detained for 7 months without a bond hearing. "
 						. "Draft the core jurisdictional argument for a § 2241 petition.</p>\n"
@@ -431,7 +431,7 @@ function pcle_seed_demo_data() {
 
 					pcle_seed_post(
 						'pcle_scenario',
-						sprintf( 'Scenario: %s in Practice', $week['title'] ),
+						sprintf( 'Scenario: %s in Practice', $unit['title'] ),
 						$scenario_body,
 						1,
 						$author_id,
@@ -442,7 +442,7 @@ function pcle_seed_demo_data() {
 
 					pcle_seed_post(
 						'pcle_template',
-						sprintf( 'Template: %s Checklist', $week['title'] ),
+						sprintf( 'Template: %s Checklist', $unit['title'] ),
 						'<p>Fill-in-the-blank starting point you can adapt for a real filing.</p>',
 						1,
 						$author_id,
@@ -551,7 +551,7 @@ function pcle_seed_demo_users( $built ) {
 				pcle_seed_backdate_progress(
 					$user_id,
 					$module['id'],
-					$program['starts'] + $module['week'],
+					$program['starts'] + $module['unit'],
 					$jitter
 				);
 			}

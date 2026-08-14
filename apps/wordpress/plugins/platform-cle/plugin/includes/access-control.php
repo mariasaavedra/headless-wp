@@ -26,7 +26,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 function pcle_protected_post_types() {
 	$types = array(
 		'pcle_program',
-		'pcle_week',
+		'pcle_unit',
 		'pcle_module',
 		'pcle_scenario',
 		'pcle_template',
@@ -197,7 +197,7 @@ add_filter( 'rest_pre_dispatch', 'pcle_guard_rest_reads', 10, 3 );
  * IDs of a protected post type that a user is allowed to read.
  *
  * Deliberately reuses pcle_can_access_post() per post rather than rebuilding
- * the rule as a meta_query: access depends on walking module → week →
+ * the rule as a meta_query: access depends on walking module → unit →
  * program, and a second implementation of that rule is exactly how the
  * per-item guard and the listing guard drifted apart in the first place.
  * That costs one access check per post, which is in line with the rest of

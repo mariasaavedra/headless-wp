@@ -95,12 +95,12 @@ $created_posts   = array();
 $created_users   = array();
 $created_files   = array();
 
-// Program A (student enrolled) → Week → Module; plus a Case Update.
+// Program A (student enrolled) → Unit → Module; plus a Case Update.
 $prog_a  = pcle_make_post( 'pcle_program', 'TEST Program A' );
 $prog_b  = pcle_make_post( 'pcle_program', 'TEST Program B' );
-$week    = pcle_make_post( 'pcle_week', 'TEST Week 1', array( '_pcle_program_id' => $prog_a ) );
-$module  = pcle_make_post( 'pcle_module', 'TEST Module 1', array( '_pcle_week_id' => $week ) );
-$module2 = pcle_make_post( 'pcle_module', 'TEST Module 2', array( '_pcle_week_id' => $week ) );
+$unit    = pcle_make_post( 'pcle_unit', 'TEST Unit 1', array( '_pcle_program_id' => $prog_a ) );
+$module  = pcle_make_post( 'pcle_module', 'TEST Module 1', array( '_pcle_unit_id' => $unit ) );
+$module2 = pcle_make_post( 'pcle_module', 'TEST Module 2', array( '_pcle_unit_id' => $unit ) );
 $case    = pcle_make_post( 'pcle_case_update', 'TEST Case Update' );
 
 // A scenario carrying a model answer, so we can assert it never reaches a
@@ -111,7 +111,7 @@ $scenario = pcle_make_post(
 	array( '_pcle_module_id' => $module ),
 	'The prompt. [pcle_model_answer]PCLE_SECRET_ANSWER[/pcle_model_answer]'
 );
-$created_posts = array( $prog_a, $prog_b, $week, $module, $module2, $case, $scenario );
+$created_posts = array( $prog_a, $prog_b, $unit, $module, $module2, $case, $scenario );
 
 /**
  * Creates a throwaway CLE student.
@@ -178,15 +178,15 @@ pcle_section( '# Progress' );
 pcle_eq( pcle_mark_module_complete( $prog_a, $student ), false, 'cannot mark a non-module complete' );
 pcle_mark_module_complete( $module, $student );
 pcle_eq( pcle_is_module_complete( $module, $student ), true, 'module marked complete' );
-$wp = pcle_get_week_progress( $week, $student );
-pcle_eq( $wp['total'], 2, 'week has 2 modules' );
-pcle_eq( $wp['completed'], 1, 'week shows 1 completed' );
-pcle_eq( $wp['percent'], 50, 'week progress is 50%' );
+$wp = pcle_get_unit_progress( $unit, $student );
+pcle_eq( $wp['total'], 2, 'unit has 2 modules' );
+pcle_eq( $wp['completed'], 1, 'unit shows 1 completed' );
+pcle_eq( $wp['percent'], 50, 'unit progress is 50%' );
 $pp = pcle_get_program_progress( $prog_a, $student );
 pcle_eq( $pp['completed'], 1, 'program shows 1 completed' );
 pcle_eq( $pp['total'], 2, 'program total is 2' );
 pcle_mark_module_complete( $module2, $student );
-pcle_eq( pcle_get_week_progress( $week, $student )['percent'], 100, 'week is 100% after both modules' );
+pcle_eq( pcle_get_unit_progress( $unit, $student )['percent'], 100, 'unit is 100% after both modules' );
 pcle_unmark_module_complete( $module, $student );
 pcle_eq( pcle_is_module_complete( $module, $student ), false, 'unmark removes completion' );
 
@@ -195,10 +195,10 @@ pcle_eq( pcle_is_module_complete( $module, $student ), false, 'unmark removes co
 /* ------------------------------------------------------------------ */
 pcle_section( '# Relationships' );
 pcle_eq( pcle_get_program_for_post( $module ), $prog_a, 'get_program_for_post walks module → program' );
-pcle_eq( pcle_get_program_for_post( $week ), $prog_a, 'get_program_for_post walks week → program' );
+pcle_eq( pcle_get_program_for_post( $unit ), $prog_a, 'get_program_for_post walks unit → program' );
 pcle_eq( pcle_get_program_for_post( $case ), 0, 'case update has no program' );
-pcle_eq( count( pcle_get_modules( $week ) ), 2, 'week has 2 child modules' );
-pcle_eq( count( pcle_get_weeks( $prog_a ) ), 1, 'program A has 1 week' );
+pcle_eq( count( pcle_get_modules( $unit ) ), 2, 'unit has 2 child modules' );
+pcle_eq( count( pcle_get_units( $prog_a ) ), 1, 'program A has 1 unit' );
 
 /* ------------------------------------------------------------------ */
 /* 5) Protected files                                                 */
@@ -393,7 +393,7 @@ function pcle_rest_get( $uid, $route ) {
 }
 
 // Access: the whole point of these routes is that enrollment is checked once.
-foreach ( array( "/platform-cle/v1/programs/{$prog_a}", "/platform-cle/v1/weeks/{$week}", "/platform-cle/v1/modules/{$module}" ) as $route ) {
+foreach ( array( "/platform-cle/v1/programs/{$prog_a}", "/platform-cle/v1/units/{$unit}", "/platform-cle/v1/modules/{$module}" ) as $route ) {
 	pcle_eq( pcle_rest_get( 0, $route )->get_status(), 401, "anonymous {$route} → 401" );
 	pcle_eq( pcle_rest_get( $outsider, $route )->get_status(), 403, "non-enrolled {$route} → 403" );
 	pcle_eq( pcle_rest_get( $student, $route )->get_status(), 200, "enrolled {$route} → 200" );
@@ -408,23 +408,23 @@ pcle_eq( pcle_rest_get( $student, "/platform-cle/v1/programs/{$prog_b}" )->get_s
 pcle_eq( pcle_rest_get( $student, "/platform-cle/v1/programs/{$module}" )->get_status(), 404, 'module id on the programs route → 404' );
 pcle_eq( pcle_rest_get( $student, '/platform-cle/v1/modules/99999999' )->get_status(), 404, 'unknown id → 404' );
 
-// Shape: a program carries its weeks, and each week its modules and events.
+// Shape: a program carries its units, and each unit its modules and events.
 $program_data = pcle_rest_get( $student, "/platform-cle/v1/programs/{$prog_a}" )->get_data();
 pcle_eq( $program_data['id'], $prog_a, 'program response carries the id' );
-pcle_eq( count( $program_data['weeks'] ), 1, 'program response carries its weeks' );
-pcle_eq( count( $program_data['weeks'][0]['modules'] ), 2, 'week carries its modules' );
-pcle_ok( isset( $program_data['weeks'][0]['events'] ), 'week carries an events list' );
+pcle_eq( count( $program_data['units'] ), 1, 'program response carries its units' );
+pcle_eq( count( $program_data['units'][0]['modules'] ), 2, 'unit carries its modules' );
+pcle_ok( isset( $program_data['units'][0]['events'] ), 'unit carries an events list' );
 
 // Progress is spelled the same way on every route that reports it.
 $expected_progress_keys = array( 'completed', 'total', 'percentage' );
 pcle_eq( array_keys( $program_data['progress'] ), $expected_progress_keys, 'program progress keys' );
-pcle_eq( array_keys( $program_data['weeks'][0]['progress'] ), $expected_progress_keys, 'week progress keys' );
+pcle_eq( array_keys( $program_data['units'][0]['progress'] ), $expected_progress_keys, 'unit progress keys' );
 $my_training_data = pcle_rest_my_training( $student );
 pcle_eq( array_keys( $my_training_data->get_data()['programs'][0]['progress'] ), $expected_progress_keys, 'my-training progress keys match' );
 
 // Module detail: breadcrumb refs, children, and the completion flag.
 $module_data = pcle_rest_get( $student, "/platform-cle/v1/modules/{$module}" )->get_data();
-pcle_eq( $module_data['week']['id'], $week, 'module response points at its week' );
+pcle_eq( $module_data['unit']['id'], $unit, 'module response points at its unit' );
 pcle_eq( $module_data['program']['id'], $prog_a, 'module response points at its program' );
 pcle_eq( count( $module_data['scenarios'] ), 1, 'module carries its scenarios' );
 pcle_eq( $module_data['completed'], pcle_is_module_complete( $module, $student ), 'module completion flag matches stored progress' );
@@ -474,7 +474,7 @@ pcle_eq( pcle_is_module_complete( $module, $outsider ), false, 'the refused writ
 $toggle = pcle_rest_post_progress( $student, $module, true );
 pcle_eq( $toggle->get_status(), 200, 'enrolled student can record progress' );
 pcle_eq( $toggle->get_data()['completed'], true, 'response reports the new state' );
-pcle_eq( array_keys( $toggle->get_data()['week_progress'] ), $expected_progress_keys, 'progress endpoint uses the same progress keys' );
+pcle_eq( array_keys( $toggle->get_data()['unit_progress'] ), $expected_progress_keys, 'progress endpoint uses the same progress keys' );
 pcle_eq( pcle_is_module_complete( $module, $student ), true, 'progress was actually stored' );
 
 pcle_rest_post_progress( $student, $module, false ); // restore fixture state
@@ -601,7 +601,7 @@ wp_set_current_user( 0 );
 /* ------------------------------------------------------------------ */
 pcle_section( '# Attendance' );
 
-$session         = pcle_make_post( 'pcle_event', 'TEST Session A', array( '_pcle_week_id' => $week ) );
+$session         = pcle_make_post( 'pcle_event', 'TEST Session A', array( '_pcle_unit_id' => $unit ) );
 $created_posts[] = $session;
 
 pcle_eq( pcle_has_attended( $session, $student ), false, 'nobody is present until marked' );
@@ -800,7 +800,7 @@ pcle_ok( ! isset( pcle_get_program_report( $prog_a )[ $doomed ] ), 'and they sto
  * auto-increment IDs, so a future post could inherit somebody else's
  * completion history.
  */
-$throwaway = pcle_make_post( 'pcle_module', 'TEST Disposable Module', array( '_pcle_week_id' => $week ) );
+$throwaway = pcle_make_post( 'pcle_module', 'TEST Disposable Module', array( '_pcle_unit_id' => $unit ) );
 pcle_mark_module_complete( $throwaway, $student );
 pcle_eq(
 	(int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$progress_table} WHERE module_id = %d", $throwaway ) ),
@@ -815,7 +815,7 @@ pcle_eq(
 	'deleting a module removes the completions that referenced it'
 );
 
-$throwaway_event = pcle_make_post( 'pcle_event', 'TEST Disposable Session', array( '_pcle_week_id' => $week ) );
+$throwaway_event = pcle_make_post( 'pcle_event', 'TEST Disposable Session', array( '_pcle_unit_id' => $unit ) );
 pcle_mark_attendance( $throwaway_event, $student, $admin );
 wp_delete_post( $throwaway_event, true );
 pcle_eq(
@@ -858,7 +858,7 @@ $orphan_page = wp_insert_post(
 );
 $created_posts[] = $orphan_page;
 
-$relationship_victim = pcle_make_post( 'pcle_module', 'TEST Relationship Victim', array( '_pcle_week_id' => $week ) );
+$relationship_victim = pcle_make_post( 'pcle_module', 'TEST Relationship Victim', array( '_pcle_unit_id' => $unit ) );
 $created_posts[]     = $relationship_victim;
 
 /**
@@ -874,25 +874,25 @@ function pcle_try_reparent( $child_id, $meta_key, $parent ) {
 	return (int) get_post_meta( $child_id, $meta_key, true );
 }
 
-pcle_eq( pcle_try_reparent( $relationship_victim, '_pcle_week_id', $prog_a ), $week, 'a module cannot be reparented onto a programme' );
-pcle_eq( pcle_try_reparent( $relationship_victim, '_pcle_week_id', $orphan_page ), $week, 'a module cannot be reparented onto a page' );
-pcle_eq( pcle_try_reparent( $relationship_victim, '_pcle_week_id', 99999999 ), $week, 'a module cannot be reparented onto a post that does not exist' );
-pcle_eq( pcle_try_reparent( $relationship_victim, '_pcle_week_id', $relationship_victim ), $week, 'a module cannot be its own parent' );
-pcle_eq( pcle_try_reparent( $relationship_victim, '_pcle_week_id', $module ), $week, 'a module cannot hang off another module' );
+pcle_eq( pcle_try_reparent( $relationship_victim, '_pcle_unit_id', $prog_a ), $unit, 'a module cannot be reparented onto a programme' );
+pcle_eq( pcle_try_reparent( $relationship_victim, '_pcle_unit_id', $orphan_page ), $unit, 'a module cannot be reparented onto a page' );
+pcle_eq( pcle_try_reparent( $relationship_victim, '_pcle_unit_id', 99999999 ), $unit, 'a module cannot be reparented onto a post that does not exist' );
+pcle_eq( pcle_try_reparent( $relationship_victim, '_pcle_unit_id', $relationship_victim ), $unit, 'a module cannot be its own parent' );
+pcle_eq( pcle_try_reparent( $relationship_victim, '_pcle_unit_id', $module ), $unit, 'a module cannot hang off another module' );
 
 // The legitimate paths must keep working, or this is a regression not a fix.
-$second_week     = pcle_make_post( 'pcle_week', 'TEST Week 2', array( '_pcle_program_id' => $prog_a ) );
-$created_posts[] = $second_week;
-pcle_eq( pcle_try_reparent( $relationship_victim, '_pcle_week_id', $second_week ), $second_week, 'a module CAN be moved to another week' );
-pcle_eq( pcle_try_reparent( $relationship_victim, '_pcle_week_id', 0 ), 0, 'a parent can still be cleared' );
-pcle_try_reparent( $relationship_victim, '_pcle_week_id', $week ); // restore
+$second_unit     = pcle_make_post( 'pcle_unit', 'TEST Unit 2', array( '_pcle_program_id' => $prog_a ) );
+$created_posts[] = $second_unit;
+pcle_eq( pcle_try_reparent( $relationship_victim, '_pcle_unit_id', $second_unit ), $second_unit, 'a module CAN be moved to another unit' );
+pcle_eq( pcle_try_reparent( $relationship_victim, '_pcle_unit_id', 0 ), 0, 'a parent can still be cleared' );
+pcle_try_reparent( $relationship_victim, '_pcle_unit_id', $unit ); // restore
 
 // And the same rule has to hold through REST, which is the path that had none.
 wp_set_current_user( $admin );
 $reparent_request = new WP_REST_Request( 'POST', "/wp/v2/pcle_module/{$relationship_victim}" );
-$reparent_request->set_body_params( array( 'meta' => array( '_pcle_week_id' => $prog_a ) ) );
+$reparent_request->set_body_params( array( 'meta' => array( '_pcle_unit_id' => $prog_a ) ) );
 rest_do_request( $reparent_request );
-pcle_eq( (int) get_post_meta( $relationship_victim, '_pcle_week_id', true ), $week, 'a REST write cannot reparent onto a programme either' );
+pcle_eq( (int) get_post_meta( $relationship_victim, '_pcle_unit_id', true ), $unit, 'a REST write cannot reparent onto a programme either' );
 wp_set_current_user( 0 );
 
 /* ------------------------------------------------------------------ */
@@ -936,7 +936,7 @@ delete_post_meta( $prog_b, pcle_credit_hours_meta_key( 'ks' ) );
  */
 pcle_section( '# Ordering' );
 
-foreach ( array( 'pcle_template', 'pcle_event', 'pcle_module', 'pcle_week' ) as $ordered_type ) {
+foreach ( array( 'pcle_template', 'pcle_event', 'pcle_module', 'pcle_unit' ) as $ordered_type ) {
 	pcle_ok( post_type_supports( $ordered_type, 'page-attributes' ), "{$ordered_type} can carry an order" );
 }
 
@@ -1035,35 +1035,35 @@ pcle_eq( pcle_rest_get( $admin, '/platform-cle/v1/authoring/programs/99999999/tr
 $tree = pcle_rest_get( $admin, "/platform-cle/v1/authoring/programs/{$prog_a}/tree" )->get_data();
 pcle_eq( $tree['id'], $prog_a, 'the tree is rooted at the programme' );
 pcle_eq( $tree['type'], 'pcle_program', 'the root carries its type' );
-pcle_eq( $tree['allowed_children'], array( 'pcle_week' ), 'a programme may only contain weeks' );
+pcle_eq( $tree['allowed_children'], array( 'pcle_unit' ), 'a programme may only contain units' );
 pcle_ok( isset( $tree['credits'] ), 'the root carries its credit hours' );
 
-$tree_week = $tree['children'][0];
-pcle_eq( $tree_week['id'], $week, 'the tree carries the week' );
-pcle_ok( in_array( 'pcle_module', $tree_week['allowed_children'], true ), 'a week may contain modules' );
-pcle_ok( in_array( 'pcle_event', $tree_week['allowed_children'], true ), 'a week may contain sessions' );
+$tree_unit = $tree['children'][0];
+pcle_eq( $tree_unit['id'], $unit, 'the tree carries the unit' );
+pcle_ok( in_array( 'pcle_module', $tree_unit['allowed_children'], true ), 'a unit may contain modules' );
+pcle_ok( in_array( 'pcle_event', $tree_unit['allowed_children'], true ), 'a unit may contain sessions' );
 
-$tree_module_ids = wp_list_pluck( array_values( array_filter( $tree_week['children'], fn( $n ) => 'pcle_module' === $n['type'] ) ), 'id' );
+$tree_module_ids = wp_list_pluck( array_values( array_filter( $tree_unit['children'], fn( $n ) => 'pcle_module' === $n['type'] ) ), 'id' );
 pcle_ok( in_array( $module, $tree_module_ids, true ), 'the tree reaches modules' );
 
 /*
  * Drafts are the whole point of an authoring view: the participant routes
  * refuse them, so a builder that could not see them could not build.
  */
-$draft_week = wp_insert_post(
+$draft_unit = wp_insert_post(
 	array(
-		'post_type'   => 'pcle_week',
-		'post_title'  => 'TEST Draft Week',
+		'post_type'   => 'pcle_unit',
+		'post_title'  => 'TEST Draft Unit',
 		'post_status' => 'draft',
 	)
 );
-update_post_meta( $draft_week, '_pcle_program_id', $prog_a );
-update_post_meta( $draft_week, '_pcle_test', 1 );
-$created_posts[] = $draft_week;
+update_post_meta( $draft_unit, '_pcle_program_id', $prog_a );
+update_post_meta( $draft_unit, '_pcle_test', 1 );
+$created_posts[] = $draft_unit;
 
 $tree_with_draft = pcle_rest_get( $admin, "/platform-cle/v1/authoring/programs/{$prog_a}/tree" )->get_data();
-pcle_ok( in_array( $draft_week, wp_list_pluck( $tree_with_draft['children'], 'id' ), true ), 'the authoring tree includes drafts' );
-pcle_eq( pcle_rest_get( $student, "/platform-cle/v1/weeks/{$draft_week}" )->get_status(), 404, 'and the participant route still refuses that draft' );
+pcle_ok( in_array( $draft_unit, wp_list_pluck( $tree_with_draft['children'], 'id' ), true ), 'the authoring tree includes drafts' );
+pcle_eq( pcle_rest_get( $student, "/platform-cle/v1/units/{$draft_unit}" )->get_status(), 404, 'and the participant route still refuses that draft' );
 
 // The programme list.
 $authoring_list = pcle_rest_get( $admin, '/platform-cle/v1/authoring/programs' )->get_data();
@@ -1117,7 +1117,7 @@ pcle_eq(
 	'a module cannot be created with no parent at all'
 );
 pcle_eq(
-	pcle_authoring_call( $student, 'POST', '/platform-cle/v1/authoring/nodes', array( 'type' => 'pcle_week', 'parent_id' => $prog_a, 'title' => 'TEST Student Week' ) )->get_status(),
+	pcle_authoring_call( $student, 'POST', '/platform-cle/v1/authoring/nodes', array( 'type' => 'pcle_unit', 'parent_id' => $prog_a, 'title' => 'TEST Student Unit' ) )->get_status(),
 	403,
 	'a participant cannot create curriculum'
 );
@@ -1127,21 +1127,21 @@ pcle_eq(
 	'a participant cannot create a programme'
 );
 pcle_eq(
-	pcle_authoring_call( 0, 'POST', '/platform-cle/v1/authoring/nodes', array( 'type' => 'pcle_week', 'parent_id' => $prog_a ) )->get_status(),
+	pcle_authoring_call( 0, 'POST', '/platform-cle/v1/authoring/nodes', array( 'type' => 'pcle_unit', 'parent_id' => $prog_a ) )->get_status(),
 	401,
 	'an anonymous caller cannot create anything'
 );
 
 // The happy path.
-$created_week = pcle_authoring_call( $admin, 'POST', '/platform-cle/v1/authoring/nodes', array( 'type' => 'pcle_week', 'parent_id' => $prog_a, 'title' => 'TEST Authored Week' ) )->get_data();
-$created_posts[] = $created_week['id'];
+$created_unit = pcle_authoring_call( $admin, 'POST', '/platform-cle/v1/authoring/nodes', array( 'type' => 'pcle_unit', 'parent_id' => $prog_a, 'title' => 'TEST Authored Unit' ) )->get_data();
+$created_posts[] = $created_unit['id'];
 
-pcle_eq( $created_week['status'], 'draft', 'a new item starts as a draft, not visible to participants' );
-pcle_eq( pcle_get_parent_id( $created_week['id'] ), $prog_a, 'the new item is linked to the parent it was created in' );
-pcle_eq( $created_week['type'], 'pcle_week', 'the new item is of the requested type' );
+pcle_eq( $created_unit['status'], 'draft', 'a new item starts as a draft, not visible to participants' );
+pcle_eq( pcle_get_parent_id( $created_unit['id'] ), $prog_a, 'the new item is linked to the parent it was created in' );
+pcle_eq( $created_unit['type'], 'pcle_unit', 'the new item is of the requested type' );
 
-$first_module    = pcle_authoring_call( $admin, 'POST', '/platform-cle/v1/authoring/nodes', array( 'type' => 'pcle_module', 'parent_id' => $created_week['id'], 'title' => 'TEST Authored Module One' ) )->get_data();
-$second_module   = pcle_authoring_call( $admin, 'POST', '/platform-cle/v1/authoring/nodes', array( 'type' => 'pcle_module', 'parent_id' => $created_week['id'], 'title' => 'TEST Authored Module Two' ) )->get_data();
+$first_module    = pcle_authoring_call( $admin, 'POST', '/platform-cle/v1/authoring/nodes', array( 'type' => 'pcle_module', 'parent_id' => $created_unit['id'], 'title' => 'TEST Authored Module One' ) )->get_data();
+$second_module   = pcle_authoring_call( $admin, 'POST', '/platform-cle/v1/authoring/nodes', array( 'type' => 'pcle_module', 'parent_id' => $created_unit['id'], 'title' => 'TEST Authored Module Two' ) )->get_data();
 $created_posts[] = $first_module['id'];
 $created_posts[] = $second_module['id'];
 
@@ -1175,13 +1175,13 @@ pcle_eq(
 pcle_eq( get_post( $first_module['id'] )->post_title, 'TEST Renamed Module', 'and the refused edit changed nothing' );
 
 // Reordering is all-or-nothing: a half-applied order is one nobody chose.
-$order_before = wp_list_pluck( pcle_authoring_get_children( $created_week['id'], 'pcle_module' ), 'ID' );
+$order_before = wp_list_pluck( pcle_authoring_get_children( $created_unit['id'], 'pcle_module' ), 'ID' );
 
 $reordered = pcle_authoring_call(
 	$admin,
 	'POST',
 	'/platform-cle/v1/authoring/reorder',
-	array( 'parent_id' => $created_week['id'], 'child_type' => 'pcle_module', 'ids' => array( $second_module['id'], $first_module['id'] ) )
+	array( 'parent_id' => $created_unit['id'], 'child_type' => 'pcle_module', 'ids' => array( $second_module['id'], $first_module['id'] ) )
 );
 pcle_eq( $reordered->get_status(), 200, 'a whole sibling list can be reordered' );
 pcle_eq( $reordered->get_data()['ids'], array( $second_module['id'], $first_module['id'] ), 'the response reports the canonical order' );
@@ -1190,23 +1190,23 @@ $foreign = pcle_authoring_call(
 	$admin,
 	'POST',
 	'/platform-cle/v1/authoring/reorder',
-	array( 'parent_id' => $created_week['id'], 'child_type' => 'pcle_module', 'ids' => array( $first_module['id'], $module ) )
+	array( 'parent_id' => $created_unit['id'], 'child_type' => 'pcle_module', 'ids' => array( $first_module['id'], $module ) )
 );
 pcle_eq( $foreign->get_status(), 400, 'a list containing something that is not a sibling is refused' );
 pcle_eq(
-	wp_list_pluck( pcle_authoring_get_children( $created_week['id'], 'pcle_module' ), 'ID' ),
+	wp_list_pluck( pcle_authoring_get_children( $created_unit['id'], 'pcle_module' ), 'ID' ),
 	array( $second_module['id'], $first_module['id'] ),
 	'and the refused reorder left every sibling exactly where it was'
 );
 
 pcle_eq(
-	pcle_authoring_call( $admin, 'POST', '/platform-cle/v1/authoring/reorder', array( 'parent_id' => $created_week['id'], 'child_type' => 'pcle_module', 'ids' => array( $first_module['id'] ) ) )->get_status(),
+	pcle_authoring_call( $admin, 'POST', '/platform-cle/v1/authoring/reorder', array( 'parent_id' => $created_unit['id'], 'child_type' => 'pcle_module', 'ids' => array( $first_module['id'] ) ) )->get_status(),
 	400,
 	'a partial list is refused rather than silently renumbering the rest'
 );
 
 // Moving.
-$move_target     = pcle_authoring_call( $admin, 'POST', '/platform-cle/v1/authoring/nodes', array( 'type' => 'pcle_week', 'parent_id' => $prog_a, 'title' => 'TEST Move Target Week' ) )->get_data();
+$move_target     = pcle_authoring_call( $admin, 'POST', '/platform-cle/v1/authoring/nodes', array( 'type' => 'pcle_unit', 'parent_id' => $prog_a, 'title' => 'TEST Move Target Unit' ) )->get_data();
 $created_posts[] = $move_target['id'];
 
 pcle_eq(
@@ -1223,7 +1223,7 @@ pcle_eq(
 pcle_eq(
 	pcle_authoring_call( $admin, 'POST', '/platform-cle/v1/authoring/move', array( 'id' => $first_module['id'], 'parent_id' => $move_target['id'] ) )->get_status(),
 	200,
-	'staff can move an item to another week'
+	'staff can move an item to another unit'
 );
 pcle_eq( pcle_get_parent_id( $first_module['id'] ), $move_target['id'], 'the move actually reparented it' );
 
@@ -1236,14 +1236,14 @@ pcle_eq( pcle_get_parent_id( $first_module['id'] ), $move_target['id'], 'the mov
  */
 
 // Deleting takes what hangs off it, but says so first.
-$delete_refusal = pcle_authoring_call( $admin, 'DELETE', "/platform-cle/v1/authoring/nodes/{$created_week['id']}" );
+$delete_refusal = pcle_authoring_call( $admin, 'DELETE', "/platform-cle/v1/authoring/nodes/{$created_unit['id']}" );
 pcle_eq( $delete_refusal->get_status(), 409, 'deleting an item with contents is refused' );
 pcle_ok( ! empty( $delete_refusal->as_error()->get_error_data()['descendants'] ), 'and the refusal lists what would have gone with it' );
-pcle_ok( null !== get_post( $created_week['id'] ), 'the refused delete removed nothing' );
+pcle_ok( null !== get_post( $created_unit['id'] ), 'the refused delete removed nothing' );
 
-$deleted = pcle_authoring_call( $admin, 'DELETE', "/platform-cle/v1/authoring/nodes/{$created_week['id']}", array( 'cascade' => true ) );
+$deleted = pcle_authoring_call( $admin, 'DELETE', "/platform-cle/v1/authoring/nodes/{$created_unit['id']}", array( 'cascade' => true ) );
 pcle_eq( $deleted->get_status(), 200, 'an explicit cascade is accepted' );
-pcle_eq( get_post( $created_week['id'] ), null, 'the item is gone' );
+pcle_eq( get_post( $created_unit['id'] ), null, 'the item is gone' );
 pcle_eq( get_post( $second_module['id'] ), null, 'and so is what it contained' );
 
 wp_set_current_user( 0 );
@@ -1330,7 +1330,7 @@ pcle_eq( pcle_authoring_text_from_content( '' )['editable'], true, 'empty conten
 /* ------------------------------------------------------------------ */
 pcle_section( '# Node editor endpoint' );
 
-$editable_module = pcle_make_post( 'pcle_module', 'TEST Editable Module', array( '_pcle_week_id' => $week ) );
+$editable_module = pcle_make_post( 'pcle_module', 'TEST Editable Module', array( '_pcle_unit_id' => $unit ) );
 $created_posts[] = $editable_module;
 
 pcle_eq( pcle_rest_get( 0, "/platform-cle/v1/authoring/nodes/{$editable_module}" )->get_status(), 401, 'anonymous cannot open a node for editing' );
@@ -1379,7 +1379,54 @@ pcle_eq( pcle_get_credit_hours( $new_program->get_data()['id'] )['mo'], 0.0, 'a 
 wp_set_current_user( 0 );
 
 /* ------------------------------------------------------------------ */
-/* 25) Emails                                                         */
+/* 25) The week-to-unit migration                                     */
+/* ------------------------------------------------------------------ */
+/*
+ * Renaming the concept moved the post type and the relationship meta key, so
+ * existing rows have to move with them. This is the only part of the rename
+ * that can destroy something: without it an install keeps its units as an
+ * unregistered post type — invisible in the admin — and every module and
+ * session loses its parent, because the code reads a meta key the rows do not
+ * carry.
+ */
+pcle_section( '# Week to unit migration' );
+
+$legacy_program = pcle_make_post( 'pcle_program', 'TEST Legacy Programme' );
+$legacy_unit    = pcle_make_post( 'pcle_unit', 'TEST Legacy Unit', array( '_pcle_program_id' => $legacy_program ) );
+$legacy_module  = pcle_make_post( 'pcle_module', 'TEST Legacy Module', array( '_pcle_unit_id' => $legacy_unit ) );
+$legacy_event   = pcle_make_post( 'pcle_event', 'TEST Legacy Session', array( '_pcle_unit_id' => $legacy_unit ) );
+$created_posts  = array_merge( $created_posts, array( $legacy_program, $legacy_unit, $legacy_module, $legacy_event ) );
+
+pcle_eq( count( pcle_get_units( $legacy_program ) ), 1, 'the fixture starts with a reachable unit' );
+
+// Put this fixture back the way an install looked before the rename.
+// phpcs:disable WordPress.DB.DirectDatabaseQuery
+$wpdb->update( $wpdb->posts, array( 'post_type' => 'pcle_week' ), array( 'ID' => $legacy_unit ) );
+$wpdb->update( $wpdb->postmeta, array( 'meta_key' => '_pcle_week_id' ), array( 'post_id' => $legacy_module, 'meta_key' => '_pcle_unit_id' ) );
+$wpdb->update( $wpdb->postmeta, array( 'meta_key' => '_pcle_week_id' ), array( 'post_id' => $legacy_event, 'meta_key' => '_pcle_unit_id' ) );
+// phpcs:enable WordPress.DB.DirectDatabaseQuery
+wp_cache_flush();
+
+pcle_eq( count( pcle_get_units( $legacy_program ) ), 0, 'before migrating, the old rows are invisible to the new code' );
+pcle_eq( count( pcle_get_modules( $legacy_unit ) ), 0, 'and its modules have lost their parent' );
+
+$migrated = pcle_migrate_week_to_unit();
+
+pcle_ok( $migrated['posts'] >= 1, 'the migration reports the units it moved' );
+pcle_ok( $migrated['meta'] >= 2, 'and the relationship rows it moved' );
+pcle_eq( get_post_type( $legacy_unit ), 'pcle_unit', 'the unit is now of the new type' );
+pcle_eq( count( pcle_get_units( $legacy_program ) ), 1, 'the unit is reachable from its programme again' );
+pcle_eq( count( pcle_get_modules( $legacy_unit ) ), 1, 'its module found its parent again' );
+pcle_eq( count( pcle_get_events( $legacy_unit ) ), 1, 'and so did its session — both hang off the same key' );
+
+// It runs on every version bump, so a second pass must be a no-op.
+$again = pcle_migrate_week_to_unit();
+pcle_eq( $again['posts'], 0, 'a second migration pass moves no posts' );
+pcle_eq( $again['meta'], 0, 'and no relationship rows' );
+pcle_eq( count( pcle_get_units( $legacy_program ) ), 1, 'and the hierarchy is still intact afterwards' );
+
+/* ------------------------------------------------------------------ */
+/* 26) Emails                                                         */
 /* ------------------------------------------------------------------ */
 pcle_section( '# Emails' );
 $before = count( $GLOBALS['pcle_mail'] );
@@ -1392,7 +1439,7 @@ $before = count( $GLOBALS['pcle_mail'] );
 pcle_enroll_user( $prog_b, $student ); // already enrolled
 pcle_eq( count( $GLOBALS['pcle_mail'] ) - $before, 0, 're-enroll does not resend' );
 
-$rem_event       = pcle_make_post( 'pcle_event', 'TEST Session', array( '_pcle_week_id' => $week ) );
+$rem_event       = pcle_make_post( 'pcle_event', 'TEST Session', array( '_pcle_unit_id' => $unit ) );
 $created_posts[] = $rem_event;
 $rdt = new DateTime( 'now', wp_timezone() );
 $rdt->modify( '+2 hours' );

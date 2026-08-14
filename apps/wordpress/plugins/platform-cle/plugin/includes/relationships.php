@@ -4,7 +4,7 @@
  *
  * Links the CPTs in the curriculum hierarchy using post meta:
  *
- *   Program ─┬─ Week ─┬─ Module ─┬─ Practice Scenario
+ *   Program ─┬─ Unit ─┬─ Module ─┬─ Practice Scenario
  *            │        │          └─ Template
  *            │        └─ Schedule Event
  *
@@ -29,26 +29,26 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Value = ['parent' => parent CPT, 'meta_key' => meta key, 'label' => label].
  *
  * Note: several children can reuse the same meta_key because it points to the
- * SAME parent type (e.g. module and event both hang off a Week).
+ * SAME parent type (e.g. module and event both hang off a Unit).
  *
  * @return array<string, array{parent:string, meta_key:string, label:string}>
  */
 function pcle_relationship_map() {
 	return array(
-		'pcle_week'     => array(
+		'pcle_unit'     => array(
 			'parent'   => 'pcle_program',
 			'meta_key' => '_pcle_program_id',
 			'label'    => __( 'Parent Program', 'platform-cle' ),
 		),
 		'pcle_module'   => array(
-			'parent'   => 'pcle_week',
-			'meta_key' => '_pcle_week_id',
-			'label'    => __( 'Parent Week', 'platform-cle' ),
+			'parent'   => 'pcle_unit',
+			'meta_key' => '_pcle_unit_id',
+			'label'    => __( 'Parent Unit', 'platform-cle' ),
 		),
 		'pcle_event'    => array(
-			'parent'   => 'pcle_week',
-			'meta_key' => '_pcle_week_id',
-			'label'    => __( 'Parent Week', 'platform-cle' ),
+			'parent'   => 'pcle_unit',
+			'meta_key' => '_pcle_unit_id',
+			'label'    => __( 'Parent Unit', 'platform-cle' ),
 		),
 		'pcle_scenario' => array(
 			'parent'   => 'pcle_module',
@@ -378,7 +378,7 @@ function pcle_get_parent_id( $child_id ) {
 /**
  * Walks up the hierarchy to find the Program a post belongs to.
  *
- * Works for any curriculum content (Week, Module, Scenario, Template, Event).
+ * Works for any curriculum content (Unit, Module, Scenario, Template, Event).
  * Returns 0 if it can't be determined (e.g. Case Update, which doesn't hang off
  * any program).
  *
@@ -410,25 +410,25 @@ function pcle_get_program_for_post( $post_id ) {
 // ---- Readable shortcuts for the concrete hierarchy ----
 
 /**
- * Weeks of a program.
+ * Units of a program.
  *
  * @param int   $program_id Program ID.
  * @param array $args       WP_Query overrides.
  * @return WP_Post[]
  */
-function pcle_get_weeks( $program_id, $args = array() ) {
-	return pcle_get_children( $program_id, 'pcle_week', $args );
+function pcle_get_units( $program_id, $args = array() ) {
+	return pcle_get_children( $program_id, 'pcle_unit', $args );
 }
 
 /**
- * Modules of a week.
+ * Modules of a unit.
  *
- * @param int   $week_id Week ID.
+ * @param int   $unit_id Unit ID.
  * @param array $args    WP_Query overrides.
  * @return WP_Post[]
  */
-function pcle_get_modules( $week_id, $args = array() ) {
-	return pcle_get_children( $week_id, 'pcle_module', $args );
+function pcle_get_modules( $unit_id, $args = array() ) {
+	return pcle_get_children( $unit_id, 'pcle_module', $args );
 }
 
 /**
@@ -454,14 +454,14 @@ function pcle_get_templates( $module_id, $args = array() ) {
 }
 
 /**
- * Schedule events of a week.
+ * Schedule events of a unit.
  *
- * @param int   $week_id Week ID.
+ * @param int   $unit_id Unit ID.
  * @param array $args    WP_Query overrides.
  * @return WP_Post[]
  */
-function pcle_get_events( $week_id, $args = array() ) {
-	return pcle_get_children( $week_id, 'pcle_event', $args );
+function pcle_get_events( $unit_id, $args = array() ) {
+	return pcle_get_children( $unit_id, 'pcle_event', $args );
 }
 
 /* =========================================================================

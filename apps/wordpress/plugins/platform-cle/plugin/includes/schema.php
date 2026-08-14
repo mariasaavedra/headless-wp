@@ -29,7 +29,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * deployed by copying files, so waiting for activation would leave sites on
  * the old schema indefinitely.
  */
-const PCLE_DB_VERSION = 2;
+const PCLE_DB_VERSION = 3;
 
 /** Option holding the installed schema version. */
 const PCLE_DB_VERSION_OPTION = 'pcle_db_version';
@@ -289,6 +289,56 @@ function pcle_delete_post_records( $post_id ) {
 add_action( 'deleted_post', 'pcle_delete_post_records' );
 
 /**
+ * Renames the "week" concept to "unit" in existing data.
+ *
+ * The level between a programme and its modules was called a Week, which
+ * promised a shape the content does not have: a stage of a course is rarely
+ * exactly seven days. Renaming only the labels would have left the code saying
+ * one thing and the screen another — this project has already paid for that
+ * kind of drift once, in documentation.
+ *
+ * So the post type and the relationship meta key move too, which means the
+ * rows have to move with them. Without this, an existing install would keep
+ * its units as an unregistered `pcle_week` type — invisible in the admin — and
+ * every module and session would lose its parent, because the code would be
+ * reading `_pcle_unit_id` from rows that still said `_pcle_week_id`.
+ *
+ * Idempotent: after the first run there is nothing left matching the old
+ * names, so a second run updates nothing.
+ *
+ * @return array{posts:int, meta:int} Rows updated.
+ */
+function pcle_migrate_week_to_unit() {
+	global $wpdb;
+
+	// phpcs:disable WordPress.DB.DirectDatabaseQuery -- one-off migration.
+	$posts = (int) $wpdb->update(
+		$wpdb->posts,
+		array( 'post_type' => 'pcle_unit' ),
+		array( 'post_type' => 'pcle_week' )
+	);
+
+	// Modules AND sessions both hang off this key.
+	$meta = (int) $wpdb->update(
+		$wpdb->postmeta,
+		array( 'meta_key' => '_pcle_unit_id' ),
+		array( 'meta_key' => '_pcle_week_id' )
+	);
+	// phpcs:enable WordPress.DB.DirectDatabaseQuery
+
+	if ( $posts || $meta ) {
+		// Post types and meta are cached per post; stale entries would keep
+		// serving the old values for the rest of the request.
+		wp_cache_flush();
+	}
+
+	return array(
+		'posts' => $posts,
+		'meta'  => $meta,
+	);
+}
+
+/**
  * Brings the database up to PCLE_DB_VERSION if it isn't already.
  *
  * Runs on every load but costs one option read in the normal case.
@@ -300,6 +350,7 @@ function pcle_maybe_upgrade_schema() {
 
 	pcle_install_schema();
 	pcle_migrate_legacy_meta();
+	pcle_migrate_week_to_unit();
 
 	update_option( PCLE_DB_VERSION_OPTION, PCLE_DB_VERSION );
 }

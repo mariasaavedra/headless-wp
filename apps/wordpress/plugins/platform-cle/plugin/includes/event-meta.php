@@ -130,7 +130,7 @@ function pcle_render_event_metabox( $post ) {
 	echo '</p>';
 
 	echo '<p class="description">';
-	esc_html_e( 'Shown to students in the week schedule. Uses the site timezone.', 'platform-cle' );
+	esc_html_e( 'Shown to students in the unit schedule. Uses the site timezone.', 'platform-cle' );
 	echo '</p>';
 }
 

@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * The plugin's capability groups (SINGLE SOURCE OF TRUTH).
  *
  * Instead of giving each CPT its own set of permissions, we group them:
- *   - 'content'     : the whole curriculum (Program, Week, Module, Practice
+ *   - 'content'     : the whole curriculum (Program, Unit, Module, Practice
  *                     Scenario, Template, Schedule Event).
  *   - 'case_update' : the case updates (Case Update).
  *
@@ -107,7 +107,7 @@ function pcle_primitive_caps( $plural ) {
  */
 function pcle_post_type_definitions() {
 	return array(
-		// 1) PROGRAM — the top-level container (the 4-week program).
+		// 1) PROGRAM — the top-level container (the 4-unit program).
 		'pcle_program'     => array(
 			'group'    => 'content',
 			'singular' => __( 'Program', 'platform-cle' ),
@@ -117,17 +117,19 @@ function pcle_post_type_definitions() {
 			'supports' => array( 'title', 'editor', 'thumbnail', 'excerpt', 'custom-fields', 'page-attributes' ),
 		),
 
-		// 2) WEEK — each of the program's 4 weeks.
-		'pcle_week'        => array(
+		// 2) UNIT — a stage of the programme. Deliberately not "week": courses
+		//    rarely run in whole weeks, and the name was promising a shape the
+		//    content does not have.
+		'pcle_unit'        => array(
 			'group'    => 'content',
-			'singular' => __( 'Week', 'platform-cle' ),
-			'plural'   => __( 'Weeks', 'platform-cle' ),
+			'singular' => __( 'Unit', 'platform-cle' ),
+			'plural'   => __( 'Units', 'platform-cle' ),
 			'icon'     => 'dashicons-calendar-alt',
-			'slug'     => 'week',
+			'slug'     => 'unit',
 			'supports' => array( 'title', 'editor', 'thumbnail', 'excerpt', 'custom-fields', 'page-attributes' ),
 		),
 
-		// 3) MODULE — lessons/units within a week.
+		// 3) MODULE — lessons within a unit.
 		'pcle_module'      => array(
 			'group'    => 'content',
 			'singular' => __( 'Module', 'platform-cle' ),
@@ -168,7 +170,7 @@ function pcle_post_type_definitions() {
 			'plural'   => __( 'Schedule Events', 'platform-cle' ),
 			'icon'     => 'dashicons-clock',
 			'slug'     => 'schedule-event',
-			// Same reason as Template: a week's sessions were unorderable.
+			// Same reason as Template: a unit's sessions were unorderable.
 			'supports' => array( 'title', 'editor', 'custom-fields', 'page-attributes' ),
 		),
 
@@ -242,7 +244,7 @@ function pcle_register_post_types() {
 				'exclude_from_search' => true,
 				'show_in_rest'        => true,  // Required for the block editor.
 				'has_archive'         => false,
-				'hierarchical'        => false, // Program>Week>Module relations go through meta.
+				'hierarchical'        => false, // Program>Unit>Module relations go through meta.
 				'rewrite'         => array(
 					'slug'       => $def['slug'],
 					'with_front' => false,
@@ -301,7 +303,7 @@ function pcle_render_admin_dashboard() {
 	echo '<div class="wrap">';
 	echo '<h1>' . esc_html__( 'Platform CLE', 'platform-cle' ) . '</h1>';
 	echo '<p>' . esc_html__( 'Continuing Legal Education platform — Immigration Habeas Corpus.', 'platform-cle' ) . '</p>';
-	echo '<p>' . esc_html__( 'Use the submenus to manage the curriculum: Programs, Weeks, Modules, Practice Scenarios, Templates, Schedule Events and Case Updates.', 'platform-cle' ) . '</p>';
+	echo '<p>' . esc_html__( 'Use the submenus to manage the curriculum: Programs, Units, Modules, Practice Scenarios, Templates, Schedule Events and Case Updates.', 'platform-cle' ) . '</p>';
 
 	if ( current_user_can( 'manage_options' ) ) {
 		pcle_render_seed_demo_data_section();
@@ -323,9 +325,9 @@ function pcle_render_seed_demo_data_section() {
 				'<div class="notice notice-success"><p>%s</p></div>',
 				esc_html(
 					sprintf(
-						/* translators: 1: weeks, 2: modules, 3: scenarios, 4: templates, 5: events, 6: case updates */
-						__( 'Demo data seeded: 1 program, %1$d weeks, %2$d modules, %3$d scenarios, %4$d templates, %5$d events, %6$d case updates.', 'platform-cle' ),
-						$counts['week'],
+						/* translators: 1: units, 2: modules, 3: scenarios, 4: templates, 5: events, 6: case updates */
+						__( 'Demo data seeded: 1 program, %1$d units, %2$d modules, %3$d scenarios, %4$d templates, %5$d events, %6$d case updates.', 'platform-cle' ),
+						$counts['unit'],
 						$counts['module'],
 						$counts['scenario'],
 						$counts['template'],
@@ -339,7 +341,7 @@ function pcle_render_seed_demo_data_section() {
 	?>
 	<hr />
 	<h2><?php esc_html_e( 'Sample Data', 'platform-cle' ); ?></h2>
-	<p><?php esc_html_e( 'Creates a full sample program (4 weeks, 9 modules, scenarios, templates, events, and case updates) so you can see the platform populated with realistic content. Safe to run more than once: it replaces only the previously seeded demo content.', 'platform-cle' ); ?></p>
+	<p><?php esc_html_e( 'Creates a full sample program (4 units, 9 modules, scenarios, templates, events, and case updates) so you can see the platform populated with realistic content. Safe to run more than once: it replaces only the previously seeded demo content.', 'platform-cle' ); ?></p>
 	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" onsubmit="return confirm('<?php echo esc_js( __( 'This will replace any existing demo data with a fresh sample program. Continue?', 'platform-cle' ) ); ?>');">
 		<?php wp_nonce_field( 'pcle_seed_demo_data', 'pcle_seed_demo_nonce' ); ?>
 		<input type="hidden" name="action" value="pcle_seed_demo_data" />

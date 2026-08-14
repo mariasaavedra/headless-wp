@@ -32,7 +32,7 @@ $counts = pcle_seed_demo_data();
 echo 'Cleanup: ' . $counts['removed'] . " previous demos removed.\n\n";
 echo "\n=== Summary ===\n";
 echo "Program:        {$counts['program']}\n";
-echo "Weeks:          {$counts['week']}\n";
+echo "Units:          {$counts['unit']}\n";
 echo "Modules:        {$counts['module']}\n";
 echo "Scenarios:      {$counts['scenario']}\n";
 echo "Templates:      {$counts['template']}\n";

@@ -42,7 +42,7 @@ Severity: 🔴 blocker · 🟡 important · 🟢 fine.
   queried/reported via SQL.
 - 🟡 Relationships have no referential integrity (deleting a parent orphans
   children; no cascade).
-- 🟡 Progress computation is N+1 (loops per week/module); no caching.
+- 🟡 Progress computation is N+1 (loops per unit/module); no caching.
 
 **Engineering practices**
 - 🟡 No automated tests (planned — Option A #5).

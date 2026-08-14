@@ -90,7 +90,7 @@ export default async function BuilderPage() {
                 </div>
 
                 <p className="mt-2 text-sm text-zinc-500">
-                  {program.weeks} {program.weeks === 1 ? "week" : "weeks"} ·{" "}
+                  {program.units} {program.units === 1 ? "unit" : "units"} ·{" "}
                   {program.modules}{" "}
                   {program.modules === 1 ? "module" : "modules"} ·{" "}
                   {program.enrollees}{" "}

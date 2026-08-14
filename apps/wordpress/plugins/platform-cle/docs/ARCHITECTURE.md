@@ -42,7 +42,7 @@ Instead of 7 sets of permissions, the CPTs share **2 groups** defined in `pcle_c
 
 | Group | Singular / Plural | CPTs |
 |---|---|---|
-| `content` | `pcle_content` / `pcle_contents` | program, week, module, scenario, template, event |
+| `content` | `pcle_content` / `pcle_contents` | program, unit, module, scenario, template, event |
 | `case_update` | `pcle_case_update` / `pcle_case_updates` | case_update |
 
 `roles.php` reads **this same function** to grant permissions, so the names never drift apart.
@@ -88,22 +88,22 @@ Modeled with **post meta** (not `post_parent`, which doesn't cross post types). 
 
 | Child | Meta key | Parent |
 |---|---|---|
-| `pcle_week` | `_pcle_program_id` | `pcle_program` |
-| `pcle_module` | `_pcle_week_id` | `pcle_week` |
-| `pcle_event` | `_pcle_week_id` | `pcle_week` |
+| `pcle_unit` | `_pcle_program_id` | `pcle_program` |
+| `pcle_module` | `_pcle_unit_id` | `pcle_unit` |
+| `pcle_event` | `_pcle_unit_id` | `pcle_unit` |
 | `pcle_scenario` | `_pcle_module_id` | `pcle_module` |
 | `pcle_template` | `_pcle_module_id` | `pcle_module` |
 
 The meta is registered in REST with an `auth_callback` (only someone who can edit the post writes it), edited via a **select meta box**, and saved with a nonce + parent-type validation.
 
-**Query API:** `pcle_get_weeks()`, `pcle_get_modules()`, `pcle_get_scenarios()`, `pcle_get_templates()`, `pcle_get_events()`, `pcle_get_parent_id()`, `pcle_get_program_for_post()`. Everything ordered by `menu_order` then title.
+**Query API:** `pcle_get_units()`, `pcle_get_modules()`, `pcle_get_scenarios()`, `pcle_get_templates()`, `pcle_get_events()`, `pcle_get_parent_id()`, `pcle_get_program_for_post()`. Everything ordered by `menu_order` then title.
 
 ## 5. Progress
 
-MVP via **user meta** `_pcle_completed_modules` (array of module IDs). Week/program progress is **computed** over the hierarchy, not stored (so it never drifts if the curriculum changes).
+MVP via **user meta** `_pcle_completed_modules` (array of module IDs). Unit/program progress is **computed** over the hierarchy, not stored (so it never drifts if the curriculum changes).
 
 - CRUD: `pcle_mark_module_complete()`, `pcle_unmark_module_complete()`, `pcle_is_module_complete()`.
-- Computation: `pcle_get_week_progress()`, `pcle_get_program_progress()` → `{completed, total, percent}`.
+- Computation: `pcle_get_unit_progress()`, `pcle_get_program_progress()` → `{completed, total, percent}`.
 - **REST:** `POST /wp-json/platform-cle/v1/progress` `{module_id, completed}` — always operates on the current user; protected by `view_cle_content` + `wp_rest` nonce.
 - Frontend: `assets/progress.js` + `assets/progress.css` ("mark as complete" button that updates the bar live).
 
@@ -118,7 +118,7 @@ User meta `_pcle_enrolled_programs` (array of program IDs). Helpers in `enrollme
 | Block | Renders |
 |---|---|
 | `platform-cle/curriculum-children` | Lists the current post's children by type. |
-| `platform-cle/progress-bar` | Progress bar for the current Program/Week. |
+| `platform-cle/progress-bar` | Progress bar for the current Program/Unit. |
 | `platform-cle/complete-button` | "Mark as complete" button for the module. |
 | `platform-cle/event-datetime` | Session date/time. |
 | `platform-cle/breadcrumbs` | Breadcrumbs (walks up the hierarchy to "My Training"). |
@@ -171,7 +171,7 @@ mailer — configure SMTP on the production host.
 
 | Key | Type | Use |
 |---|---|---|
-| `_pcle_program_id` / `_pcle_week_id` / `_pcle_module_id` | post meta | hierarchical relationships |
+| `_pcle_program_id` / `_pcle_unit_id` / `_pcle_module_id` | post meta | hierarchical relationships |
 | `_pcle_event_datetime` | post meta | event date/time (`Y-m-d H:i:s`) |
 | `_pcle_completed_modules` | user meta | completed modules (array) |
 | `_pcle_enrolled_programs` | user meta | enrolled programs (array) |

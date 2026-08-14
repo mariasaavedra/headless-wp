@@ -38,7 +38,7 @@ export default async function BuilderProgramPage({
   }
 
   const isDraft = tree.status !== "publish";
-  const weeks = tree.children.filter((child) => child.type === "pcle_week");
+  const units = tree.children.filter((child) => child.type === "pcle_unit");
 
   return (
     <PageShell>
@@ -135,31 +135,31 @@ export default async function BuilderProgramPage({
       </details>
 
       <div className="mt-8 rounded-lg border border-zinc-200 bg-white p-6">
-        {weeks.length === 0 ? (
+        {units.length === 0 ? (
           <p className="text-zinc-600">
-            Nothing in this programme yet. Add the first week below.
+            Nothing in this programme yet. Add the first unit below.
           </p>
         ) : (
           <TreeView node={tree} />
         )}
 
         {/*
-          The top-level add sits with the tree rather than in a toolbar: a week
+          The top-level add sits with the tree rather than in a toolbar: a unit
           belongs to this programme, and the whole point of building here is
           that you never pick a parent from a list — it is wherever you clicked.
         */}
         <details className="mt-6 border-t border-zinc-100 pt-4 text-sm">
           <summary className="cursor-pointer text-zinc-500 hover:text-zinc-900">
-            + {NODE_LABELS.pcle_week.singular}
+            + {NODE_LABELS.pcle_unit.singular}
           </summary>
           <ActionForm action={createNodeAction} className="mt-2 flex gap-2">
-            <input type="hidden" name="type" value="pcle_week" />
+            <input type="hidden" name="type" value="pcle_unit" />
             <input type="hidden" name="parent_id" value={tree.id} />
             <input
               type="text"
               name="title"
-              placeholder="New week"
-              aria-label="Title for the new week"
+              placeholder="New unit"
+              aria-label="Title for the new unit"
               className="w-64 rounded border border-zinc-300 px-2 py-1"
             />
             <button

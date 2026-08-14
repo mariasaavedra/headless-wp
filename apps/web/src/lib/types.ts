@@ -34,7 +34,7 @@ type SessionEvent = {
   formatted: string;
 };
 
-type Week = {
+type Unit = {
   id: number;
   title: string;
   excerpt: string;
@@ -43,7 +43,7 @@ type Week = {
   events: SessionEvent[];
 };
 
-type WeekDetail = Week & {
+type UnitDetail = Unit & {
   content: string;
   program: Ref | null;
 };
@@ -53,7 +53,7 @@ type Program = {
   title: string;
   content: string;
   progress: Progress;
-  weeks: Week[];
+  units: Unit[];
 };
 
 /** A practice scenario or a template hanging off a module. */
@@ -68,7 +68,7 @@ type ModuleDetail = {
   title: string;
   content: string;
   completed: boolean;
-  week: Ref | null;
+  unit: Ref | null;
   program: Ref | null;
   scenarios: ModuleResource[];
   templates: ModuleResource[];
@@ -86,8 +86,8 @@ export type {
   Ref,
   ModuleSummary,
   SessionEvent,
-  Week,
-  WeekDetail,
+  Unit,
+  UnitDetail,
   Program,
   ModuleResource,
   ModuleDetail,
@@ -110,7 +110,7 @@ type Me = {
 /** The curriculum post types the builder manages. */
 type NodeType =
   | "pcle_program"
-  | "pcle_week"
+  | "pcle_unit"
   | "pcle_module"
   | "pcle_scenario"
   | "pcle_template"
@@ -122,7 +122,7 @@ type AuthoringProgram = {
   title: string;
   status: string;
   credits: CreditHours[];
-  weeks: number;
+  units: number;
   modules: number;
   enrollees: number;
 };
