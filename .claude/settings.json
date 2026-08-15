@@ -5,7 +5,8 @@
       "Bash(yes)",
       "Bash(npx shadcn@latest add button radio-group checkbox card dialog drawer questionnaire)",
       "Bash(npx shadcn@latest add button questionnaire)",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(npx shadcn@latest add sidebar avatar typography separator toggle-group switch button dropdown-menu card button-group tooltip item badge scroll-area)"
     ]
   }
 }
