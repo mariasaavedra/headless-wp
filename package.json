@@ -2,7 +2,8 @@
   "name": "headless-wp",
   "private": true,
   "workspaces": [
-    "apps/*"
+    "apps/*",
+    "libs/*"
   ],
   "scripts": {
     "dev": "docker compose up -d wordpress db && npm run dev --workspace=apps/web",

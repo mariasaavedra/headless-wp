@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(timeout 20 npx shadcn@latest add button --yes)",
+      "Bash(yes)",
+      "Bash(npx shadcn@latest add button radio-group checkbox card dialog drawer questionnaire)",
+      "Bash(npx shadcn@latest add button questionnaire)",
+      "Bash(npm install *)"
+    ]
+  }
+}
