@@ -1,5 +1,9 @@
 import Link from "next/link";
 
+import { Badge } from "@pcle/ui/components/badge";
+import { Button } from "@pcle/ui/components/button";
+import { Input } from "@pcle/ui/components/input";
+
 import ActionForm from "@/components/builder/action-form";
 import { NODE_BADGES, NODE_LABELS } from "@/components/builder/node-labels";
 import {
@@ -72,13 +76,15 @@ function MoveButton({
         name="ids"
         value={reordered(siblingIds, id, direction).join(",")}
       />
-      <button
+      <Button
         type="submit"
-        className="w-7 rounded border border-zinc-300 py-0.5 text-xs text-zinc-600 hover:bg-zinc-100"
+        variant="outline"
+        size="icon-sm"
+        className="w-7 text-xs text-zinc-600"
         aria-label={direction === -1 ? "Move up" : "Move down"}
       >
         {direction === -1 ? "↑" : "↓"}
-      </button>
+      </Button>
     </ActionForm>
   );
 }
@@ -101,9 +107,9 @@ export default function NodeRow({
   return (
     <li className="border-t border-zinc-100 first:border-t-0">
       <div className="flex flex-wrap items-center gap-2 py-2">
-        <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+        <Badge variant="secondary" className="uppercase tracking-wide">
           {NODE_BADGES[node.type]}
-        </span>
+        </Badge>
 
         <Link
           href={`/builder/nodes/${node.id}`}
@@ -113,9 +119,7 @@ export default function NodeRow({
         </Link>
 
         {isDraft && (
-          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">
-            Draft
-          </span>
+          <Badge className="bg-amber-100 text-amber-800">Draft</Badge>
         )}
 
         {node.type === "pcle_event" && node.starts_at && (
@@ -149,12 +153,9 @@ export default function NodeRow({
               name="status"
               value={isDraft ? "publish" : "draft"}
             />
-            <button
-              type="submit"
-              className="rounded border border-zinc-300 px-2 py-0.5 text-xs text-zinc-600 hover:bg-zinc-100"
-            >
+            <Button type="submit" variant="outline" size="sm" className="text-xs">
               {isDraft ? "Publish" : "Unpublish"}
-            </button>
+            </Button>
           </ActionForm>
         </span>
       </div>
@@ -166,19 +167,14 @@ export default function NodeRow({
           </summary>
           <ActionForm action={renameNodeAction} className="mt-2 flex gap-2">
             <input type="hidden" name="id" value={node.id} />
-            <input
+            <Input
               type="text"
               name="title"
               defaultValue={title}
               aria-label={`Title for ${title}`}
-              className="w-64 rounded border border-zinc-300 px-2 py-1"
+              className="w-64"
             />
-            <button
-              type="submit"
-              className="rounded bg-zinc-950 px-2 py-1 text-white"
-            >
-              Save
-            </button>
+            <Button type="submit">Save</Button>
           </ActionForm>
         </details>
 
@@ -190,19 +186,14 @@ export default function NodeRow({
             <ActionForm action={createNodeAction} className="mt-2 flex gap-2">
               <input type="hidden" name="type" value={childType} />
               <input type="hidden" name="parent_id" value={node.id} />
-              <input
+              <Input
                 type="text"
                 name="title"
                 placeholder={`New ${NODE_LABELS[childType].singular.toLowerCase()}`}
                 aria-label={`Title for the new ${NODE_LABELS[childType].singular.toLowerCase()}`}
-                className="w-64 rounded border border-zinc-300 px-2 py-1"
+                className="w-64"
               />
-              <button
-                type="submit"
-                className="rounded bg-zinc-950 px-2 py-1 text-white"
-              >
-                Add
-              </button>
+              <Button type="submit">Add</Button>
             </ActionForm>
           </details>
         ))}
@@ -234,14 +225,15 @@ export default function NodeRow({
                 name="cascade"
                 value={descendants > 0 ? "true" : "false"}
               />
-              <button
+              <Button
                 type="submit"
-                className="rounded bg-red-700 px-2 py-1 text-white hover:bg-red-800"
+                variant="destructive"
+                className="bg-red-700 text-white hover:bg-red-800"
               >
                 {descendants > 0
                   ? `Delete all ${descendants + 1} items`
                   : "Delete"}
-              </button>
+              </Button>
             </ActionForm>
           </div>
         </details>

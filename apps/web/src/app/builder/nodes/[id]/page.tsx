@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { Badge } from "@pcle/ui/components/badge";
+import { Button } from "@pcle/ui/components/button";
+import { Card, CardContent } from "@pcle/ui/components/card";
+import { Input } from "@pcle/ui/components/input";
+
 import { renderAccessError } from "@/components/access-error";
 import Breadcrumbs from "@/components/breadcrumbs";
 import ActionForm from "@/components/builder/action-form";
@@ -81,65 +86,61 @@ export default async function BuilderNodePage({
       />
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+        <Badge variant="secondary" className="uppercase tracking-wide">
           {NODE_BADGES[node.type]}
-        </span>
+        </Badge>
 
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-950">
           {title}
         </h1>
 
         {node.status !== "publish" && (
-          <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
-            Draft
-          </span>
+          <Badge className="bg-amber-100 text-amber-800">Draft</Badge>
         )}
       </div>
 
       {node.editable ? (
-        <ActionForm
-          action={saveBodyAction}
-          className="mt-8 rounded-lg border border-zinc-200 bg-white p-6"
-        >
-          <input type="hidden" name="id" value={node.id} />
+        <ActionForm action={saveBodyAction} className="mt-8">
+          <Card className="p-6">
+            <CardContent className="p-0">
+              <input type="hidden" name="id" value={node.id} />
 
-          <label
-            htmlFor="node-title"
-            className="block text-sm font-medium text-zinc-700"
-          >
-            Title
-          </label>
-          <input
-            id="node-title"
-            type="text"
-            name="title"
-            defaultValue={title}
-            className="mt-1 w-full rounded border border-zinc-300 px-3 py-2"
-          />
+              <label
+                htmlFor="node-title"
+                className="block text-sm font-medium text-zinc-700"
+              >
+                Title
+              </label>
+              <Input
+                id="node-title"
+                type="text"
+                name="title"
+                defaultValue={title}
+                className="mt-1 w-full"
+              />
 
-          <label
-            htmlFor="node-body"
-            className="mt-6 block text-sm font-medium text-zinc-700"
-          >
-            Body
-          </label>
-          <textarea
-            id="node-body"
-            name="body"
-            rows={18}
-            defaultValue={node.body}
-            spellCheck
-            className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 font-mono text-sm leading-relaxed"
-          />
+              <label
+                htmlFor="node-body"
+                className="mt-6 block text-sm font-medium text-zinc-700"
+              >
+                Body
+              </label>
+              <textarea
+                id="node-body"
+                name="body"
+                rows={18}
+                defaultValue={node.body}
+                spellCheck
+                className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 font-mono text-sm leading-relaxed"
+              />
 
-          <SyntaxHelp />
+              <SyntaxHelp />
 
-          <button
-            type="submit"
-            className="mt-6 rounded bg-zinc-950 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800"
-          >
-            Save
-          </button>
+              <Button type="submit" className="mt-6">
+                Save
+              </Button>
+            </CardContent>
+          </Card>
         </ActionForm>
       ) : (
         <div className="mt-8 rounded-lg border border-amber-200 bg-amber-50 p-6">
@@ -166,22 +167,26 @@ export default async function BuilderNodePage({
           here would make it a preview of something else the moment the two
           drift.
         */}
-        <div className="mt-3 rounded-lg border border-zinc-200 bg-white p-6">
-          {node.rendered.trim() ? (
-            <WpContent html={node.rendered} />
-          ) : (
-            <p className="text-sm text-zinc-500">Nothing written yet.</p>
-          )}
-        </div>
+        <Card className="mt-3 p-6">
+          <CardContent className="p-0">
+            {node.rendered.trim() ? (
+              <WpContent html={node.rendered} />
+            ) : (
+              <p className="text-sm text-zinc-500">Nothing written yet.</p>
+            )}
+          </CardContent>
+        </Card>
       </section>
 
       {node.program && (
-        <Link
-          href={`/builder/programs/${node.program.id}`}
-          className="mt-8 inline-block text-sm text-zinc-500 underline hover:text-zinc-900"
+        <Button
+          variant="link"
+          className="mt-8 h-auto px-0 text-zinc-500"
+          nativeButton={false}
+          render={<Link href={`/builder/programs/${node.program.id}`} />}
         >
           Back to the programme
-        </Link>
+        </Button>
       )}
     </PageShell>
   );

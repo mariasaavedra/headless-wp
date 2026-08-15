@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { Badge } from "@pcle/ui/components/badge";
+import { Button } from "@pcle/ui/components/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@pcle/ui/components/card";
+import { Input } from "@pcle/ui/components/input";
+
 import { renderAccessError } from "@/components/access-error";
 import ActionForm from "@/components/builder/action-form";
 import { createProgramAction } from "@/app/actions/authoring";
@@ -51,19 +56,14 @@ export default async function BuilderPage() {
         </summary>
 
         <ActionForm action={createProgramAction} className="mt-3 flex gap-2">
-          <input
+          <Input
             type="text"
             name="title"
             placeholder="e.g. Immigration Habeas Corpus — Spring 2027"
             aria-label="Title for the new programme"
-            className="w-96 max-w-full rounded border border-zinc-300 px-2 py-1"
+            className="w-96 max-w-full"
           />
-          <button
-            type="submit"
-            className="rounded bg-zinc-950 px-3 py-1 text-white"
-          >
-            Create
-          </button>
+          <Button type="submit">Create</Button>
         </ActionForm>
       </details>
 
@@ -75,37 +75,41 @@ export default async function BuilderPage() {
             <li key={program.id}>
               <Link
                 href={`/builder/programs/${program.id}`}
-                className="block rounded-lg border border-zinc-200 bg-white p-6 transition hover:border-zinc-300 hover:shadow-sm"
+                className="block transition hover:shadow-sm"
               >
-                <div className="flex flex-wrap items-center gap-3">
-                  <h2 className="text-xl font-medium text-zinc-950">
-                    {decodeEntities(program.title)}
-                  </h2>
+                <Card className="hover:border-zinc-300">
+                  <CardHeader>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <CardTitle className="text-xl font-medium text-zinc-950">
+                        {decodeEntities(program.title)}
+                      </CardTitle>
 
-                  {program.status !== "publish" && (
-                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">
-                      Draft
-                    </span>
-                  )}
-                </div>
+                      {program.status !== "publish" && (
+                        <Badge className="bg-amber-100 text-amber-800">Draft</Badge>
+                      )}
+                    </div>
+                  </CardHeader>
 
-                <p className="mt-2 text-sm text-zinc-500">
-                  {program.weeks} {program.weeks === 1 ? "week" : "weeks"} ·{" "}
-                  {program.modules}{" "}
-                  {program.modules === 1 ? "module" : "modules"} ·{" "}
-                  {program.enrollees}{" "}
-                  {program.enrollees === 1 ? "participant" : "participants"}
-                </p>
+                  <CardContent>
+                    <p className="text-sm text-zinc-500">
+                      {program.weeks} {program.weeks === 1 ? "week" : "weeks"} ·{" "}
+                      {program.modules}{" "}
+                      {program.modules === 1 ? "module" : "modules"} ·{" "}
+                      {program.enrollees}{" "}
+                      {program.enrollees === 1 ? "participant" : "participants"}
+                    </p>
 
-                <p className="mt-1 text-sm text-zinc-500">
-                  {program.credits
-                    .map((credit) =>
-                      credit.hours > 0
-                        ? `${credit.label}: ${credit.hours} h`
-                        : `${credit.label}: not accredited`
-                    )
-                    .join(" · ")}
-                </p>
+                    <p className="mt-1 text-sm text-zinc-500">
+                      {program.credits
+                        .map((credit) =>
+                          credit.hours > 0
+                            ? `${credit.label}: ${credit.hours} h`
+                            : `${credit.label}: not accredited`
+                        )
+                        .join(" · ")}
+                    </p>
+                  </CardContent>
+                </Card>
               </Link>
             </li>
           ))}

@@ -1,5 +1,10 @@
 import { redirect } from "next/navigation";
 
+import { Badge } from "@pcle/ui/components/badge";
+import { Button } from "@pcle/ui/components/button";
+import { Card } from "@pcle/ui/components/card";
+import { Input } from "@pcle/ui/components/input";
+
 import { renderAccessError } from "@/components/access-error";
 import Breadcrumbs from "@/components/breadcrumbs";
 import ActionForm from "@/components/builder/action-form";
@@ -55,9 +60,7 @@ export default async function BuilderProgramPage({
         </h1>
 
         {isDraft && (
-          <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
-            Draft
-          </span>
+          <Badge className="bg-amber-100 text-amber-800">Draft</Badge>
         )}
 
         <ActionForm action={setStatusAction} className="ml-auto">
@@ -67,12 +70,9 @@ export default async function BuilderProgramPage({
             name="status"
             value={isDraft ? "publish" : "draft"}
           />
-          <button
-            type="submit"
-            className="rounded border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100"
-          >
+          <Button type="submit" variant="outline">
             {isDraft ? "Publish programme" : "Unpublish programme"}
-          </button>
+          </Button>
         </ActionForm>
       </div>
 
@@ -106,7 +106,7 @@ export default async function BuilderProgramPage({
               >
                 {credit.label}
               </label>
-              <input
+              <Input
                 id={`credit-${credit.jurisdiction}`}
                 type="number"
                 name={`credit_${credit.jurisdiction}`}
@@ -114,17 +114,12 @@ export default async function BuilderProgramPage({
                 min="0"
                 step="0.25"
                 placeholder="—"
-                className="mt-1 w-24 rounded border border-zinc-300 px-2 py-1"
+                className="mt-1 w-24"
               />
             </span>
           ))}
 
-          <button
-            type="submit"
-            className="rounded bg-zinc-950 px-3 py-1 text-white"
-          >
-            Save hours
-          </button>
+          <Button type="submit">Save hours</Button>
 
           <span className="w-full text-xs text-zinc-500">
             Approved hours per jurisdiction, in quarter-hour steps. Leave blank
@@ -134,7 +129,7 @@ export default async function BuilderProgramPage({
         </ActionForm>
       </details>
 
-      <div className="mt-8 rounded-lg border border-zinc-200 bg-white p-6">
+      <Card className="mt-8 p-6">
         {weeks.length === 0 ? (
           <p className="text-zinc-600">
             Nothing in this programme yet. Add the first week below.
@@ -155,22 +150,17 @@ export default async function BuilderProgramPage({
           <ActionForm action={createNodeAction} className="mt-2 flex gap-2">
             <input type="hidden" name="type" value="pcle_week" />
             <input type="hidden" name="parent_id" value={tree.id} />
-            <input
+            <Input
               type="text"
               name="title"
               placeholder="New week"
               aria-label="Title for the new week"
-              className="w-64 rounded border border-zinc-300 px-2 py-1"
+              className="w-64"
             />
-            <button
-              type="submit"
-              className="rounded bg-zinc-950 px-2 py-1 text-white"
-            >
-              Add
-            </button>
+            <Button type="submit">Add</Button>
           </ActionForm>
         </details>
-      </div>
+      </Card>
 
       <p className="mt-6 text-sm text-zinc-500">
         Click any title to write its body. Attaching files and embedding video
