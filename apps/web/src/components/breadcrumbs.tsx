@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { Separator } from "@pcle/ui/components/separator";
+
 import { decodeEntities } from "@/lib/html";
 
 type Crumb = {
@@ -35,9 +37,7 @@ export default function Breadcrumbs({ trail }: { trail: Crumb[] }) {
               )}
 
               {!isLast && (
-                <span aria-hidden="true" className="text-zinc-300">
-                  /
-                </span>
+                <Separator orientation="vertical" className="h-3" aria-hidden="true" />
               )}
             </li>
           );

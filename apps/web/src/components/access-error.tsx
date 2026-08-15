@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import type { ReactElement } from "react";
 
+import { Button } from "@pcle/ui/components/button";
+
 import PageShell from "@/components/page-shell";
 import { WordPressApiError } from "@/lib/wordpress";
 
@@ -58,12 +60,14 @@ export function renderAccessError(
           "This content is limited to enrolled participants. If you believe you should have access, contact your programme administrator."}
       </p>
 
-      <Link
-        href="/my-training"
-        className="mt-6 inline-block text-sm font-medium text-zinc-950 underline"
+      <Button
+        variant="link"
+        className="mt-6 h-auto px-0"
+        nativeButton={false}
+        render={<Link href="/my-training" />}
       >
         Back to My Training
-      </Link>
+      </Button>
     </PageShell>
   );
 }

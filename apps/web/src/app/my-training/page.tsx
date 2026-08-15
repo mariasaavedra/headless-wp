@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { Card, CardContent, CardHeader, CardTitle } from "@pcle/ui/components/card";
+
 import { renderAccessError } from "@/components/access-error";
 import PageShell from "@/components/page-shell";
 import ProgressBar from "@/components/progress-bar";
@@ -39,15 +41,19 @@ export default async function MyTrainingPage() {
             <li key={program.id}>
               <Link
                 href={`/programs/${program.id}`}
-                className="block rounded-lg border border-zinc-200 bg-white p-6 transition hover:border-zinc-300 hover:shadow-sm"
+                className="block transition hover:shadow-sm"
               >
-                <h2 className="text-xl font-medium text-zinc-950">
-                  {decodeEntities(program.title)}
-                </h2>
+                <Card className="hover:border-zinc-300">
+                  <CardHeader>
+                    <CardTitle className="text-xl font-medium text-zinc-950">
+                      {decodeEntities(program.title)}
+                    </CardTitle>
+                  </CardHeader>
 
-                <div className="mt-4">
-                  <ProgressBar progress={program.progress} />
-                </div>
+                  <CardContent>
+                    <ProgressBar progress={program.progress} />
+                  </CardContent>
+                </Card>
               </Link>
             </li>
           ))}
