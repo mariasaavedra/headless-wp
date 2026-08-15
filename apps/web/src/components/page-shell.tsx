@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { Button } from "@pcle/ui/components/button";
+
 import { logoutAction } from "@/app/actions/auth";
 import { getMe } from "@/lib/wordpress";
 
@@ -40,21 +42,21 @@ export default async function PageShell({ children }: { children: ReactNode }) {
           </Link>
 
           {showBuilder && (
-            <Link
-              href="/builder"
-              className="text-sm text-zinc-500 hover:text-zinc-900 hover:underline"
+            <Button
+              variant="link"
+              size="sm"
+              className="px-0 text-zinc-500"
+              nativeButton={false}
+              render={<Link href="/builder" />}
             >
               Build
-            </Link>
+            </Button>
           )}
 
           <form action={logoutAction} className="ml-auto">
-            <button
-              type="submit"
-              className="text-sm text-zinc-500 hover:text-zinc-900 hover:underline"
-            >
+            <Button type="submit" variant="link" size="sm" className="px-0 text-zinc-500">
               Log out
-            </button>
+            </Button>
           </form>
         </div>
       </header>

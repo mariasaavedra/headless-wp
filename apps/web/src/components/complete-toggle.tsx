@@ -2,6 +2,8 @@
 
 import { useActionState } from "react";
 
+import { Button } from "@pcle/ui/components/button";
+
 import { toggleModuleAction } from "@/app/actions/progress";
 
 /**
@@ -24,21 +26,18 @@ export default function CompleteToggle({
       <input type="hidden" name="module_id" value={moduleId} />
       <input type="hidden" name="completed" value={String(!completed)} />
 
-      <button
+      <Button
         type="submit"
         disabled={pending}
-        className={
-          completed
-            ? "rounded border border-emerald-600 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
-            : "rounded bg-zinc-950 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
-        }
+        variant={completed ? "outline" : "default"}
+        className={completed ? "border-emerald-600 text-emerald-700 hover:bg-emerald-50" : undefined}
       >
         {pending
           ? "Saving…"
           : completed
             ? "✓ Completed — undo"
             : "Mark as complete"}
-      </button>
+      </Button>
 
       {state.error && (
         <p role="alert" className="text-sm text-red-600">
