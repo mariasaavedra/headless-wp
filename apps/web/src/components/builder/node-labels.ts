@@ -7,7 +7,7 @@ import type { NodeType } from "@/lib/types";
  */
 const NODE_LABELS: Record<NodeType, { singular: string; plural: string }> = {
   pcle_program: { singular: "Programme", plural: "Programmes" },
-  pcle_week: { singular: "Week", plural: "Weeks" },
+  pcle_unit: { singular: "Unit", plural: "Units" },
   pcle_module: { singular: "Module", plural: "Modules" },
   pcle_scenario: { singular: "Practice scenario", plural: "Practice scenarios" },
   pcle_template: { singular: "Template", plural: "Templates" },
@@ -17,7 +17,7 @@ const NODE_LABELS: Record<NodeType, { singular: string; plural: string }> = {
 /** A short badge for a row. */
 const NODE_BADGES: Record<NodeType, string> = {
   pcle_program: "Programme",
-  pcle_week: "Week",
+  pcle_unit: "Unit",
   pcle_module: "Module",
   pcle_scenario: "Scenario",
   pcle_template: "Template",

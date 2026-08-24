@@ -122,7 +122,7 @@ function pcle_authoring_guard_node( $request, $expected_type = '' ) {
  * @return string[]
  */
 function pcle_authorable_post_types() {
-	return array( 'pcle_program', 'pcle_week', 'pcle_module', 'pcle_scenario', 'pcle_template', 'pcle_event' );
+	return array( 'pcle_program', 'pcle_unit', 'pcle_module', 'pcle_scenario', 'pcle_template', 'pcle_event' );
 }
 
 /* =========================================================================
@@ -420,7 +420,7 @@ function pcle_authoring_list_programs() {
 			'title'      => $program->post_title,
 			'status'     => $program->post_status,
 			'credits'    => pcle_rest_shape_credit_hours( $program->ID ),
-			'weeks'      => count( pcle_authoring_get_children( $program->ID, 'pcle_week' ) ),
+			'units'      => count( pcle_authoring_get_children( $program->ID, 'pcle_unit' ) ),
 			'modules'    => count( pcle_get_program_module_ids( $program->ID ) ),
 			'enrollees'  => count( pcle_get_program_enrollee_ids( $program->ID ) ),
 		);
@@ -517,7 +517,7 @@ function pcle_authoring_next_order( $parent_id, $child_type ) {
  * POST /authoring/nodes — create one item inside its parent.
  *
  * Created as a draft. Publishing is a separate, deliberate act; a half-built
- * week appearing to participants the moment it is named would be the wrong
+ * unit appearing to participants the moment it is named would be the wrong
  * default.
  *
  * @param WP_REST_Request $request Request.
@@ -651,7 +651,7 @@ function pcle_authoring_descendants( $post_id ) {
  * DELETE /authoring/nodes/<id> — remove an item, and optionally what hangs off it.
  *
  * Refuses with the list of descendants unless the caller asked for a cascade.
- * Deleting a week silently takes its modules, scenarios, templates and
+ * Deleting a unit silently takes its modules, scenarios, templates and
  * sessions with it, and "I did not realise" is not a recoverable state.
  *
  * @param WP_REST_Request $request Request.

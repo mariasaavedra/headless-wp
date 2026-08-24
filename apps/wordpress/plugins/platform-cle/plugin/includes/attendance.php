@@ -135,8 +135,8 @@ function pcle_get_event_attendee_ids( $event_id ) {
 function pcle_get_program_event_ids( $program_id ) {
 	$ids = array();
 
-	foreach ( pcle_get_weeks( $program_id ) as $week ) {
-		foreach ( pcle_get_events( $week->ID ) as $event ) {
+	foreach ( pcle_get_units( $program_id ) as $unit ) {
+		foreach ( pcle_get_events( $unit->ID ) as $event ) {
 			$ids[] = (int) $event->ID;
 		}
 	}

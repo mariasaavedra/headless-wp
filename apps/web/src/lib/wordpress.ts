@@ -8,7 +8,7 @@ import type {
   Program,
   TrainingProgram,
   TreeNode,
-  WeekDetail,
+  UnitDetail,
 } from "@/lib/types";
 
 const WORDPRESS_API_URL = process.env.WORDPRESS_API_URL;
@@ -144,10 +144,10 @@ async function getProgram(id: number): Promise<Program> {
   }) as Promise<Program>;
 }
 
-async function getWeek(id: number): Promise<WeekDetail> {
-  return wordpressFetch(`/platform-cle/v1/weeks/${id}`, {
+async function getUnit(id: number): Promise<UnitDetail> {
+  return wordpressFetch(`/platform-cle/v1/units/${id}`, {
     auth: true,
-  }) as Promise<WeekDetail>;
+  }) as Promise<UnitDetail>;
 }
 
 async function getModule(id: number): Promise<ModuleDetail> {
@@ -279,7 +279,7 @@ export {
   logout,
   getMyTraining,
   getProgram,
-  getWeek,
+  getUnit,
   getModule,
   setModuleCompletion,
   getMe,

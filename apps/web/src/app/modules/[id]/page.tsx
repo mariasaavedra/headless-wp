@@ -76,8 +76,8 @@ export default async function ModulePage({
                 },
               ]
             : []),
-          ...(courseModule.week
-            ? [{ label: courseModule.week.title, href: `/weeks/${courseModule.week.id}` }]
+          ...(courseModule.unit
+            ? [{ label: courseModule.unit.title, href: `/units/${courseModule.unit.id}` }]
             : []),
           { label: courseModule.title },
         ]}

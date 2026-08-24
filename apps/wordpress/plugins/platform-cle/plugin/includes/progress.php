@@ -3,13 +3,13 @@
  * Platform CLE progress tracking (MVP, via user meta).
  *
  * Model: one row per (user, module) in the `pcle_progress` table, carrying the
- * completion timestamp. Week/program progress is COMPUTED over the hierarchy
+ * completion timestamp. Unit/program progress is COMPUTED over the hierarchy
  * (relationships.php), not stored: that way it never drifts if the curriculum
  * changes.
  *
  * Includes:
  *   - Completion CRUD (mark / unmark / query).
- *   - Per-week and per-program progress computation.
+ *   - Per-unit and per-program progress computation.
  *   - REST endpoint for the "mark as complete" button.
  *   - Render helpers (button + bar) and asset loading.
  *   - Participant progress view for instructors.
@@ -218,14 +218,14 @@ function pcle_progress_struct( $completed, $total ) {
 }
 
 /**
- * Progress of a week (its published modules).
+ * Progress of a unit (its published modules).
  *
- * @param int      $week_id Week ID.
+ * @param int      $unit_id Unit ID.
  * @param int|null $user_id User ID (defaults to the current user).
  * @return array{completed:int, total:int, percent:int}
  */
-function pcle_get_week_progress( $week_id, $user_id = null ) {
-	$modules   = pcle_get_modules( $week_id );
+function pcle_get_unit_progress( $unit_id, $user_id = null ) {
+	$modules   = pcle_get_modules( $unit_id );
 	$completed = pcle_get_completed_modules( $user_id );
 
 	$done = 0;
@@ -238,7 +238,7 @@ function pcle_get_week_progress( $week_id, $user_id = null ) {
 }
 
 /**
- * Progress of a whole program (all modules of all its weeks).
+ * Progress of a whole program (all modules of all its units).
  *
  * @param int      $program_id Program ID.
  * @param int|null $user_id    User ID (defaults to the current user).
@@ -256,7 +256,7 @@ function pcle_get_program_progress( $program_id, $user_id = null ) {
 /**
  * Every module ID under a program, in curriculum order.
  *
- * Walking program → weeks → modules is the expensive part of any progress
+ * Walking program → units → modules is the expensive part of any progress
  * computation, and it does not depend on the user. Pulled out so a report
  * over a cohort walks the hierarchy once instead of once per participant.
  *
@@ -266,8 +266,8 @@ function pcle_get_program_progress( $program_id, $user_id = null ) {
 function pcle_get_program_module_ids( $program_id ) {
 	$ids = array();
 
-	foreach ( pcle_get_weeks( $program_id ) as $week ) {
-		foreach ( pcle_get_modules( $week->ID ) as $module ) {
+	foreach ( pcle_get_units( $program_id ) as $unit ) {
+		foreach ( pcle_get_modules( $unit->ID ) as $module ) {
 			$ids[] = (int) $module->ID;
 		}
 	}
@@ -350,15 +350,15 @@ function pcle_rest_toggle_progress( $request ) {
 		pcle_unmark_module_complete( $module_id );
 	}
 
-	// Recompute the parent week's progress to refresh the UI.
-	$week_id  = pcle_get_parent_id( $module_id );
-	$progress = $week_id ? pcle_get_week_progress( $week_id ) : pcle_progress_struct( 0, 0 );
+	// Recompute the parent unit's progress to refresh the UI.
+	$unit_id  = pcle_get_parent_id( $module_id );
+	$progress = $unit_id ? pcle_get_unit_progress( $unit_id ) : pcle_progress_struct( 0, 0 );
 
 	return rest_ensure_response(
 		array(
 			'module_id'     => $module_id,
 			'completed'     => pcle_is_module_complete( $module_id ),
-			'week_progress' => pcle_rest_shape_progress( $progress ),
+			'unit_progress' => pcle_rest_shape_progress( $progress ),
 		)
 	);
 }
@@ -445,7 +445,7 @@ add_shortcode( 'pcle_module_progress', 'pcle_module_progress_shortcode' );
  * Enqueues the progress JS/CSS on the relevant frontend views.
  */
 function pcle_enqueue_progress_assets() {
-	$is_cle_view = is_singular( array( 'pcle_module', 'pcle_week', 'pcle_program' ) );
+	$is_cle_view = is_singular( array( 'pcle_module', 'pcle_unit', 'pcle_program' ) );
 
 	// Also on any page that uses the "my-programs" block/shortcode.
 	$content      = (string) get_post_field( 'post_content', get_queried_object_id() );

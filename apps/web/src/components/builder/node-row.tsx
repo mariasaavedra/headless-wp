@@ -217,7 +217,7 @@ export default function NodeRow({
               <input type="hidden" name="id" value={node.id} />
               {/*
                 The server refuses an unrequested cascade; confirming here is
-                what turns it on, so a stray click cannot take a week's
+                what turns it on, so a stray click cannot take a unit's
                 contents with it.
               */}
               <input

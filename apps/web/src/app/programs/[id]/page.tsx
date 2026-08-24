@@ -4,7 +4,7 @@ import { renderAccessError } from "@/components/access-error";
 import Breadcrumbs from "@/components/breadcrumbs";
 import PageShell from "@/components/page-shell";
 import ProgressBar from "@/components/progress-bar";
-import WeekSection from "@/components/week-section";
+import UnitSection from "@/components/unit-section";
 import WpContent from "@/components/wp-content";
 import { isAuthenticated } from "@/lib/auth";
 import { decodeEntities } from "@/lib/html";
@@ -47,14 +47,14 @@ export default async function ProgramPage({
 
       <WpContent html={program.content} className="mt-8" />
 
-      {program.weeks.length === 0 ? (
+      {program.units.length === 0 ? (
         <p className="mt-8 text-zinc-600">
-          This programme has no published weeks yet.
+          This programme has no published units yet.
         </p>
       ) : (
         <div className="mt-8 space-y-6">
-          {program.weeks.map((week) => (
-            <WeekSection key={week.id} week={week} />
+          {program.units.map((unit) => (
+            <UnitSection key={unit.id} unit={unit} />
           ))}
         </div>
       )}

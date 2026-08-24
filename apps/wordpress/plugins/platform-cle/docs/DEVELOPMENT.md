@@ -54,7 +54,7 @@ MYSQL_PWD="$PW" "$MYSQL" -u root --socket="$SOCK" local -e "SELECT option_value 
 ## Included scripts
 
 ### `plugin/bin/seed-demo.php`
-Creates a full sample program (1 Program, 4 Weeks, 9 Modules, scenarios, templates, events, 2 Case Updates). **Idempotent**: it marks everything with the `_pcle_demo` meta and clears previous demos before recreating.
+Creates a full sample program (1 Program, 4 Units, 9 Modules, scenarios, templates, events, 2 Case Updates). **Idempotent**: it marks everything with the `_pcle_demo` meta and clears previous demos before recreating.
 
 ```bash
 "$PHP" -d mysqli.default_socket="$SOCK" wp-content/plugins/platform-cle/bin/seed-demo.php
