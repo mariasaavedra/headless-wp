@@ -10,7 +10,9 @@
  *   - GET /platform-cle/v1/my-training     : programs available to the current user.
  *   - GET /platform-cle/v1/programs/<id>   : one program with its units and modules.
  *   - GET /platform-cle/v1/units/<id>      : one unit with its modules and events.
- *   - GET /platform-cle/v1/modules/<id>    : one module with its scenarios and templates.
+ *   - GET /platform-cle/v1/modules/<id>    : one module with its scenarios, templates and quizzes.
+ *   - GET /platform-cle/v1/quizzes/<id>    : one quiz to sit, with the answers stripped out.
+ *   - POST /platform-cle/v1/quizzes/<id>/attempts : sit it; the server marks and records.
  *
  * These exist instead of walking /wp/v2/pcle_* from the client for two
  * reasons. The client would otherwise need one request per level and would
@@ -258,6 +260,7 @@ function pcle_register_curriculum_routes() {
 		'programs' => array( 'pcle_program', 'pcle_rest_get_program' ),
 		'units'    => array( 'pcle_unit', 'pcle_rest_get_unit' ),
 		'modules'  => array( 'pcle_module', 'pcle_rest_get_module' ),
+		'quizzes'  => array( 'pcle_quiz', 'pcle_rest_get_quiz' ),
 	);
 
 	foreach ( $routes as $slug => list( $post_type, $callback ) ) {
@@ -280,6 +283,33 @@ function pcle_register_curriculum_routes() {
 			)
 		);
 	}
+
+	/*
+	 * Submitting goes through the same per-programme guard as reading. It is
+	 * registered separately only because it is the one write among them.
+	 */
+	register_rest_route(
+		'platform-cle/v1',
+		'/quizzes/(?P<id>\d+)/attempts',
+		array(
+			'methods'             => 'POST',
+			'callback'            => 'pcle_rest_submit_quiz',
+			'permission_callback' => function ( $request ) {
+				return pcle_rest_guard_item( $request, 'pcle_quiz' );
+			},
+			'args'                => array(
+				'id'      => array(
+					'required'          => true,
+					'type'              => 'integer',
+					'sanitize_callback' => 'absint',
+				),
+				'answers' => array(
+					'required' => true,
+					'type'     => 'object',
+				),
+			),
+		)
+	);
 }
 add_action( 'rest_api_init', 'pcle_register_curriculum_routes' );
 
@@ -352,6 +382,92 @@ function pcle_rest_get_module( $request ) {
 			'program'   => pcle_rest_shape_ref( $program ),
 			'scenarios' => array_map( $shape_child, pcle_get_scenarios( $module->ID ) ),
 			'templates' => array_map( $shape_child, pcle_get_templates( $module->ID ) ),
+			/*
+			 * Deliberately not $shape_child: a quiz's content is its
+			 * questions, and this listing is only meant to say that a quiz
+			 * exists and where the reader stands with it.
+			 */
+			'quizzes'   => array_map( 'pcle_rest_shape_quiz_summary', pcle_get_children( $module->ID, 'pcle_quiz' ) ),
 		)
 	);
+}
+
+/**
+ * Shapes a quiz for a listing: enough to link to it, nothing to answer it with.
+ *
+ * @param WP_Post $quiz Quiz.
+ * @return array
+ */
+function pcle_rest_shape_quiz_summary( $quiz ) {
+	return array(
+		'id'        => (int) $quiz->ID,
+		'title'     => get_the_title( $quiz ),
+		'questions' => count( pcle_get_quiz_questions( $quiz->ID ) ),
+		'required'  => pcle_quiz_gates_completion( $quiz->ID ),
+		'passed'    => pcle_user_passed_quiz( $quiz->ID ),
+	);
+}
+
+/**
+ * GET /quizzes/<id> — a quiz to sit.
+ *
+ * The questions come from pcle_quiz_questions_for_taking(), which is the only
+ * shape of this data that may reach a participant: no correct flags, no
+ * per-question feedback. Marking happens on submission, in the server, and the
+ * result of that is where feedback comes from.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return WP_REST_Response
+ */
+function pcle_rest_get_quiz( $request ) {
+	$quiz    = get_post( (int) $request['id'] );
+	$module  = get_post( pcle_get_parent_id( $quiz->ID ) );
+	$program = get_post( pcle_get_program_for_post( $quiz->ID ) );
+
+	return rest_ensure_response(
+		array(
+			'id'        => (int) $quiz->ID,
+			'title'     => get_the_title( $quiz ),
+			'content'   => pcle_rest_rendered_content( $quiz ),
+			'questions' => pcle_quiz_questions_for_taking( $quiz->ID ),
+			'pass_mark' => pcle_quiz_pass_mark( $quiz->ID ),
+			'required'  => pcle_quiz_gates_completion( $quiz->ID ),
+			'passed'    => pcle_user_passed_quiz( $quiz->ID ),
+			'attempts'  => pcle_get_quiz_attempts( $quiz->ID ),
+			'module'    => pcle_rest_shape_ref( $module ),
+			'program'   => pcle_rest_shape_ref( $program ),
+		)
+	);
+}
+
+/**
+ * POST /quizzes/<id>/attempts — sit the quiz.
+ *
+ * Always for the current user, never another: marking somebody else's paper is
+ * not something this route can be asked to do.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return WP_REST_Response|WP_Error
+ */
+function pcle_rest_submit_quiz( $request ) {
+	$result = pcle_record_quiz_attempt( (int) $request['id'], $request->get_param( 'answers' ) );
+
+	if ( is_wp_error( $result ) ) {
+		return $result;
+	}
+
+	/*
+	 * The module's own state travels back with the result. Passing a required
+	 * quiz is the moment a module becomes completable, and the screen that
+	 * asked the question is the one that has to stop saying otherwise.
+	 */
+	$module_id = pcle_get_parent_id( (int) $request['id'] );
+
+	$result['module'] = array(
+		'id'        => (int) $module_id,
+		'blockers'  => pcle_module_completion_blockers( $module_id ),
+		'completed' => pcle_is_module_complete( $module_id ),
+	);
+
+	return rest_ensure_response( $result );
 }

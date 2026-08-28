@@ -6,6 +6,43 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and the proje
 
 ## [Unreleased] — Pilot-ready hardening
 
+### Added
+
+- **Quizzes.** A `pcle_quiz` post type hanging off a module, alongside practice
+  scenarios and templates, with authoring in the builder, server-side marking,
+  and a per-quiz switch making a pass required to complete the module.
+
+  The questions live in post meta rather than a table, following the rule the
+  rest of this schema already follows: tables are for what has to be queried,
+  and a question is never read except as part of its quiz. Attempts are the
+  opposite and get a table (schema v4) — with no UNIQUE key on the natural
+  pair, because a participant may sit a quiz more than once and each sitting is
+  its own record.
+
+  The correct answers are kept away from participants by construction rather
+  than by a guard. The questions meta is deliberately not passed through
+  `register_post_meta()` and its key is underscore-prefixed, so it is absent
+  from `/wp/v2` and from the editor's custom-fields box by default. The single
+  path to a client is `pcle_quiz_questions_for_taking()`, which strips the
+  correct flags and the per-question feedback. This plugin has shipped the
+  "one route was guarded, the other was not" bug twice; a right answer is the
+  first content here worth stealing, so it is not guarded — it is absent.
+
+  Marking is all-or-nothing on multiple-answer questions and free text is not
+  scored at all. Both are deliberate: partial credit and machine-marked prose
+  are grading rules somebody has to decide on, and inventing either would put a
+  number nobody agreed to on a record that may support CLE credit. Grades are
+  stored with the attempt rather than recomputed on read, so editing a quiz
+  cannot retroactively change what somebody scored.
+
+  Gating defaults to off, per quiz, for the reason credit hours are not derived
+  from attendance: whether an assessment is required is an accreditation
+  question, answered per course by whoever holds the paperwork. Draft quizzes
+  never gate, so an author cannot freeze a cohort by starting to write one. The
+  check lives in `pcle_mark_module_complete()`, the single place completion is
+  recorded, rather than in the REST callback — a gate only one caller honours
+  is not a gate.
+
 ### Changed
 
 - **"Week" is now "Unit".** The level between a programme and its modules was

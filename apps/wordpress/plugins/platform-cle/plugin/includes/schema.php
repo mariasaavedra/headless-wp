@@ -29,7 +29,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * deployed by copying files, so waiting for activation would leave sites on
  * the old schema indefinitely.
  */
-const PCLE_DB_VERSION = 3;
+const PCLE_DB_VERSION = 4;
 
 /** Option holding the installed schema version. */
 const PCLE_DB_VERSION_OPTION = 'pcle_db_version';
@@ -62,6 +62,16 @@ function pcle_progress_table() {
 function pcle_attendance_table() {
 	global $wpdb;
 	return $wpdb->prefix . 'pcle_attendance';
+}
+
+/**
+ * Fully-qualified name of the quiz attempts table.
+ *
+ * @return string
+ */
+function pcle_quiz_attempts_table() {
+	global $wpdb;
+	return $wpdb->prefix . 'pcle_quiz_attempts';
 }
 
 /**
@@ -130,6 +140,36 @@ function pcle_install_schema() {
 			PRIMARY KEY  (id),
 			UNIQUE KEY user_event (user_id,event_id),
 			KEY event_id (event_id)
+		) {$charset_collate};"
+	);
+
+	/*
+	 * Quiz attempts. The odd one out among these tables: no UNIQUE key on the
+	 * natural pair, because a participant may sit a quiz more than once and
+	 * each sitting is its own record. "Did they pass" is therefore a question
+	 * about the set, not about a row — see pcle_user_passed_quiz().
+	 *
+	 * `answers` is the submitted JSON, kept whole. Marking is recomputed from
+	 * the questions at submission time and stored alongside, so a later edit
+	 * to the quiz cannot retroactively change somebody's grade; and keeping
+	 * the raw answers means free-text responses survive for an instructor to
+	 * read, and item-level analysis stays possible without a second table.
+	 */
+	$attempts = pcle_quiz_attempts_table();
+
+	dbDelta(
+		"CREATE TABLE {$attempts} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			user_id bigint(20) unsigned NOT NULL,
+			quiz_id bigint(20) unsigned NOT NULL,
+			submitted_at datetime NULL DEFAULT NULL,
+			score smallint(5) unsigned NOT NULL DEFAULT 0,
+			max_score smallint(5) unsigned NOT NULL DEFAULT 0,
+			passed tinyint(1) NOT NULL DEFAULT 0,
+			answers longtext NULL,
+			PRIMARY KEY  (id),
+			KEY user_quiz (user_id,quiz_id),
+			KEY quiz_id (quiz_id)
 		) {$charset_collate};"
 	);
 }
@@ -234,7 +274,7 @@ function pcle_delete_user_records( $user_id ) {
 		return;
 	}
 
-	foreach ( array( pcle_enrollments_table(), pcle_progress_table(), pcle_attendance_table() ) as $table ) {
+	foreach ( array( pcle_enrollments_table(), pcle_progress_table(), pcle_attendance_table(), pcle_quiz_attempts_table() ) as $table ) {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom table.
 		$wpdb->delete( $table, array( 'user_id' => $user_id ), array( '%d' ) );
 	}
@@ -277,6 +317,7 @@ function pcle_delete_post_records( $post_id ) {
 		array( pcle_enrollments_table(), 'program_id' ),
 		array( pcle_progress_table(), 'module_id' ),
 		array( pcle_attendance_table(), 'event_id' ),
+		array( pcle_quiz_attempts_table(), 'quiz_id' ),
 	);
 
 	foreach ( $targets as $target ) {
