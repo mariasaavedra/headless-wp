@@ -16,16 +16,20 @@ Tailwind.
 - [Dropdown Menu](https://ui.shadcn.com/docs/components/dropdown-menu) — `components/dropdown-menu.tsx`
 - [Input](https://ui.shadcn.com/docs/components/input) — `components/input.tsx`
 - [Item](https://ui.shadcn.com/docs/components/item) — `components/item.tsx`
+- [Label](https://ui.shadcn.com/docs/components/label) — `components/label.tsx`
 - [Scroll Area](https://ui.shadcn.com/docs/components/scroll-area) — `components/scroll-area.tsx`
 - [Separator](https://ui.shadcn.com/docs/components/separator) — `components/separator.tsx`
 - [Sheet](https://ui.shadcn.com/docs/components/sheet) — `components/sheet.tsx`
 - [Sidebar](https://ui.shadcn.com/docs/components/sidebar) — `components/sidebar.tsx`
 - [Skeleton](https://ui.shadcn.com/docs/components/skeleton) — `components/skeleton.tsx`
 - [Switch](https://ui.shadcn.com/docs/components/switch) — `components/switch.tsx`
+- [Textarea](https://ui.shadcn.com/docs/components/textarea) — `components/textarea.tsx`
 - [Toggle Group](https://ui.shadcn.com/docs/components/toggle-group) — `components/toggle-group.tsx`
 - [Toggle](https://ui.shadcn.com/docs/components/toggle) — `components/toggle.tsx`
 - [Tooltip](https://ui.shadcn.com/docs/components/tooltip) — `components/tooltip.tsx`
-- `Questionnaire` — `components/questionnaire.tsx` (custom, not a shadcn primitive)
+- [Questionnaire](https://ui.shadcn.com/docs/components/base/questionnaire) — `components/questionnaire.tsx`
+  (wraps the `@shadcn/react/questionnaire` primitive rather than Base UI, which is
+  why its dependency is listed separately below)
 
 Full component index: [ui.shadcn.com/docs/components](https://ui.shadcn.com/docs/components)
 

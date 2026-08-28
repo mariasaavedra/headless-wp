@@ -113,8 +113,37 @@ type NodeType =
   | "pcle_unit"
   | "pcle_module"
   | "pcle_scenario"
+  | "pcle_quiz"
   | "pcle_template"
   | "pcle_event";
+
+/** How a quiz question is answered, and whether the server can mark it. */
+type QuizQuestionType = "single" | "multiple" | "text";
+
+/**
+ * One option of a choice question.
+ *
+ * `correct` is present only in the authoring shape. The endpoint a participant
+ * reads strips it, along with the per-question feedback — see
+ * `pcle_quiz_questions_for_taking()` in the plugin.
+ */
+type QuizChoice = {
+  key: string;
+  text: string;
+  correct: boolean;
+};
+
+/** One question, as its author sees it. */
+type QuizQuestion = {
+  key: string;
+  type: QuizQuestionType;
+  prompt: string;
+  help: string;
+  /** Shown after answering, so it often gives the answer away. */
+  feedback: string;
+  required: boolean;
+  choices: QuizChoice[];
+};
 
 /** A programme as it appears in the builder's list. */
 type AuthoringProgram = {
@@ -152,6 +181,10 @@ type TreeNode = {
   starts_at?: string;
   /** Scenarios only. */
   has_model_answer?: boolean;
+  /** Quizzes only: how many questions have been written. */
+  questions?: number;
+  /** Quizzes only: whether passing is required to complete the module. */
+  gates_completion?: boolean;
   /** Programmes only. */
   credits?: CreditHours[];
 };
@@ -163,18 +196,28 @@ type TreeNode = {
  * markup. `editable` is false when the stored content contains something the
  * builder cannot express, in which case it must be shown read-only.
  */
-type NodeDetail = TreeNode & {
+type NodeDetail = Omit<TreeNode, "questions"> & {
   body: string;
   editable: boolean;
   excerpt: string;
   rendered: string;
   parent: Ref | null;
   program: Ref | null;
+  /**
+   * Quizzes only. The tree carries a count; opening the node carries the
+   * questions themselves, answers included, because this route is staff-only.
+   */
+  questions?: QuizQuestion[];
+  pass_mark?: number;
+  max_score?: number;
 };
 
 export type {
   Me,
   NodeType,
+  QuizQuestionType,
+  QuizChoice,
+  QuizQuestion,
   AuthoringProgram,
   CreditHours,
   TreeNode,

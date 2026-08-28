@@ -9,6 +9,7 @@ import { Input } from "@pcle/ui/components/input";
 import { renderAccessError } from "@/components/access-error";
 import Breadcrumbs from "@/components/breadcrumbs";
 import ActionForm from "@/components/builder/action-form";
+import QuizEditor from "@/components/builder/quiz-editor";
 import { NODE_BADGES } from "@/components/builder/node-labels";
 import PageShell from "@/components/page-shell";
 import WpContent from "@/components/wp-content";
@@ -99,7 +100,13 @@ export default async function BuilderNodePage({
         )}
       </div>
 
-      {node.editable ? (
+      {/*
+        A quiz is authored as questions, not prose, so it gets its own editor
+        rather than the body field every other type shares.
+      */}
+      {node.type === "pcle_quiz" ? (
+        <QuizEditor node={node} />
+      ) : node.editable ? (
         <ActionForm action={saveBodyAction} className="mt-8">
           <Card className="p-6">
             <CardContent className="p-0">
@@ -156,27 +163,29 @@ export default async function BuilderNodePage({
         </div>
       )}
 
-      <section className="mt-10">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
-          As a participant sees it
-        </h2>
+      {node.type !== "pcle_quiz" && (
+        <section className="mt-10">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
+            As a participant sees it
+          </h2>
 
-        {/*
-          The preview is the server's own rendering of the stored content — the
-          same call the participant screens make. Rendering it a second way
-          here would make it a preview of something else the moment the two
-          drift.
-        */}
-        <Card className="mt-3 p-6">
-          <CardContent className="p-0">
-            {node.rendered.trim() ? (
-              <WpContent html={node.rendered} />
-            ) : (
-              <p className="text-sm text-zinc-500">Nothing written yet.</p>
-            )}
-          </CardContent>
-        </Card>
-      </section>
+          {/*
+            The preview is the server's own rendering of the stored content —
+            the same call the participant screens make. Rendering it a second
+            way here would make it a preview of something else the moment the
+            two drift.
+          */}
+          <Card className="mt-3 p-6">
+            <CardContent className="p-0">
+              {node.rendered.trim() ? (
+                <WpContent html={node.rendered} />
+              ) : (
+                <p className="text-sm text-zinc-500">Nothing written yet.</p>
+              )}
+            </CardContent>
+          </Card>
+        </section>
+      )}
 
       {node.program && (
         <Button
