@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { PlusIcon } from "lucide-react";
 
 import { Badge } from "@pcle/ui/components/badge";
 import { Button } from "@pcle/ui/components/button";
@@ -50,12 +51,14 @@ export default async function BuilderPage() {
         accreditation paperwork rather than out of someone's head at the moment
         of naming it.
       */}
-      <details className="mt-6 rounded-lg border border-zinc-200 bg-white p-4 text-sm">
-        <summary className="cursor-pointer font-medium text-zinc-700">
-          New programme
-        </summary>
-
-        <ActionForm action={createProgramAction} className="mt-3 flex gap-2">
+      {/*
+        A programme is named up front, unlike everything else in the builder:
+        it has no parent to be created inside, and no other screen where the
+        name could be corrected later. Everything below it is created with one
+        click and renamed where it is edited.
+      */}
+      <Card className="mt-6 p-4">
+        <ActionForm action={createProgramAction} className="flex flex-wrap gap-2">
           <Input
             type="text"
             name="title"
@@ -63,9 +66,12 @@ export default async function BuilderPage() {
             aria-label="Title for the new programme"
             className="w-96 max-w-full"
           />
-          <Button type="submit">Create</Button>
+          <Button type="submit">
+            <PlusIcon className="size-4" />
+            New programme
+          </Button>
         </ActionForm>
-      </details>
+      </Card>
 
       {programs.length === 0 ? (
         <p className="mt-8 text-zinc-600">There are no programmes yet.</p>
