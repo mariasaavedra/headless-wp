@@ -7,17 +7,27 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: hsl(0 0% 3.9%);
-    --foreground: hsl(0 0% 98%);
-  }
-}
+/*
+ * There is deliberately no `prefers-color-scheme` block here.
+ *
+ * There used to be, and it flipped exactly two tokens — --background and
+ * --foreground — while the other twenty-five stayed light. On a machine set to
+ * dark that produced white body text on surfaces that were still white, and
+ * shortcut badges drawn `bg-background` (black) over `text-muted-foreground`
+ * (dark grey). Anything hardcoded to `zinc-*` kept working, which is why it
+ * stayed hidden until a screen relied on inherited colour.
+ *
+ * The design system in @pcle/ui is class-based — `@custom-variant dark
+ * (&:is(.dark *))` — so a real dark mode means putting `.dark` on <html> and
+ * getting the whole token set at once. Every token now has a dark value (see
+ * libs/ui/src/styles/globals.css), so that is a small change when someone
+ * wants it. Half of it, applied by media query, is worse than none.
+ */
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
 }
 
 /*

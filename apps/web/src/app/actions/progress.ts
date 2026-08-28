@@ -2,10 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 
-import { setModuleCompletion } from "@/lib/wordpress";
+import { setModuleCompletion, WordPressApiError } from "@/lib/wordpress";
 
 type ProgressActionState = {
   error?: string;
+  /** Quizzes standing between the reader and completing this module. */
+  blockedBy?: { id: number; title: string }[];
 };
 
 /**
@@ -32,7 +34,26 @@ async function toggleModuleAction(
 
   try {
     await setModuleCompletion(moduleId, completed);
-  } catch {
+  } catch (error) {
+    /*
+     * A required quiz that has not been passed is a refusal with a reason, not
+     * a failure to save. Reporting it as "try again" would send the reader
+     * round a loop that cannot succeed.
+     */
+    if (
+      error instanceof WordPressApiError &&
+      error.code === "pcle_quiz_required"
+    ) {
+      const data = error.data as
+        | { quizzes?: { id: number; title: string }[] }
+        | undefined;
+
+      return {
+        error: "You need to pass this module's quiz first.",
+        blockedBy: data?.quizzes ?? [],
+      };
+    }
+
     return { error: "Your progress could not be saved. Please try again." };
   }
 

@@ -361,18 +361,34 @@ function readQuestions(formData: FormData): QuizQuestion[] {
     });
 }
 
+/**
+ * Placeholder text for something just added.
+ *
+ * Not decoration. The server drops a question with no prompt and a choice with
+ * no text — correctly, since neither is answerable — so a genuinely blank
+ * addition would be discarded on the very save that created it, and the button
+ * would appear to do nothing. Adding something has to produce something.
+ *
+ * The same answer the authoring API already gives for a node created without a
+ * name, which it stores as "(untitled)" rather than refusing.
+ */
+const NEW_QUESTION_PROMPT = "New question";
+const NEW_CHOICE_TEXT = "New answer";
+
+function blankChoice() {
+  return { key: "", text: NEW_CHOICE_TEXT, correct: false };
+}
+
 function blankQuestion(): QuizQuestion {
   return {
     key: "",
     type: "single",
-    prompt: "",
+    prompt: NEW_QUESTION_PROMPT,
     help: "",
     feedback: "",
     required: false,
-    choices: [
-      { key: "", text: "", correct: false },
-      { key: "", text: "", correct: false },
-    ],
+    // Two, because one option is not a question and the server enforces that.
+    choices: [blankChoice(), blankChoice()],
   };
 }
 
@@ -412,7 +428,7 @@ async function saveQuizAction(
   }
 
   if (verb === "add_choice" && questions[Number(first)]) {
-    questions[Number(first)].choices.push({ key: "", text: "", correct: false });
+    questions[Number(first)].choices.push(blankChoice());
   }
 
   if (verb === "remove_choice" && questions[Number(first)]) {

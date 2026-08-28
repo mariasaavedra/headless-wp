@@ -6,7 +6,9 @@ import type {
   NodeDetail,
   NodeType,
   Program,
+  QuizForTaking,
   QuizQuestion,
+  QuizResult,
   TrainingProgram,
   TreeNode,
   UnitDetail,
@@ -23,11 +25,17 @@ class WordPressAuthError extends Error {
 
 class WordPressApiError extends Error {
   status: number;
+  /** WordPress's own error code, e.g. `pcle_quiz_required`. */
+  code?: string;
+  /** The `data` payload WordPress attached, when it sent one. */
+  data?: unknown;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, code?: string, data?: unknown) {
     super(message);
     this.name = "WordPressApiError";
     this.status = status;
+    this.code = code;
+    this.data = data;
   }
 }
 
@@ -61,17 +69,27 @@ async function wordpressFetch(
     cache: options.cache ?? "no-store",
   });
 
-  if (response.status === 401 || response.status === 403) {
-    throw new WordPressApiError(
-      "WordPress rejected the request as unauthorized.",
-      response.status
-    );
-  }
-
   if (!response.ok) {
+    /*
+     * A refusal often carries the reason: which quiz is blocking a module,
+     * which required questions were left blank. Reading it here is what lets
+     * an action say something true to the participant instead of "try again".
+     */
+    let body: { code?: string; data?: unknown } | null = null;
+
+    try {
+      body = (await response.json()) as { code?: string; data?: unknown };
+    } catch {
+      body = null;
+    }
+
     throw new WordPressApiError(
-      `WordPress request to ${path} failed.`,
-      response.status
+      response.status === 401 || response.status === 403
+        ? "WordPress rejected the request as unauthorized."
+        : `WordPress request to ${path} failed.`,
+      response.status,
+      body?.code,
+      body?.data
     );
   }
 
@@ -185,6 +203,31 @@ async function setModuleCompletion(
  * The rest of the app assumes a participant; this is what lets it offer the
  * builder to the people who have one and nobody else.
  */
+async function getQuiz(id: number): Promise<QuizForTaking> {
+  return wordpressFetch(`/platform-cle/v1/quizzes/${id}`, {
+    auth: true,
+  }) as Promise<QuizForTaking>;
+}
+
+/**
+ * Sits a quiz.
+ *
+ * The answers go up as they were given; the marking comes back from the
+ * server. Nothing here knows which answer is right, and that is the point —
+ * the client is never sent enough to work it out.
+ */
+async function submitQuizAttempt(
+  id: number,
+  answers: Record<string, string | string[]>
+): Promise<QuizResult> {
+  return wordpressFetch(`/platform-cle/v1/quizzes/${id}/attempts`, {
+    auth: true,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ answers }),
+  }) as Promise<QuizResult>;
+}
+
 async function getMe(): Promise<Me> {
   return wordpressFetch("/platform-cle/v1/me", { auth: true }) as Promise<Me>;
 }
@@ -288,6 +331,8 @@ export {
   getModule,
   setModuleCompletion,
   getMe,
+  getQuiz,
+  submitQuizAttempt,
   getAuthoringPrograms,
   getNode,
   getProgramTree,
