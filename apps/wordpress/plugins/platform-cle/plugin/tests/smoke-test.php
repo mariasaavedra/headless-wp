@@ -1592,9 +1592,172 @@ pcle_eq( $taking[0]['choices'][0]['text'], 'The facility warden', 'the participa
 pcle_eq( pcle_quiz_gates_completion( $quiz ), false, 'a quiz does not gate its module by default' );
 update_post_meta( $quiz, PCLE_QUIZ_GATES_META, 1 );
 pcle_eq( pcle_quiz_gates_completion( $quiz ), true, 'gating can be switched on per quiz' );
+
+/*
+ * Switched back off before moving on. This fixture hangs off $module, which
+ * later sections complete, and a quiz left gating would block them for the
+ * rest of the run — the gating tests below build their own fixture for that.
+ */
+delete_post_meta( $quiz, PCLE_QUIZ_GATES_META );
+pcle_eq( pcle_quiz_gates_completion( $quiz ), false, 'gating can be switched back off' );
 pcle_eq( pcle_quiz_pass_mark( $quiz ), PCLE_QUIZ_DEFAULT_PASS_MARK, 'pass mark defaults when unset' );
 pcle_eq( pcle_sanitize_quiz_pass_mark( 0 ), 1, 'pass mark cannot be zero' );
 pcle_eq( pcle_sanitize_quiz_pass_mark( 250 ), 100, 'pass mark is capped at 100' );
+
+/* ------------------------------------------------------------------ */
+/* Quiz marking and attempts                                          */
+/* ------------------------------------------------------------------ */
+pcle_section( '# Quiz marking' );
+
+$marked_quiz = pcle_make_post( 'pcle_quiz', 'TEST Marked Quiz', array( '_pcle_module_id' => $module2 ) );
+$created_posts[] = $marked_quiz;
+
+pcle_set_quiz_questions(
+	$marked_quiz,
+	array(
+		array(
+			'key'     => 'respondent',
+			'prompt'  => 'Proper respondent?',
+			'type'    => 'single',
+			'choices' => array(
+				array( 'key' => 'warden', 'text' => 'The facility warden', 'correct' => true ),
+				array( 'key' => 'ag', 'text' => 'The Attorney General' ),
+			),
+		),
+		array(
+			'key'     => 'grounds',
+			'prompt'  => 'Valid grounds?',
+			'type'    => 'multiple',
+			'choices' => array(
+				array( 'key' => 'prolonged', 'text' => 'Prolonged detention', 'correct' => true ),
+				array( 'key' => 'unlawful', 'text' => 'Unlawful custody', 'correct' => true ),
+				array( 'key' => 'venue', 'text' => 'Venue dislike' ),
+			),
+		),
+		array( 'key' => 'thoughts', 'prompt' => 'What would you argue first?', 'type' => 'text' ),
+	)
+);
+
+// Marking is a pure function of the questions and the answers.
+$all_right = pcle_mark_quiz( $marked_quiz, array(
+	'respondent' => 'warden',
+	'grounds'    => array( 'unlawful', 'prolonged' ), // order must not matter
+	'thoughts'   => 'Custody first.',
+) );
+pcle_eq( $all_right['score'], 2, 'every scored question right gives full marks' );
+pcle_eq( $all_right['max_score'], 2, 'the free-text question is not part of the maximum' );
+pcle_eq( $all_right['percent'], 100, 'full marks is 100%' );
+pcle_eq( $all_right['passed'], true, 'full marks passes' );
+pcle_eq( $all_right['questions'][2]['scored'], false, 'free text is recorded but not scored' );
+pcle_eq( $all_right['questions'][2]['response'], 'Custody first.', 'the free-text response is kept' );
+
+// All-or-nothing on multiple answers: half right is not half a mark.
+$half = pcle_mark_quiz( $marked_quiz, array( 'respondent' => 'warden', 'grounds' => array( 'prolonged' ) ) );
+pcle_eq( $half['score'], 1, 'a partially correct multiple answer scores nothing' );
+pcle_eq( $half['percent'], 50, 'one of two scored questions is 50%' );
+pcle_eq( $half['passed'], false, '50% is below the default pass mark' );
+
+// Choosing a wrong extra is just as wrong as missing one.
+$extra = pcle_mark_quiz( $marked_quiz, array( 'grounds' => array( 'prolonged', 'unlawful', 'venue' ) ) );
+pcle_eq( $extra['questions'][1]['correct'], false, 'an extra wrong choice fails the question' );
+
+$unanswered = pcle_mark_quiz( $marked_quiz, array() );
+pcle_eq( $unanswered['score'], 0, 'answering nothing scores nothing' );
+pcle_eq( $unanswered['questions'][0]['answered'], false, 'an unanswered question is reported as such' );
+
+// Recording an attempt.
+$attempt = pcle_record_quiz_attempt( $marked_quiz, array( 'respondent' => 'warden', 'grounds' => array( 'prolonged', 'unlawful' ) ), $student );
+pcle_eq( is_wp_error( $attempt ), false, 'an attempt can be recorded' );
+pcle_eq( $attempt['passed'], true, 'the recorded attempt passed' );
+pcle_eq( count( pcle_get_quiz_attempts( $marked_quiz, $student ) ), 1, 'the attempt is stored' );
+pcle_eq( pcle_user_passed_quiz( $marked_quiz, $student ), true, 'the student has passed the quiz' );
+pcle_eq( pcle_user_passed_quiz( $marked_quiz, $outsider ), false, 'another user has not' );
+
+// Several sittings are all kept, and passing once is permanent.
+pcle_record_quiz_attempt( $marked_quiz, array( 'respondent' => 'ag' ), $student );
+pcle_eq( count( pcle_get_quiz_attempts( $marked_quiz, $student ) ), 2, 'a second attempt is kept alongside the first' );
+pcle_eq( pcle_user_passed_quiz( $marked_quiz, $student ), true, 'a later worse attempt does not undo having passed' );
+
+// A stored grade is a statement about a moment: editing the quiz afterwards
+// must not rewrite it.
+$before_edit = pcle_get_quiz_attempts( $marked_quiz, $student )[1]['score'];
+pcle_set_quiz_questions( $marked_quiz, array_merge(
+	pcle_get_quiz_questions( $marked_quiz ),
+	array( array( 'key' => 'extra', 'prompt' => 'Added later', 'type' => 'single',
+		'choices' => array( array( 'key' => 'a', 'text' => 'A', 'correct' => true ), array( 'key' => 'b', 'text' => 'B' ) ) ) )
+) );
+pcle_eq( pcle_get_quiz_attempts( $marked_quiz, $student )[1]['score'], $before_edit, 'editing the quiz does not change a recorded grade' );
+
+// Required questions are enforced server-side, not just by the browser.
+$req_quiz = pcle_make_post( 'pcle_quiz', 'TEST Required Quiz', array( '_pcle_module_id' => $module2 ) );
+$created_posts[] = $req_quiz;
+pcle_set_quiz_questions( $req_quiz, array(
+	array( 'key' => 'must', 'prompt' => 'Must answer', 'type' => 'single', 'required' => true,
+		'choices' => array( array( 'key' => 'a', 'text' => 'A', 'correct' => true ), array( 'key' => 'b', 'text' => 'B' ) ) ),
+) );
+$refused = pcle_record_quiz_attempt( $req_quiz, array(), $student );
+pcle_eq( is_wp_error( $refused ), true, 'a submission missing a required answer is refused' );
+pcle_eq( $refused->get_error_data()['status'], 400, 'the refusal is a 400' );
+pcle_eq( $refused->get_error_data()['missing'], array( 'must' ), 'the refusal names the missing question' );
+pcle_eq( count( pcle_get_quiz_attempts( $req_quiz, $student ) ), 0, 'a refused submission records nothing' );
+
+/*
+ * Attempts must not outlive what they point at. WordPress reuses
+ * auto-increment IDs, so an orphan row is not merely invisible — it can end up
+ * attached to a future quiz, or to a future user, as somebody else's grade.
+ */
+$doomed = pcle_make_post( 'pcle_quiz', 'TEST Doomed Quiz', array( '_pcle_module_id' => $module2 ) );
+pcle_set_quiz_questions( $doomed, array(
+	array( 'key' => 'a', 'prompt' => 'A?', 'type' => 'single',
+		'choices' => array( array( 'key' => 'y', 'text' => 'Y', 'correct' => true ), array( 'key' => 'n', 'text' => 'N' ) ) ),
+) );
+pcle_record_quiz_attempt( $doomed, array( 'a' => 'y' ), $student );
+pcle_eq( count( pcle_get_quiz_attempts( $doomed, $student ) ), 1, 'the doomed quiz has an attempt' );
+wp_delete_post( $doomed, true );
+pcle_eq( count( pcle_get_quiz_attempts( $doomed, $student ) ), 0, 'deleting a quiz removes its attempts' );
+
+// An empty quiz cannot be sat at all.
+$empty_quiz = pcle_make_post( 'pcle_quiz', 'TEST Empty Quiz', array( '_pcle_module_id' => $module2 ) );
+$created_posts[] = $empty_quiz;
+pcle_eq( is_wp_error( pcle_record_quiz_attempt( $empty_quiz, array(), $student ) ), true, 'a quiz with no questions cannot be sat' );
+
+/* ------------------------------------------------------------------ */
+/* Quiz gating of module completion                                   */
+/* ------------------------------------------------------------------ */
+pcle_section( '# Quiz gating' );
+
+$gate_quiz = pcle_make_post( 'pcle_quiz', 'TEST Gate Quiz', array( '_pcle_module_id' => $module ) );
+$created_posts[] = $gate_quiz;
+pcle_set_quiz_questions( $gate_quiz, array(
+	array( 'key' => 'q', 'prompt' => 'Gate question', 'type' => 'single',
+		'choices' => array( array( 'key' => 'right', 'text' => 'Right', 'correct' => true ), array( 'key' => 'wrong', 'text' => 'Wrong' ) ) ),
+) );
+
+pcle_unmark_module_complete( $module, $student );
+
+// Off by default: an ungated quiz changes nothing.
+pcle_eq( pcle_module_completion_blockers( $module, $student ), array(), 'an ungated quiz does not block completion' );
+pcle_eq( pcle_mark_module_complete( $module, $student ), true, 'the module completes while the quiz is ungated' );
+
+// Switched on, it blocks until passed.
+pcle_unmark_module_complete( $module, $student );
+update_post_meta( $gate_quiz, PCLE_QUIZ_GATES_META, 1 );
+pcle_eq( pcle_module_completion_blockers( $module, $student ), array( $gate_quiz ), 'a required unpassed quiz blocks completion' );
+pcle_eq( pcle_mark_module_complete( $module, $student ), false, 'the module refuses to complete' );
+pcle_eq( pcle_is_module_complete( $module, $student ), false, 'and nothing was recorded' );
+
+// A draft quiz must not be able to freeze a cohort.
+wp_update_post( array( 'ID' => $gate_quiz, 'post_status' => 'draft' ) );
+pcle_eq( pcle_module_completion_blockers( $module, $student ), array(), 'an unpublished required quiz does not block' );
+wp_update_post( array( 'ID' => $gate_quiz, 'post_status' => 'publish' ) );
+
+// Passing clears it.
+pcle_record_quiz_attempt( $gate_quiz, array( 'q' => 'right' ), $student );
+pcle_eq( pcle_module_completion_blockers( $module, $student ), array(), 'passing clears the blocker' );
+pcle_eq( pcle_mark_module_complete( $module, $student ), true, 'the module completes once the quiz is passed' );
+
+// The gate reaches program-level progress, not just the one call.
+pcle_eq( pcle_get_program_progress( $prog_a, $student )['completed'] > 0, true, 'programme progress reflects the completion' );
 
 /* ------------------------------------------------------------------ */
 /* Teardown                                                           */

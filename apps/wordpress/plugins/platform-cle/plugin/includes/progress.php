@@ -145,6 +145,21 @@ function pcle_mark_module_complete( $module_id, $user_id = null ) {
 		return false;
 	}
 
+	/*
+	 * A module carrying a quiz its author marked as required is not complete
+	 * until that quiz has been passed. The switch is per quiz and off by
+	 * default — see pcle_quiz_gates_completion() — so this changes nothing for
+	 * a programme that has not opted in.
+	 *
+	 * Enforced here rather than in the REST callback because this function is
+	 * the single place completion is recorded: the callback, the admin and any
+	 * future importer all come through it, and a gate that only one caller
+	 * honours is not a gate.
+	 */
+	if ( pcle_module_completion_blockers( $module_id, $user_id ) ) {
+		return false;
+	}
+
 	global $wpdb;
 
 	$table = pcle_progress_table();
@@ -345,6 +360,32 @@ function pcle_rest_toggle_progress( $request ) {
 	}
 
 	if ( $completed ) {
+		/*
+		 * Refusals here are not failures to save — they are the answer. A
+		 * participant who ticks "complete" on a module with an unpassed
+		 * required quiz has to be told why, or the button looks broken.
+		 */
+		$blockers = pcle_module_completion_blockers( $module_id );
+
+		if ( $blockers ) {
+			return new WP_Error(
+				'pcle_quiz_required',
+				__( 'This module has a quiz you need to pass first.', 'platform-cle' ),
+				array(
+					'status'  => 409,
+					'quizzes' => array_map(
+						function ( $quiz_id ) {
+							return array(
+								'id'    => $quiz_id,
+								'title' => get_the_title( $quiz_id ),
+							);
+						},
+						$blockers
+					),
+				)
+			);
+		}
+
 		pcle_mark_module_complete( $module_id );
 	} else {
 		pcle_unmark_module_complete( $module_id );

@@ -390,3 +390,349 @@ function pcle_quiz_max_score( $quiz_id ) {
 
 	return $max;
 }
+
+/* =========================================================================
+ * MARKING AND ATTEMPTS
+ * ========================================================================= */
+
+/**
+ * Normalises submitted answers into question key => value.
+ *
+ * A choice question answers with one or more choice keys; free text answers
+ * with a string. Anything else is discarded rather than coerced — a value of
+ * an unexpected shape is a client bug, and guessing at what it meant would put
+ * an invented answer into what becomes a compliance record.
+ *
+ * @param mixed $raw Answers as submitted.
+ * @return array<string,string|string[]>
+ */
+function pcle_sanitize_quiz_answers( $raw ) {
+	if ( ! is_array( $raw ) ) {
+		return array();
+	}
+
+	$answers = array();
+
+	foreach ( $raw as $key => $value ) {
+		$key = pcle_quiz_sanitize_key( $key, '' );
+
+		if ( '' === $key ) {
+			continue;
+		}
+
+		if ( is_array( $value ) ) {
+			$keys = array();
+
+			foreach ( $value as $item ) {
+				$item = pcle_quiz_sanitize_key( $item, '' );
+
+				if ( '' !== $item ) {
+					$keys[] = $item;
+				}
+			}
+
+			$answers[ $key ] = array_values( array_unique( $keys ) );
+			continue;
+		}
+
+		$answers[ $key ] = sanitize_textarea_field( (string) $value );
+	}
+
+	return $answers;
+}
+
+/**
+ * The required questions a submission has left unanswered.
+ *
+ * Checked on the server because the browser's own `required` is a convenience,
+ * not a guarantee: this endpoint is reachable without going through the form.
+ *
+ * @param int   $quiz_id Quiz post ID.
+ * @param array $answers Sanitised answers.
+ * @return string[] Question keys.
+ */
+function pcle_quiz_missing_required( $quiz_id, $answers ) {
+	$missing = array();
+
+	foreach ( pcle_get_quiz_questions( $quiz_id ) as $question ) {
+		if ( empty( $question['required'] ) ) {
+			continue;
+		}
+
+		$given = $answers[ $question['key'] ] ?? null;
+
+		if ( null === $given || '' === $given || array() === $given ) {
+			$missing[] = $question['key'];
+		}
+	}
+
+	return $missing;
+}
+
+/**
+ * Marks a submission against the quiz as it stands.
+ *
+ * Choice questions are all-or-nothing: a multiple-answer question is right
+ * when the set chosen is exactly the set that is correct. Partial credit was
+ * considered and left out, because "half the answers is half a mark" is a
+ * grading rule somebody has to decide on, and inventing one here would put a
+ * number nobody agreed to on a record that may support CLE credit. If a
+ * jurisdiction asks for partial credit, it belongs here, once, deliberately.
+ *
+ * Free text is recorded and returned but never scored — see
+ * pcle_quiz_question_types().
+ *
+ * @param int   $quiz_id Quiz post ID.
+ * @param array $answers Sanitised answers.
+ * @return array{score:int,max_score:int,percent:int,passed:bool,questions:array}
+ */
+function pcle_mark_quiz( $quiz_id, $answers ) {
+	$score   = 0;
+	$max     = 0;
+	$results = array();
+
+	foreach ( pcle_get_quiz_questions( $quiz_id ) as $question ) {
+		$key   = $question['key'];
+		$given = $answers[ $key ] ?? null;
+
+		$result = array(
+			'key'      => $key,
+			'type'     => $question['type'],
+			'prompt'   => $question['prompt'],
+			'answered' => null !== $given && '' !== $given && array() !== $given,
+			'feedback' => $question['feedback'],
+		);
+
+		if ( ! pcle_quiz_type_is_scored( $question['type'] ) ) {
+			// Recorded, shown back, and worth nothing.
+			$result['scored']   = false;
+			$result['response'] = is_string( $given ) ? $given : '';
+			$results[]          = $result;
+			continue;
+		}
+
+		++$max;
+
+		$correct_keys = array();
+		foreach ( $question['choices'] as $choice ) {
+			if ( $choice['correct'] ) {
+				$correct_keys[] = $choice['key'];
+			}
+		}
+
+		$chosen = is_array( $given ) ? $given : ( null === $given ? array() : array( (string) $given ) );
+
+		// Order is not part of an answer, so compare as sets.
+		sort( $chosen );
+		sort( $correct_keys );
+
+		$is_correct = $chosen === $correct_keys;
+		$score     += $is_correct ? 1 : 0;
+
+		$result['scored']       = true;
+		$result['correct']      = $is_correct;
+		$result['chosen']       = $chosen;
+		$result['correct_keys'] = $correct_keys;
+
+		$results[] = $result;
+	}
+
+	/*
+	 * A quiz of nothing but free text has no maximum, so there is nothing to
+	 * be below. Treating that as a pass is what stops such a quiz from
+	 * blocking a module forever when its author also ticked the gate — the
+	 * alternative is an unsatisfiable condition, which is worse than a
+	 * generous one.
+	 */
+	$percent = $max > 0 ? (int) floor( ( $score / $max ) * 100 ) : 100;
+
+	return array(
+		'score'     => $score,
+		'max_score' => $max,
+		'percent'   => $percent,
+		'passed'    => $percent >= pcle_quiz_pass_mark( $quiz_id ),
+		'questions' => $results,
+	);
+}
+
+/**
+ * Records one sitting of a quiz.
+ *
+ * The marking is stored with the attempt rather than recomputed on read. A
+ * quiz is editable, and an author who fixes a wrong answer next month must not
+ * silently change what somebody scored last month — a stored grade is a
+ * statement about a moment, and this is the table a credit audit would read.
+ *
+ * The number of attempts is not capped. A retry limit is a policy somebody has
+ * to set, not a default worth guessing at; every attempt is kept, so a limit
+ * can be applied later without having lost the history it would need.
+ *
+ * @param int      $quiz_id Quiz post ID.
+ * @param mixed    $raw     Answers as submitted.
+ * @param int|null $user_id User (defaults to the current one).
+ * @return array|WP_Error The marking, plus the attempt id.
+ */
+function pcle_record_quiz_attempt( $quiz_id, $raw, $user_id = null ) {
+	global $wpdb;
+
+	$user_id = pcle_resolve_user_id( $user_id );
+	$quiz_id = (int) $quiz_id;
+
+	if ( ! $user_id || 'pcle_quiz' !== get_post_type( $quiz_id ) ) {
+		return new WP_Error( 'pcle_invalid_quiz', __( 'Invalid quiz.', 'platform-cle' ), array( 'status' => 400 ) );
+	}
+
+	if ( ! pcle_get_quiz_questions( $quiz_id ) ) {
+		return new WP_Error( 'pcle_quiz_empty', __( 'This quiz has no questions yet.', 'platform-cle' ), array( 'status' => 409 ) );
+	}
+
+	$answers = pcle_sanitize_quiz_answers( $raw );
+	$missing = pcle_quiz_missing_required( $quiz_id, $answers );
+
+	if ( $missing ) {
+		return new WP_Error(
+			'pcle_quiz_incomplete',
+			__( 'Some required questions have not been answered.', 'platform-cle' ),
+			array(
+				'status'  => 400,
+				'missing' => $missing,
+			)
+		);
+	}
+
+	$marked = pcle_mark_quiz( $quiz_id, $answers );
+
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom table.
+	$wpdb->insert(
+		pcle_quiz_attempts_table(),
+		array(
+			'user_id'      => $user_id,
+			'quiz_id'      => $quiz_id,
+			'submitted_at' => current_time( 'mysql' ),
+			'score'        => $marked['score'],
+			'max_score'    => $marked['max_score'],
+			'passed'       => $marked['passed'] ? 1 : 0,
+			'answers'      => wp_json_encode( $answers ),
+		),
+		array( '%d', '%d', '%s', '%d', '%d', '%d', '%s' )
+	);
+
+	$marked['attempt_id'] = (int) $wpdb->insert_id;
+
+	return $marked;
+}
+
+/**
+ * Every attempt a user has made at a quiz, newest first.
+ *
+ * @param int      $quiz_id Quiz post ID.
+ * @param int|null $user_id User (defaults to the current one).
+ * @return array<int,array>
+ */
+function pcle_get_quiz_attempts( $quiz_id, $user_id = null ) {
+	global $wpdb;
+
+	$user_id = pcle_resolve_user_id( $user_id );
+
+	if ( ! $user_id ) {
+		return array();
+	}
+
+	$table = pcle_quiz_attempts_table();
+
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- custom table.
+	$rows = $wpdb->get_results(
+		$wpdb->prepare(
+			"SELECT id, submitted_at, score, max_score, passed FROM {$table}
+			 WHERE user_id = %d AND quiz_id = %d ORDER BY id DESC",
+			$user_id,
+			(int) $quiz_id
+		),
+		ARRAY_A
+	);
+
+	return array_map(
+		function ( $row ) {
+			return array(
+				'id'           => (int) $row['id'],
+				'submitted_at' => $row['submitted_at'],
+				'score'        => (int) $row['score'],
+				'max_score'    => (int) $row['max_score'],
+				'passed'       => (bool) (int) $row['passed'],
+			);
+		},
+		$rows ? $rows : array()
+	);
+}
+
+/**
+ * Has this user ever passed this quiz?
+ *
+ * Ever, not most recently. Passing is something that happened; sitting it
+ * again out of interest and doing worse does not un-happen it.
+ *
+ * @param int      $quiz_id Quiz post ID.
+ * @param int|null $user_id User (defaults to the current one).
+ * @return bool
+ */
+function pcle_user_passed_quiz( $quiz_id, $user_id = null ) {
+	global $wpdb;
+
+	$user_id = pcle_resolve_user_id( $user_id );
+
+	if ( ! $user_id ) {
+		return false;
+	}
+
+	$table = pcle_quiz_attempts_table();
+
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- custom table.
+	return (bool) $wpdb->get_var(
+		$wpdb->prepare(
+			"SELECT 1 FROM {$table} WHERE user_id = %d AND quiz_id = %d AND passed = 1 LIMIT 1",
+			$user_id,
+			(int) $quiz_id
+		)
+	);
+}
+
+/**
+ * The published quizzes of a module that must be passed to complete it.
+ *
+ * Drafts are excluded: an unpublished quiz is not in front of anybody, and
+ * letting one block completion would mean an author could freeze a cohort's
+ * progress by starting to write an assessment.
+ *
+ * @param int $module_id Module ID.
+ * @return int[] Quiz post IDs.
+ */
+function pcle_module_required_quizzes( $module_id ) {
+	$required = array();
+
+	foreach ( pcle_get_children( (int) $module_id, 'pcle_quiz' ) as $quiz ) {
+		if ( pcle_quiz_gates_completion( $quiz->ID ) && pcle_get_quiz_questions( $quiz->ID ) ) {
+			$required[] = (int) $quiz->ID;
+		}
+	}
+
+	return $required;
+}
+
+/**
+ * Required quizzes of a module this user has not passed yet.
+ *
+ * @param int      $module_id Module ID.
+ * @param int|null $user_id   User (defaults to the current one).
+ * @return int[] Quiz post IDs.
+ */
+function pcle_module_completion_blockers( $module_id, $user_id = null ) {
+	$blockers = array();
+
+	foreach ( pcle_module_required_quizzes( $module_id ) as $quiz_id ) {
+		if ( ! pcle_user_passed_quiz( $quiz_id, $user_id ) ) {
+			$blockers[] = $quiz_id;
+		}
+	}
+
+	return $blockers;
+}
