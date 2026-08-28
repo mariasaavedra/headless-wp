@@ -122,7 +122,7 @@ function pcle_authoring_guard_node( $request, $expected_type = '' ) {
  * @return string[]
  */
 function pcle_authorable_post_types() {
-	return array( 'pcle_program', 'pcle_unit', 'pcle_module', 'pcle_scenario', 'pcle_template', 'pcle_event' );
+	return array( 'pcle_program', 'pcle_unit', 'pcle_module', 'pcle_scenario', 'pcle_quiz', 'pcle_template', 'pcle_event' );
 }
 
 /* =========================================================================
@@ -157,6 +157,14 @@ function pcle_authoring_shape_node( $post ) {
 
 	if ( 'pcle_scenario' === $post->post_type ) {
 		$node['has_model_answer'] = false !== strpos( $post->post_content, '[pcle_model_answer' );
+	}
+
+	if ( 'pcle_quiz' === $post->post_type ) {
+		// The count, not the questions. A quiz with none is the one state the
+		// tree has to be able to show, because publishing it would put an
+		// empty assessment in front of a participant.
+		$node['questions']        = count( pcle_get_quiz_questions( $post->ID ) );
+		$node['gates_completion'] = pcle_quiz_gates_completion( $post->ID );
 	}
 
 	if ( 'pcle_program' === $post->post_type ) {
@@ -609,6 +617,20 @@ function pcle_authoring_update_node( $request ) {
 		update_post_meta( $id, PCLE_EVENT_DATETIME_META, pcle_sanitize_event_datetime( (string) $request['starts_at'] ) );
 	}
 
+	if ( 'pcle_quiz' === get_post_type( $id ) ) {
+		if ( null !== $request['questions'] ) {
+			pcle_set_quiz_questions( $id, $request['questions'] );
+		}
+
+		if ( null !== $request['pass_mark'] ) {
+			update_post_meta( $id, PCLE_QUIZ_PASS_MARK_META, pcle_sanitize_quiz_pass_mark( $request['pass_mark'] ) );
+		}
+
+		if ( null !== $request['gates_completion'] ) {
+			update_post_meta( $id, PCLE_QUIZ_GATES_META, rest_sanitize_boolean( $request['gates_completion'] ) ? 1 : 0 );
+		}
+	}
+
 	if ( null !== $request['credits'] && 'pcle_program' === get_post_type( $id ) ) {
 		foreach ( (array) $request['credits'] as $code => $hours ) {
 			if ( ! isset( pcle_jurisdictions()[ $code ] ) ) {
@@ -892,6 +914,19 @@ function pcle_authoring_get_node( $request ) {
 	// What the participant will actually see, so the editor can preview it
 	// without a second round trip and without a second renderer.
 	$node['rendered'] = pcle_rest_rendered_content( $post );
+
+	/*
+	 * Answers and all. This route is behind pcle_authoring_guard_node(), which
+	 * is staff-only and per-programme — the same gate that lets someone edit
+	 * the questions in the first place. The shape a participant gets is a
+	 * different function entirely; see pcle_quiz_questions_for_taking().
+	 */
+	if ( 'pcle_quiz' === $post->post_type ) {
+		$node['questions']        = pcle_get_quiz_questions( $post->ID );
+		$node['pass_mark']        = pcle_quiz_pass_mark( $post->ID );
+		$node['gates_completion'] = pcle_quiz_gates_completion( $post->ID );
+		$node['max_score']        = pcle_quiz_max_score( $post->ID );
+	}
 
 	$parent_id = pcle_get_parent_id( $post->ID );
 

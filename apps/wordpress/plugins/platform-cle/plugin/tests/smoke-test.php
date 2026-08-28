@@ -1075,7 +1075,7 @@ pcle_eq( $listed_a['enrollees'], count( pcle_get_program_enrollee_ids( $prog_a )
 pcle_eq( $listed_a['modules'], count( pcle_get_program_module_ids( $prog_a ) ), 'the list reports the module count' );
 
 // The child-type map must come from the relationship map, not a second copy.
-pcle_eq( pcle_allowed_child_types( 'pcle_module' ), array( 'pcle_scenario', 'pcle_template' ), 'a module may contain scenarios and templates' );
+pcle_eq( pcle_allowed_child_types( 'pcle_module' ), array( 'pcle_scenario', 'pcle_quiz', 'pcle_template' ), 'a module may contain scenarios, quizzes and templates' );
 pcle_eq( pcle_allowed_child_types( 'pcle_scenario' ), array(), 'a scenario is a leaf' );
 wp_set_current_user( 0 );
 
@@ -1489,6 +1489,112 @@ pcle_eq( pcle_mail_count_for( $student_email, $before ), 1, 'session reminder em
 $before = count( $GLOBALS['pcle_mail'] );
 pcle_send_session_reminders();
 pcle_eq( pcle_mail_count_for( $student_email, $before ), 0, 'reminder is de-duplicated on re-run' );
+
+/* ------------------------------------------------------------------ */
+/* Quizzes                                                            */
+/* ------------------------------------------------------------------ */
+pcle_section( '# Quizzes' );
+
+$quiz = pcle_make_post( 'pcle_quiz', 'TEST Quiz', array( '_pcle_module_id' => $module ) );
+$created_posts[] = $quiz;
+
+// A quiz is curriculum: it hangs off a module and is gated like everything else.
+pcle_eq( pcle_get_program_for_post( $quiz ), $prog_a, 'quiz walks up to its programme' );
+pcle_eq( in_array( 'pcle_quiz', pcle_allowed_child_types( 'pcle_module' ), true ), true, 'a module may contain a quiz' );
+pcle_eq( in_array( 'pcle_quiz', pcle_protected_post_types(), true ), true, 'quizzes are REST-protected' );
+pcle_eq( pcle_can_access_post( $quiz, $student ), true, 'enrolled student can access a quiz in their programme' );
+pcle_eq( pcle_can_access_post( $quiz, $outsider ), false, 'unenrolled user cannot access a quiz' );
+
+// The sanitiser is the only way questions get stored, so it carries the rules.
+$stored = pcle_set_quiz_questions(
+	$quiz,
+	array(
+		array(
+			'prompt'   => 'Who is the proper respondent?',
+			'type'     => 'single',
+			'required' => true,
+			'feedback' => 'The immediate custodian.',
+			'choices'  => array(
+				array( 'text' => 'The facility warden', 'correct' => true ),
+				array( 'text' => 'The Attorney General', 'correct' => true ),
+				array( 'text' => 'The sentencing judge' ),
+			),
+		),
+		array(
+			'prompt'  => 'Which of these are habeas grounds?',
+			'type'    => 'multiple',
+			'choices' => array(
+				array( 'text' => 'Prolonged detention', 'correct' => true ),
+				array( 'text' => 'Unlawful custody', 'correct' => true ),
+				array( 'text' => 'Dislike of the venue' ),
+			),
+		),
+		array(
+			'prompt' => 'What would you argue first, and why?',
+			'type'   => 'text',
+		),
+		// Dropped: no prompt at all.
+		array( 'type' => 'single', 'choices' => array( array( 'text' => 'x' ), array( 'text' => 'y' ) ) ),
+		// Dropped: a scored question needs something to choose between.
+		array( 'prompt' => 'Only one option?', 'type' => 'single', 'choices' => array( array( 'text' => 'x' ) ) ),
+	)
+);
+
+pcle_eq( count( $stored ), 3, 'sanitiser keeps the three usable questions' );
+pcle_eq( $stored[0]['key'], 'q1', 'questions get a generated key' );
+pcle_eq( $stored[0]['choices'][1]['correct'], false, '"one correct answer" keeps only the first correct choice' );
+pcle_eq( $stored[1]['choices'][0]['correct'], true, 'multiple-answer questions keep every correct choice' );
+pcle_eq( $stored[1]['choices'][1]['correct'], true, 'multiple-answer questions keep the second correct choice' );
+pcle_eq( count( $stored[2]['choices'] ), 0, 'free-text questions have no choices' );
+
+// A scored question nobody can get right is an authoring slip, not a valid quiz.
+$rescued = pcle_sanitize_quiz_questions(
+	array(
+		array(
+			'prompt'  => 'Nothing marked correct',
+			'type'    => 'single',
+			'choices' => array( array( 'text' => 'a' ), array( 'text' => 'b' ) ),
+		),
+	)
+);
+pcle_eq( $rescued[0]['choices'][0]['correct'], true, 'a question with no correct answer gets one' );
+
+// Duplicate keys would make two questions share a form field on submission.
+$deduped = pcle_sanitize_quiz_questions(
+	array(
+		array( 'prompt' => 'First', 'type' => 'text', 'key' => 'same' ),
+		array( 'prompt' => 'Second', 'type' => 'text', 'key' => 'same' ),
+	)
+);
+pcle_eq( $deduped[0]['key'] === $deduped[1]['key'], false, 'duplicate question keys are made unique' );
+
+// Free text is deliberately unscored, so it cannot be part of the maximum.
+pcle_eq( pcle_quiz_max_score( $quiz ), 2, 'max score counts only the scored questions' );
+
+/*
+ * The one that matters. Everything above is correctness; this is the leak the
+ * plugin has already had twice in another form.
+ */
+$taking = pcle_quiz_questions_for_taking( $quiz );
+$leaked = 0;
+foreach ( $taking as $question ) {
+	$leaked += array_key_exists( 'feedback', $question ) ? 1 : 0;
+
+	foreach ( $question['choices'] as $choice ) {
+		$leaked += array_key_exists( 'correct', $choice ) ? 1 : 0;
+	}
+}
+pcle_eq( count( $taking ), 3, 'the participant shape has every question' );
+pcle_eq( $leaked, 0, 'the participant shape leaks no answers and no feedback' );
+pcle_eq( $taking[0]['choices'][0]['text'], 'The facility warden', 'the participant shape keeps the choice text' );
+
+// Gating and pass mark: stored from the start, enforced when scoring lands.
+pcle_eq( pcle_quiz_gates_completion( $quiz ), false, 'a quiz does not gate its module by default' );
+update_post_meta( $quiz, PCLE_QUIZ_GATES_META, 1 );
+pcle_eq( pcle_quiz_gates_completion( $quiz ), true, 'gating can be switched on per quiz' );
+pcle_eq( pcle_quiz_pass_mark( $quiz ), PCLE_QUIZ_DEFAULT_PASS_MARK, 'pass mark defaults when unset' );
+pcle_eq( pcle_sanitize_quiz_pass_mark( 0 ), 1, 'pass mark cannot be zero' );
+pcle_eq( pcle_sanitize_quiz_pass_mark( 250 ), 100, 'pass mark is capped at 100' );
 
 /* ------------------------------------------------------------------ */
 /* Teardown                                                           */

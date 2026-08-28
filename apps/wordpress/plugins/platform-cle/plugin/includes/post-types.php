@@ -2,7 +2,7 @@
 /**
  * Platform CLE Custom Post Types.
  *
- * Here we register the program's 7 entities. We also define the "capability
+ * Here we register the program's 8 entities. We also define the "capability
  * groups" shared by several CPTs, to avoid repeating permissions and keep
  * everything in sync with roles.php.
  *
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * Instead of giving each CPT its own set of permissions, we group them:
  *   - 'content'     : the whole curriculum (Program, Unit, Module, Practice
- *                     Scenario, Template, Schedule Event).
+ *                     Scenario, Quiz, Template, Schedule Event).
  *   - 'case_update' : the case updates (Case Update).
  *
  * roles.php reads THIS SAME function to grant the permissions, so the names
@@ -98,7 +98,7 @@ function pcle_primitive_caps( $plural ) {
 }
 
 /**
- * Definition of the 7 CPTs.
+ * Definition of the 8 CPTs.
  *
  * Each entry states which capability group it belongs to and that it appears
  * under the admin's "Platform CLE" parent menu.
@@ -149,7 +149,22 @@ function pcle_post_type_definitions() {
 			'supports' => array( 'title', 'editor', 'thumbnail', 'excerpt', 'custom-fields', 'page-attributes' ),
 		),
 
-		// 5) TEMPLATE — downloadable templates (briefs, forms, etc.).
+		// 5) QUIZ — a set of questions attached to a module.
+		//    Unlike a Practice Scenario, which is prose with a model answer an
+		//    instructor may reveal, a quiz has answers the server marks. Those
+		//    answers live in protected, unregistered meta — see quizzes.php.
+		'pcle_quiz'        => array(
+			'group'    => 'content',
+			'singular' => __( 'Quiz', 'platform-cle' ),
+			'plural'   => __( 'Quizzes', 'platform-cle' ),
+			'icon'     => 'dashicons-forms',
+			'slug'     => 'quiz',
+			// Same reason as Template: menu_order is what orders a module's
+			// children, and page-attributes is what stores it.
+			'supports' => array( 'title', 'editor', 'excerpt', 'page-attributes' ),
+		),
+
+		// 6) TEMPLATE — downloadable templates (briefs, forms, etc.).
 		'pcle_template'    => array(
 			'group'    => 'content',
 			'singular' => __( 'Template', 'platform-cle' ),
@@ -163,7 +178,7 @@ function pcle_post_type_definitions() {
 			'supports' => array( 'title', 'editor', 'thumbnail', 'excerpt', 'custom-fields', 'page-attributes' ),
 		),
 
-		// 6) SCHEDULE EVENT — live sessions / calendar dates.
+		// 7) SCHEDULE EVENT — live sessions / calendar dates.
 		'pcle_event'       => array(
 			'group'    => 'content',
 			'singular' => __( 'Schedule Event', 'platform-cle' ),
@@ -174,7 +189,7 @@ function pcle_post_type_definitions() {
 			'supports' => array( 'title', 'editor', 'custom-fields', 'page-attributes' ),
 		),
 
-		// 7) CASE UPDATE — case-law updates published by instructors.
+		// 8) CASE UPDATE — case-law updates published by instructors.
 		//    Has its own permission group.
 		'pcle_case_update' => array(
 			'group'    => 'case_update',
