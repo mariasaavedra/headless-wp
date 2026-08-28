@@ -72,6 +72,101 @@ type ModuleDetail = {
   program: Ref | null;
   scenarios: ModuleResource[];
   templates: ModuleResource[];
+  quizzes: QuizSummary[];
+};
+
+/* ------------------------------------------------------------------ */
+/* Quizzes, as a participant sees them                                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A choice on a quiz the reader is about to sit.
+ *
+ * Note what is missing: whether it is the right one. The endpoint behind these
+ * types strips that before the response leaves WordPress, so there is nothing
+ * for the browser to reveal — see `pcle_quiz_questions_for_taking()`.
+ */
+type QuizChoicePublic = {
+  key: string;
+  text: string;
+};
+
+type QuizQuestionPublic = {
+  key: string;
+  type: QuizQuestionType;
+  prompt: string;
+  help: string;
+  required: boolean;
+  choices: QuizChoicePublic[];
+};
+
+/** One past sitting, as listed on the quiz page. */
+type QuizAttempt = {
+  id: number;
+  submitted_at: string;
+  score: number;
+  max_score: number;
+  passed: boolean;
+};
+
+type QuizForTaking = {
+  id: number;
+  title: string;
+  content: string;
+  questions: QuizQuestionPublic[];
+  pass_mark: number;
+  /** Whether passing is required to complete the parent module. */
+  required: boolean;
+  /** Whether this reader has ever passed it. */
+  passed: boolean;
+  attempts: QuizAttempt[];
+  module: Ref | null;
+  program: Ref | null;
+};
+
+/**
+ * How one question was marked.
+ *
+ * This is the *only* shape carrying `feedback` and `correct_keys`, and it only
+ * exists in the response to a submission — answering is what unlocks it.
+ */
+type QuizQuestionResult = {
+  key: string;
+  type: QuizQuestionType;
+  prompt: string;
+  answered: boolean;
+  feedback: string;
+  scored: boolean;
+  /** Scored questions only. */
+  correct?: boolean;
+  chosen?: string[];
+  correct_keys?: string[];
+  /** Free-text questions only. */
+  response?: string;
+};
+
+type QuizResult = {
+  attempt_id: number;
+  score: number;
+  max_score: number;
+  percent: number;
+  passed: boolean;
+  questions: QuizQuestionResult[];
+  module: {
+    id: number;
+    /** Quiz ids still standing between the reader and completing the module. */
+    blockers: number[];
+    completed: boolean;
+  };
+};
+
+/** A quiz as it appears in its module's listing. */
+type QuizSummary = {
+  id: number;
+  title: string;
+  questions: number;
+  required: boolean;
+  passed: boolean;
 };
 
 /** An entry of the signed-in user's programme list. */
@@ -84,6 +179,13 @@ type TrainingProgram = {
 export type {
   Progress,
   Ref,
+  QuizChoicePublic,
+  QuizQuestionPublic,
+  QuizAttempt,
+  QuizForTaking,
+  QuizQuestionResult,
+  QuizResult,
+  QuizSummary,
   ModuleSummary,
   SessionEvent,
   Unit,

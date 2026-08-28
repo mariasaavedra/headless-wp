@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 
 import { Button } from "@pcle/ui/components/button";
@@ -42,6 +43,15 @@ export default function CompleteToggle({
       {state.error && (
         <p role="alert" className="text-sm text-red-600">
           {state.error}
+          {state.blockedBy?.map((quiz) => (
+            <Link
+              key={quiz.id}
+              href={`/quizzes/${quiz.id}`}
+              className="ml-2 underline"
+            >
+              {quiz.title}
+            </Link>
+          ))}
         </p>
       )}
     </form>
