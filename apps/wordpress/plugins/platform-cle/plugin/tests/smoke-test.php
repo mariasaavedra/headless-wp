@@ -1547,6 +1547,35 @@ pcle_eq( $stored[1]['choices'][0]['correct'], true, 'multiple-answer questions k
 pcle_eq( $stored[1]['choices'][1]['correct'], true, 'multiple-answer questions keep the second correct choice' );
 pcle_eq( count( $stored[2]['choices'] ), 0, 'free-text questions have no choices' );
 
+/*
+ * The builder's "Add a question" button sends a placeholder question rather
+ * than a blank one, because a blank one is dropped by the rule directly above
+ * — which made adding the first question of a quiz impossible. This pins the
+ * contract from the other side: whatever the editor sends for a new question
+ * has to survive the save that created it.
+ *
+ * If this fails, check apps/web/src/app/actions/authoring.ts (blankQuestion).
+ */
+$fresh = pcle_sanitize_quiz_questions(
+	array(
+		array(
+			'key'      => '',
+			'type'     => 'single',
+			'prompt'   => 'New question',
+			'help'     => '',
+			'feedback' => '',
+			'required' => false,
+			'choices'  => array(
+				array( 'key' => '', 'text' => 'New answer', 'correct' => false ),
+				array( 'key' => '', 'text' => 'New answer', 'correct' => false ),
+			),
+		),
+	)
+);
+pcle_eq( count( $fresh ), 1, 'a newly added question survives its first save' );
+pcle_eq( count( $fresh[0]['choices'] ), 2, 'and keeps both of its blank answers' );
+pcle_eq( $fresh[0]['choices'][0]['key'] === $fresh[0]['choices'][1]['key'], false, 'whose keys are distinct despite identical text' );
+
 // A scored question nobody can get right is an authoring slip, not a valid quiz.
 $rescued = pcle_sanitize_quiz_questions(
 	array(
