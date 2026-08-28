@@ -29,6 +29,7 @@ function pcle_protected_post_types() {
 		'pcle_unit',
 		'pcle_module',
 		'pcle_scenario',
+		'pcle_quiz',
 		'pcle_template',
 		'pcle_event',
 		'pcle_case_update',

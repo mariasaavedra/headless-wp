@@ -6,6 +6,7 @@ import type {
   NodeDetail,
   NodeType,
   Program,
+  QuizQuestion,
   TrainingProgram,
   TreeNode,
   UnitDetail,
@@ -235,6 +236,10 @@ async function updateNode(
     body?: string;
     excerpt?: string;
     credits?: Record<string, number>;
+    /** Quizzes. The server sanitises and re-keys these; it owns the rules. */
+    questions?: QuizQuestion[];
+    pass_mark?: number;
+    gates_completion?: boolean;
   }
 ): Promise<TreeNode> {
   return wordpressFetch(`/platform-cle/v1/authoring/nodes/${id}`, {

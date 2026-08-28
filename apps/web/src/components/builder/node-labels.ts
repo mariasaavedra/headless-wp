@@ -10,6 +10,7 @@ const NODE_LABELS: Record<NodeType, { singular: string; plural: string }> = {
   pcle_unit: { singular: "Unit", plural: "Units" },
   pcle_module: { singular: "Module", plural: "Modules" },
   pcle_scenario: { singular: "Practice scenario", plural: "Practice scenarios" },
+  pcle_quiz: { singular: "Quiz", plural: "Quizzes" },
   pcle_template: { singular: "Template", plural: "Templates" },
   pcle_event: { singular: "Live session", plural: "Live sessions" },
 };
@@ -20,6 +21,7 @@ const NODE_BADGES: Record<NodeType, string> = {
   pcle_unit: "Unit",
   pcle_module: "Module",
   pcle_scenario: "Scenario",
+  pcle_quiz: "Quiz",
   pcle_template: "Template",
   pcle_event: "Session",
 };

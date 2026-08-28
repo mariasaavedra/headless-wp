@@ -130,6 +130,15 @@ export default function NodeRow({
           <span className="text-xs text-zinc-500">no model answer yet</span>
         )}
 
+        {node.type === "pcle_quiz" && (
+          <span className="text-xs text-zinc-500">
+            {node.questions
+              ? `${node.questions} ${node.questions === 1 ? "question" : "questions"}`
+              : "no questions yet"}
+            {node.gates_completion ? " · required to complete" : ""}
+          </span>
+        )}
+
         <span className="ml-auto flex items-center gap-1">
           <MoveButton
             parentId={parentId}

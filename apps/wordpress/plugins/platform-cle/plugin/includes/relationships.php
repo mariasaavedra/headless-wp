@@ -55,6 +55,11 @@ function pcle_relationship_map() {
 			'meta_key' => '_pcle_module_id',
 			'label'    => __( 'Parent Module', 'platform-cle' ),
 		),
+		'pcle_quiz'     => array(
+			'parent'   => 'pcle_module',
+			'meta_key' => '_pcle_module_id',
+			'label'    => __( 'Parent Module', 'platform-cle' ),
+		),
 		'pcle_template' => array(
 			'parent'   => 'pcle_module',
 			'meta_key' => '_pcle_module_id',

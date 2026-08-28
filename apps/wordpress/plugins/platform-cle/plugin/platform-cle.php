@@ -41,6 +41,7 @@ require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/emails.php';
 require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/health.php';
 require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/credits.php';
 require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/attendance.php';
+require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/quizzes.php';
 require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/certificates.php';
 require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/reports.php';
 require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/authoring-content.php';

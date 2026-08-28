@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import type { NodeType } from "@/lib/types";
+import type { NodeType, QuizQuestion, QuizQuestionType } from "@/lib/types";
 import {
   createNode,
   deleteNode,
@@ -20,6 +20,7 @@ const NODE_TYPES: NodeType[] = [
   "pcle_unit",
   "pcle_module",
   "pcle_scenario",
+  "pcle_quiz",
   "pcle_template",
   "pcle_event",
 ];
@@ -289,8 +290,159 @@ async function reorderAction(
   return {};
 }
 
+
+/* ------------------------------------------------------------------ */
+/* Quizzes                                                             */
+/* ------------------------------------------------------------------ */
+
+const QUESTION_TYPES: QuizQuestionType[] = ["single", "multiple", "text"];
+
+function readQuestionType(value: FormDataEntryValue | null): QuizQuestionType {
+  const candidate = String(value ?? "");
+  return QUESTION_TYPES.includes(candidate as QuizQuestionType)
+    ? (candidate as QuizQuestionType)
+    : "single";
+}
+
+/**
+ * Reads the whole quiz back out of one form.
+ *
+ * The fields are flat and indexed — `q.0.prompt`, `q.0.c.1.text` — rather than
+ * a serialised blob in a hidden input, so the form degrades to something a
+ * browser can submit on its own and every value stays inspectable.
+ *
+ * Indices are positions in this render, not identities. The `key` travels in
+ * its own field precisely so that reordering or removing a question does not
+ * silently reassign somebody's recorded answer to a different question.
+ *
+ * Nothing is validated here beyond shape. Which choice may be correct, how
+ * many of them, what counts as a usable question — those rules live in the
+ * plugin's sanitiser, and duplicating them here would create a second place
+ * for them to drift.
+ */
+function readQuestions(formData: FormData): QuizQuestion[] {
+  const positions = new Set<number>();
+
+  for (const name of formData.keys()) {
+    const match = /^q\.(\d+)\./.exec(name);
+    if (match) {
+      positions.add(Number(match[1]));
+    }
+  }
+
+  return [...positions]
+    .sort((a, b) => a - b)
+    .map((i) => {
+      const choicePositions = new Set<number>();
+
+      for (const name of formData.keys()) {
+        const match = new RegExp(`^q\\.${i}\\.c\\.(\\d+)\\.`).exec(name);
+        if (match) {
+          choicePositions.add(Number(match[1]));
+        }
+      }
+
+      return {
+        key: String(formData.get(`q.${i}.key`) ?? ""),
+        type: readQuestionType(formData.get(`q.${i}.type`)),
+        prompt: String(formData.get(`q.${i}.prompt`) ?? ""),
+        help: String(formData.get(`q.${i}.help`) ?? ""),
+        feedback: String(formData.get(`q.${i}.feedback`) ?? ""),
+        // An unchecked box submits nothing, which is exactly "false".
+        required: formData.get(`q.${i}.required`) !== null,
+        choices: [...choicePositions]
+          .sort((a, b) => a - b)
+          .map((j) => ({
+            key: String(formData.get(`q.${i}.c.${j}.key`) ?? ""),
+            text: String(formData.get(`q.${i}.c.${j}.text`) ?? ""),
+            correct: formData.get(`q.${i}.c.${j}.correct`) !== null,
+          })),
+      };
+    });
+}
+
+function blankQuestion(): QuizQuestion {
+  return {
+    key: "",
+    type: "single",
+    prompt: "",
+    help: "",
+    feedback: "",
+    required: false,
+    choices: [
+      { key: "", text: "", correct: false },
+      { key: "", text: "", correct: false },
+    ],
+  };
+}
+
+/**
+ * Saves a quiz, and applies the one structural change the author asked for.
+ *
+ * Adding a question, removing a choice and saving are the same round trip:
+ * the form carries the entire quiz, the button says what to do to it, and the
+ * result is written back. That is why the editor needs no client-side state —
+ * and why an author who has JavaScript disabled, or has not yet loaded it,
+ * can still build a quiz.
+ *
+ * The cost is that a structural change is also a save. That is the right way
+ * round: the alternative is holding unsaved edits in the page while adding a
+ * question throws them away.
+ */
+async function saveQuizAction(
+  _prev: BuilderActionState,
+  formData: FormData
+): Promise<BuilderActionState> {
+  const id = readId(formData.get("id"));
+
+  if (!id) {
+    return { error: "That quiz could not be identified." };
+  }
+
+  const questions = readQuestions(formData);
+  const intent = String(formData.get("intent") ?? "save");
+  const [verb, first, second] = intent.split(".");
+
+  if (verb === "add_question") {
+    questions.push(blankQuestion());
+  }
+
+  if (verb === "remove_question") {
+    questions.splice(Number(first), 1);
+  }
+
+  if (verb === "add_choice" && questions[Number(first)]) {
+    questions[Number(first)].choices.push({ key: "", text: "", correct: false });
+  }
+
+  if (verb === "remove_choice" && questions[Number(first)]) {
+    questions[Number(first)].choices.splice(Number(second), 1);
+  }
+
+  const title = String(formData.get("title") ?? "").trim();
+
+  if (!title) {
+    return { error: "A title is required." };
+  }
+
+  try {
+    await updateNode(id, {
+      title,
+      questions,
+      pass_mark: Number(formData.get("pass_mark") ?? 70),
+      gates_completion: formData.get("gates_completion") !== null,
+    });
+  } catch (error) {
+    return { error: describe(error) };
+  }
+
+  refresh();
+  return {};
+}
+
 export {
   createNodeAction,
+  saveQuizAction,
   createProgramAction,
   saveBodyAction,
   saveCreditsAction,
