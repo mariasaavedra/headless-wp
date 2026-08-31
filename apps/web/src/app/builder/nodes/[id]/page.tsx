@@ -9,6 +9,7 @@ import { Input } from "@pcle/ui/components/input";
 import { renderAccessError } from "@/components/access-error";
 import Breadcrumbs from "@/components/breadcrumbs";
 import ActionForm from "@/components/builder/action-form";
+import BodyEditor from "@/components/builder/body-editor";
 import QuizEditor from "@/components/builder/quiz-editor";
 import { NODE_BADGES } from "@/components/builder/node-labels";
 import PageShell from "@/components/page-shell";
@@ -18,33 +19,6 @@ import { isAuthenticated } from "@/lib/auth";
 import { decodeEntities } from "@/lib/html";
 import type { NodeDetail } from "@/lib/types";
 import { getNode } from "@/lib/wordpress";
-
-/**
- * The authoring syntax, stated where it is used.
- *
- * There is deliberately no separate help page: an author should not have to
- * remember this, and the plugin's existing documentation problem is that the
- * one thing they did have to remember — the model-answer shortcode — was
- * documented in a markdown file nobody opens.
- */
-function SyntaxHelp() {
-  return (
-    <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs text-zinc-500">
-      <dt className="font-mono">## Heading</dt>
-      <dd>a section heading</dd>
-      <dt className="font-mono">### Heading</dt>
-      <dd>a smaller heading</dd>
-      <dt className="font-mono">- item</dt>
-      <dd>a bulleted list</dd>
-      <dt className="font-mono">&gt; text</dt>
-      <dd>a quotation</dd>
-      <dt className="font-mono">**bold** *italic*</dt>
-      <dd>emphasis</dd>
-      <dt className="font-mono">[label](https://…)</dt>
-      <dd>a link</dd>
-    </dl>
-  );
-}
 
 export default async function BuilderNodePage({
   params,
@@ -132,16 +106,7 @@ export default async function BuilderNodePage({
               >
                 Body
               </label>
-              <textarea
-                id="node-body"
-                name="body"
-                rows={18}
-                defaultValue={node.body}
-                spellCheck
-                className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 font-mono text-sm leading-relaxed"
-              />
-
-              <SyntaxHelp />
+              <BodyEditor defaultValue={node.body} />
 
               <Button type="submit" className="mt-6">
                 Save
