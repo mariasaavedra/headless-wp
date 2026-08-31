@@ -1852,6 +1852,97 @@ pcle_eq( pcle_mark_module_complete( $module, $student ), true, 'the module compl
 pcle_eq( pcle_get_program_progress( $prog_a, $student )['completed'] > 0, true, 'programme progress reflects the completion' );
 
 /* ------------------------------------------------------------------ */
+/* Quiz results in the cohort report                                  */
+/* ------------------------------------------------------------------ */
+pcle_section( '# Quiz results in reports' );
+
+/*
+ * The report is built from grouped queries rather than the per-user helpers,
+ * so — as with progress and attendance above — it has to be checked against
+ * them, or the two drift apart without anything failing.
+ */
+$quiz_report = pcle_get_program_report( $prog_a )[ $student ];
+
+$program_quizzes = pcle_get_program_quiz_ids( $prog_a );
+pcle_eq( in_array( $gate_quiz, $program_quizzes, true ), true, 'a quiz is found from its programme' );
+pcle_eq( $quiz_report['quizzes'], count( $program_quizzes ), 'the report counts every quiz in the programme' );
+pcle_eq( $quiz_report['quizzes_passed'] >= 1, true, 'a passed quiz is counted' );
+pcle_eq( $quiz_report['required_outstanding'], 0, 'nothing outstanding once the required quiz is passed' );
+
+// Sitting a passed quiz again must not count twice.
+pcle_record_quiz_attempt( $gate_quiz, array( 'q' => 'right' ), $student );
+pcle_eq(
+	pcle_get_program_report( $prog_a )[ $student ]['quizzes_passed'],
+	$quiz_report['quizzes_passed'],
+	'passing the same quiz twice still counts as one'
+);
+
+// A second required quiz, unpassed, is what the outstanding count is for.
+$second_gate = pcle_make_post( 'pcle_quiz', 'TEST Second Gate', array( '_pcle_module_id' => $module2 ) );
+$created_posts[] = $second_gate;
+pcle_set_quiz_questions( $second_gate, array(
+	array( 'key' => 'q', 'prompt' => 'Second gate', 'type' => 'single',
+		'choices' => array( array( 'key' => 'a', 'text' => 'A', 'correct' => true ), array( 'key' => 'b', 'text' => 'B' ) ) ),
+) );
+update_post_meta( $second_gate, PCLE_QUIZ_GATES_META, 1 );
+
+$with_outstanding = pcle_get_program_report( $prog_a )[ $student ];
+pcle_eq( $with_outstanding['required_outstanding'], 1, 'an unpassed required quiz is reported as outstanding' );
+pcle_eq(
+	in_array( $second_gate, pcle_get_program_required_quiz_ids( $prog_a ), true ),
+	true,
+	'and it is listed among the programme required quizzes'
+);
+
+// An optional quiz left unsat is a different fact, and must not be counted.
+$optional = pcle_make_post( 'pcle_quiz', 'TEST Optional', array( '_pcle_module_id' => $module2 ) );
+$created_posts[] = $optional;
+pcle_set_quiz_questions( $optional, array(
+	array( 'key' => 'q', 'prompt' => 'Optional', 'type' => 'single',
+		'choices' => array( array( 'key' => 'a', 'text' => 'A', 'correct' => true ), array( 'key' => 'b', 'text' => 'B' ) ) ),
+) );
+$with_optional = pcle_get_program_report( $prog_a )[ $student ];
+pcle_eq( $with_optional['required_outstanding'], 1, 'an unsat optional quiz is not outstanding' );
+pcle_eq( $with_optional['quizzes'], count( $program_quizzes ) + 2, 'but it does count towards the total' );
+
+// A draft required quiz must not be chased, the same way it does not gate.
+wp_update_post( array( 'ID' => $second_gate, 'post_status' => 'draft' ) );
+pcle_eq(
+	pcle_get_program_report( $prog_a )[ $student ]['required_outstanding'],
+	0,
+	'an unpublished required quiz is not reported as outstanding'
+);
+wp_update_post( array( 'ID' => $second_gate, 'post_status' => 'publish' ) );
+
+// The CSV carries the same three facts, in the same order as the header.
+$csv    = pcle_get_program_report_csv( $prog_a );
+$header = $csv[0];
+foreach ( array( 'Quizzes passed', 'Quizzes total', 'Required quizzes outstanding' ) as $column ) {
+	pcle_ok( in_array( $column, $header, true ), "the CSV header carries \"{$column}\"" );
+}
+/*
+ * Find the participant's own line rather than trusting the first data row:
+ * rows are ordered by display name, so $csv[1] is whoever sorts first and the
+ * assertion would pass for the wrong reason.
+ */
+$passed_col = array_search( 'Quizzes passed', $header, true );
+$name_col   = array_search( 'Participant', $header, true );
+$student_line = null;
+foreach ( array_slice( $csv, 1 ) as $line ) {
+	if ( get_userdata( $student )->display_name === $line[ $name_col ] ) {
+		$student_line = $line;
+	}
+}
+pcle_ok( null !== $student_line, 'the CSV has a line for the participant' );
+pcle_eq(
+	$student_line[ $passed_col ],
+	(string) pcle_get_program_report( $prog_a )[ $student ]['quizzes_passed'],
+	'and its quizzes-passed cell matches the report row'
+);
+pcle_eq( count( $csv[0] ), count( $csv[1] ), 'every CSV row is as wide as its header' );
+
+
+/* ------------------------------------------------------------------ */
 /* Teardown                                                           */
 /* ------------------------------------------------------------------ */
 foreach ( $created_posts as $pid ) {
