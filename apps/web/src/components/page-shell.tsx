@@ -24,8 +24,14 @@ async function canAuthor(): Promise<boolean> {
 }
 
 /**
- * Shared frame for the signed-in pages: a header that always offers a way back
- * to My Training and a way out, plus a readable content column.
+ * Shared frame for the signed-in pages: a header offering the same paths the
+ * front page offers, and a way out, plus a readable content column.
+ *
+ * The wordmark goes home rather than to My Training. It used to go to My
+ * Training, which was reasonable while the front page was a dead end — there
+ * was nothing there to go back to. Now that it is the one screen listing every
+ * path a reader has, the wordmark doing the conventional thing costs nothing:
+ * My Training has its own link beside it.
  */
 export default async function PageShell({ children }: { children: ReactNode }) {
   const showBuilder = await canAuthor();
@@ -35,11 +41,21 @@ export default async function PageShell({ children }: { children: ReactNode }) {
       <header className="border-b border-zinc-200 bg-white">
         <div className="mx-auto flex max-w-3xl items-center gap-4 px-6 py-4">
           <Link
-            href="/my-training"
+            href="/"
             className="text-sm font-semibold text-zinc-950 hover:underline"
           >
             Platform CLE
           </Link>
+
+          <Button
+            variant="link"
+            size="sm"
+            className="px-0 text-zinc-500"
+            nativeButton={false}
+            render={<Link href="/my-training" />}
+          >
+            My Training
+          </Button>
 
           {showBuilder && (
             <Button

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 
 import { Button } from "@pcle/ui/components/button";
@@ -38,6 +39,13 @@ export default function LoginPage() {
         <Button type="submit" disabled={pending} className="w-full">
           {pending ? "Logging in..." : "Log in"}
         </Button>
+
+        {/* Somewhere to go for anyone who arrived here by accident. */}
+        <p className="text-center text-sm">
+          <Link href="/" className="text-zinc-500 hover:text-zinc-900 hover:underline">
+            Back to the home page
+          </Link>
+        </p>
       </form>
     </main>
   );
