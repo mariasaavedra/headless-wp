@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { PlusIcon } from "lucide-react";
 
 import { Badge } from "@pcle/ui/components/badge";
 import { Button } from "@pcle/ui/components/button";
@@ -8,6 +9,7 @@ import { Input } from "@pcle/ui/components/input";
 import { renderAccessError } from "@/components/access-error";
 import Breadcrumbs from "@/components/breadcrumbs";
 import ActionForm from "@/components/builder/action-form";
+import EditableTitle from "@/components/builder/editable-title";
 import { NODE_LABELS } from "@/components/builder/node-labels";
 import TreeView from "@/components/builder/tree-view";
 import PageShell from "@/components/page-shell";
@@ -55,9 +57,7 @@ export default async function BuilderProgramPage({
       />
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <h1 className="text-3xl font-semibold tracking-tight text-zinc-950">
-          {decodeEntities(tree.title)}
-        </h1>
+        <EditableTitle nodeId={tree.id} title={decodeEntities(tree.title)} />
 
         {isDraft && (
           <Badge className="bg-amber-100 text-amber-800">Draft</Badge>
@@ -132,7 +132,8 @@ export default async function BuilderProgramPage({
       <Card className="mt-8 p-6">
         {units.length === 0 ? (
           <p className="text-zinc-600">
-            Nothing in this programme yet. Add the first unit below.
+            Nothing in this programme yet. A unit is a stage of the course —
+            add one to start.
           </p>
         ) : (
           <TreeView node={tree} />
@@ -143,23 +144,23 @@ export default async function BuilderProgramPage({
           belongs to this programme, and the whole point of building here is
           that you never pick a parent from a list — it is wherever you clicked.
         */}
-        <details className="mt-6 border-t border-zinc-100 pt-4 text-sm">
-          <summary className="cursor-pointer text-zinc-500 hover:text-zinc-900">
-            + {NODE_LABELS.pcle_unit.singular}
-          </summary>
-          <ActionForm action={createNodeAction} className="mt-2 flex gap-2">
-            <input type="hidden" name="type" value="pcle_unit" />
-            <input type="hidden" name="parent_id" value={tree.id} />
-            <Input
-              type="text"
-              name="title"
-              placeholder="New unit"
-              aria-label="Title for the new unit"
-              className="w-64"
-            />
-            <Button type="submit">Add</Button>
-          </ActionForm>
-        </details>
+        {/*
+          One click, named for you. Asking for a title before the thing exists
+          was a question with an obvious answer, and it stood between the
+          instructor and the only action this page is for.
+        */}
+        <ActionForm
+          action={createNodeAction}
+          className="mt-6 border-t border-zinc-100 pt-4"
+        >
+          <input type="hidden" name="type" value="pcle_unit" />
+          <input type="hidden" name="parent_id" value={tree.id} />
+          <input type="hidden" name="title" value="New unit" />
+          <Button type="submit" variant="outline">
+            <PlusIcon className="size-4" />
+            Add {NODE_LABELS.pcle_unit.singular.toLowerCase()}
+          </Button>
+        </ActionForm>
       </Card>
 
       <p className="mt-6 text-sm text-zinc-500">
