@@ -1941,6 +1941,55 @@ pcle_eq(
 );
 pcle_eq( count( $csv[0] ), count( $csv[1] ), 'every CSV row is as wide as its header' );
 
+/* ------------------------------------------------------------------ */
+/* The report over REST                                               */
+/* ------------------------------------------------------------------ */
+pcle_section( '# Reports over REST' );
+
+$report_route = "/platform-cle/v1/reports/programs/{$prog_a}";
+
+/*
+ * A cohort report is a list of other people's records, so it takes the
+ * staff gate rather than the participant one. view_cle_content only says
+ * somebody is enrolled somewhere.
+ */
+pcle_eq( pcle_rest_status( 0, $report_route ), 401, 'anonymous cannot read a report' );
+pcle_eq( pcle_rest_status( $student, $report_route ), 403, 'a participant cannot read a report' );
+pcle_eq( pcle_rest_status( $outsider, $report_route ), 403, 'nor can someone enrolled in nothing' );
+pcle_eq( pcle_rest_status( $admin, $report_route ), 200, 'staff can' );
+pcle_eq( pcle_rest_status( $admin, "/platform-cle/v1/reports/programs/{$module}" ), 404, 'a non-programme id is a 404' );
+
+wp_set_current_user( $admin );
+$report_body = rest_do_request( new WP_REST_Request( 'GET', $report_route ) )->get_data();
+
+pcle_ok( isset( $report_body['participants'] ), 'the response carries participants' );
+pcle_eq( $report_body['program']['id'], $prog_a, 'and names the programme' );
+
+$rest_row = null;
+foreach ( $report_body['participants'] as $participant ) {
+	if ( (int) $participant['id'] === $student ) {
+		$rest_row = $participant;
+	}
+}
+pcle_ok( null !== $rest_row, 'the participant appears in the response' );
+
+// The shaped row has to agree with the report it came from, or the API and
+// the admin table will drift apart without anything failing.
+$direct = pcle_get_program_report( $prog_a )[ $student ];
+foreach ( array( 'completed', 'total', 'attended', 'sessions', 'quizzes_passed', 'quizzes', 'required_outstanding' ) as $field ) {
+	pcle_eq( $rest_row[ $field ], (int) $direct[ $field ], "the API row agrees on {$field}" );
+}
+
+// The CSV route hands back rows, not a rendered file, so the columns are
+// decided in one place only.
+$csv_body = rest_do_request( new WP_REST_Request( 'GET', $report_route . '/csv' ) )->get_data();
+pcle_eq( $csv_body['rows'][0], pcle_get_program_report_csv( $prog_a )[0], 'the CSV route returns the same header' );
+pcle_ok( '' !== $csv_body['filename'], 'and suggests a filename' );
+pcle_eq( pcle_rest_status( $student, $report_route . '/csv' ), 403, 'a participant cannot download the CSV either' );
+
+wp_set_current_user( 0 );
+
+
 
 /* ------------------------------------------------------------------ */
 /* Teardown                                                           */

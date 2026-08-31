@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Button } from "@pcle/ui/components/button";
+import { cn } from "@pcle/ui/lib/utils";
 
 import { logoutAction } from "@/app/actions/auth";
 import { getMe } from "@/lib/wordpress";
@@ -33,7 +34,18 @@ async function canAuthor(): Promise<boolean> {
  * path a reader has, the wordmark doing the conventional thing costs nothing:
  * My Training has its own link beside it.
  */
-export default async function PageShell({ children }: { children: ReactNode }) {
+export default async function PageShell({
+  children,
+  wide = false,
+}: {
+  children: ReactNode;
+  /**
+   * Widens the content column. The default is sized for prose, which is what
+   * almost every screen here is; a cohort table is the exception and gets
+   * clipped in it.
+   */
+  wide?: boolean;
+}) {
   const showBuilder = await canAuthor();
 
   return (
@@ -58,15 +70,27 @@ export default async function PageShell({ children }: { children: ReactNode }) {
           </Button>
 
           {showBuilder && (
-            <Button
-              variant="link"
-              size="sm"
-              className="px-0 text-zinc-500"
-              nativeButton={false}
-              render={<Link href="/builder" />}
-            >
-              Build
-            </Button>
+            <>
+              <Button
+                variant="link"
+                size="sm"
+                className="px-0 text-zinc-500"
+                nativeButton={false}
+                render={<Link href="/builder" />}
+              >
+                Build
+              </Button>
+
+              <Button
+                variant="link"
+                size="sm"
+                className="px-0 text-zinc-500"
+                nativeButton={false}
+                render={<Link href="/reports" />}
+              >
+                Reports
+              </Button>
+            </>
           )}
 
           <form action={logoutAction} className="ml-auto">
@@ -77,7 +101,9 @@ export default async function PageShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-6 py-10">{children}</main>
+      <main className={cn("mx-auto px-6 py-10", wide ? "max-w-6xl" : "max-w-3xl")}>
+        {children}
+      </main>
     </div>
   );
 }

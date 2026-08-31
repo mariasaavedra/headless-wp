@@ -507,3 +507,139 @@ function pcle_render_reports_admin_page() {
 	echo '</tbody></table>';
 	echo '</div>';
 }
+
+/* =========================================================================
+ * REST
+ * ========================================================================= */
+
+/**
+ * Permission callback for the report routes.
+ *
+ * Reporting is a staff act, so it takes the same gate as authoring rather than
+ * the participant one: `view_cle_content` only says somebody is enrolled
+ * somewhere, and a cohort report is a list of other people's records.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return true|WP_Error
+ */
+function pcle_rest_guard_report( $request ) {
+	if ( ! is_user_logged_in() ) {
+		return new WP_Error( 'pcle_not_authenticated', __( 'You must be signed in.', 'platform-cle' ), array( 'status' => 401 ) );
+	}
+
+	$id = (int) $request['id'];
+
+	if ( 'pcle_program' !== get_post_type( $id ) ) {
+		return new WP_Error( 'pcle_not_found', __( 'Not found.', 'platform-cle' ), array( 'status' => 404 ) );
+	}
+
+	if ( ! pcle_user_can_edit_program( $id ) ) {
+		return new WP_Error( 'pcle_cannot_report', __( 'You may not report on this programme.', 'platform-cle' ), array( 'status' => 403 ) );
+	}
+
+	return true;
+}
+
+/**
+ * Shapes the report for the API.
+ *
+ * The same rows the admin table renders, with the user object reduced to the
+ * two fields a reader needs. Nothing is decided here either — an undated
+ * completion still says so, because a report that quietly rounded it off would
+ * overstate what is known.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return WP_REST_Response
+ */
+function pcle_rest_get_report( $request ) {
+	$program_id = (int) $request['id'];
+	$rows       = array();
+
+	foreach ( pcle_get_program_report( $program_id ) as $row ) {
+		$rows[] = array(
+			'id'                   => (int) $row['user']->ID,
+			'name'                 => $row['user']->display_name,
+			'email'                => $row['user']->user_email,
+			'enrolled_at'          => $row['enrolled_at'],
+			'completed'            => (int) $row['completed'],
+			'total'                => (int) $row['total'],
+			'percent'              => (int) $row['percent'],
+			'finished'             => (bool) $row['finished'],
+			'completed_at'         => $row['completed_at'],
+			'undated'              => (int) $row['undated'],
+			'attended'             => (int) $row['attended'],
+			'sessions'             => (int) $row['sessions'],
+			'quizzes_passed'       => (int) $row['quizzes_passed'],
+			'quizzes'              => (int) $row['quizzes'],
+			'required_outstanding' => (int) $row['required_outstanding'],
+		);
+	}
+
+	return rest_ensure_response(
+		array(
+			'program'      => pcle_rest_shape_ref( get_post( $program_id ) ),
+			'credits'      => pcle_rest_shape_credit_hours( $program_id ),
+			'participants' => $rows,
+		)
+	);
+}
+
+/**
+ * The report as CSV rows, for a client that wants to offer the download.
+ *
+ * Deliberately the rows rather than a rendered file: pcle_get_program_report_csv()
+ * already decides the columns, their order and their escaping, and a second
+ * implementation of that in the frontend is a second thing to keep in step.
+ * The client's only job is to join them.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return WP_REST_Response
+ */
+function pcle_rest_get_report_csv( $request ) {
+	$program_id = (int) $request['id'];
+
+	return rest_ensure_response(
+		array(
+			'filename' => sanitize_file_name(
+				sprintf( '%s-%s.csv', get_post( $program_id )->post_name, gmdate( 'Y-m-d' ) )
+			),
+			'rows'     => pcle_get_program_report_csv( $program_id ),
+		)
+	);
+}
+
+/**
+ * Registers the report routes.
+ */
+function pcle_register_report_routes() {
+	$args = array(
+		'id' => array(
+			'required'          => true,
+			'type'              => 'integer',
+			'sanitize_callback' => 'absint',
+		),
+	);
+
+	register_rest_route(
+		'platform-cle/v1',
+		'/reports/programs/(?P<id>\d+)',
+		array(
+			'methods'             => 'GET',
+			'callback'            => 'pcle_rest_get_report',
+			'permission_callback' => 'pcle_rest_guard_report',
+			'args'                => $args,
+		)
+	);
+
+	register_rest_route(
+		'platform-cle/v1',
+		'/reports/programs/(?P<id>\d+)/csv',
+		array(
+			'methods'             => 'GET',
+			'callback'            => 'pcle_rest_get_report_csv',
+			'permission_callback' => 'pcle_rest_guard_report',
+			'args'                => $args,
+		)
+	);
+}
+add_action( 'rest_api_init', 'pcle_register_report_routes' );

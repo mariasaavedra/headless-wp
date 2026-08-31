@@ -169,6 +169,48 @@ type QuizSummary = {
   passed: boolean;
 };
 
+/* ------------------------------------------------------------------ */
+/* Cohort reports                                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * One participant's record in a cohort report.
+ *
+ * Deliberately raw. `undated` counts completions with no recorded date, and
+ * `required_outstanding` counts required quizzes still unpassed — both are
+ * reported rather than folded into a summary, because a compliance record that
+ * quietly rounds them off overstates what is actually known.
+ */
+type ReportParticipant = {
+  id: number;
+  name: string;
+  email: string;
+  enrolled_at: string | null;
+  completed: number;
+  total: number;
+  percent: number;
+  finished: boolean;
+  completed_at: string | null;
+  undated: number;
+  attended: number;
+  sessions: number;
+  quizzes_passed: number;
+  quizzes: number;
+  required_outstanding: number;
+};
+
+type ProgramReport = {
+  program: Ref | null;
+  credits: CreditHours[];
+  participants: ReportParticipant[];
+};
+
+/** The export, as the plugin decided its columns. */
+type ReportCsv = {
+  filename: string;
+  rows: string[][];
+};
+
 /** An entry of the signed-in user's programme list. */
 type TrainingProgram = {
   id: number;
@@ -179,6 +221,9 @@ type TrainingProgram = {
 export type {
   Progress,
   Ref,
+  ReportParticipant,
+  ProgramReport,
+  ReportCsv,
   QuizChoicePublic,
   QuizQuestionPublic,
   QuizAttempt,

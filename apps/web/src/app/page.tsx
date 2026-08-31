@@ -5,7 +5,7 @@ import { Card, CardContent } from "@pcle/ui/components/card";
 
 import { isAuthenticated } from "@/lib/auth";
 import { decodeEntities } from "@/lib/html";
-import { getMe, wordpressFetch } from "@/lib/wordpress";
+import { getMe, wordpressFetch, WORDPRESS_SITE_URL } from "@/lib/wordpress";
 
 type WordPressSite = {
   name: string;
@@ -17,17 +17,18 @@ async function getWordPressSite(): Promise<WordPressSite> {
 }
 
 /**
- * Can the signed-in reader build courses?
+ * What may the signed-in reader do?
  *
  * Fails closed, the same way the shared header does: a stale or expired token
- * means no Build path rather than a broken page. The route itself is guarded
- * server-side regardless — this only decides whether to offer it.
+ * means no staff paths rather than a broken page. Every route is guarded
+ * server-side regardless — this only decides what to offer.
  */
-async function canAuthor(): Promise<boolean> {
+async function whoIsThis(): Promise<{ author: boolean; admin: boolean }> {
   try {
-    return (await getMe()).can_author;
+    const me = await getMe();
+    return { author: me.can_author, admin: me.is_admin };
   } catch {
-    return false;
+    return { author: false, admin: false };
   }
 }
 
@@ -64,7 +65,9 @@ function Path({
 export default async function Home() {
   const site = await getWordPressSite();
   const signedIn = await isAuthenticated();
-  const author = signedIn && (await canAuthor());
+  const { author, admin } = signedIn
+    ? await whoIsThis()
+    : { author: false, admin: false };
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-zinc-50 px-6 py-16">
@@ -91,10 +94,33 @@ export default async function Home() {
                 cannot open is worse than not knowing it is there.
               */}
               {author && (
+                <>
+                  <Path
+                    href="/builder"
+                    title="Build"
+                    description="Write and organise programmes, units, modules and quizzes."
+                  />
+
+                  <Path
+                    href="/reports"
+                    title="Reports"
+                    description="Who is enrolled, what they have completed, and what is outstanding."
+                  />
+                </>
+              )}
+
+              {/*
+                Administration stays in WordPress: enrolment, accounts and
+                settings live there and are not worth a second implementation.
+                Offered only when the public WordPress URL is known, because
+                the address this server uses for the API is not always one a
+                browser can reach.
+              */}
+              {admin && WORDPRESS_SITE_URL && (
                 <Path
-                  href="/builder"
-                  title="Build"
-                  description="Write and organise programmes, units, modules and quizzes."
+                  href={`${WORDPRESS_SITE_URL}/wp-admin/`}
+                  title="Administration"
+                  description="Accounts, enrolment and site settings, in WordPress."
                 />
               )}
             </div>
