@@ -381,9 +381,14 @@ function pcle_seed_demo_data() {
 			);
 			$counts['unit']++;
 
+			/*
+			 * Titles here do not name their own type. The builder shows what a
+			 * thing is beside it, and demo content is the first thing an
+			 * instructor copies — "Scenario: X" taught everyone to say it twice.
+			 */
 			$event_id = pcle_seed_post(
 				'pcle_event',
-				sprintf( 'Live Session — Unit %d', $w + 1 ),
+				sprintf( 'Unit %d — Live Discussion', $w + 1 ),
 				'<p>Weekly live discussion and Q&amp;A with faculty.</p>',
 				$w + 1,
 				$author_id,
@@ -431,7 +436,7 @@ function pcle_seed_demo_data() {
 
 					pcle_seed_post(
 						'pcle_scenario',
-						sprintf( 'Scenario: %s in Practice', $unit['title'] ),
+						sprintf( '%s in Practice', $unit['title'] ),
 						$scenario_body,
 						1,
 						$author_id,
@@ -442,7 +447,7 @@ function pcle_seed_demo_data() {
 
 					pcle_seed_post(
 						'pcle_template',
-						sprintf( 'Template: %s Checklist', $unit['title'] ),
+						sprintf( '%s Checklist', $unit['title'] ),
 						'<p>Fill-in-the-blank starting point you can adapt for a real filing.</p>',
 						1,
 						$author_id,
