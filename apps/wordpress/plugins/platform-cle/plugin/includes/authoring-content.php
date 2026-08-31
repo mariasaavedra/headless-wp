@@ -21,9 +21,9 @@
  *   anything else         → paragraph
  *   **bold**  *italic*  [text](url)     → inline
  *
- * Blank lines separate blocks. This is not "markdown support" and should not
- * grow into it: every construct here is one the participant screens and the
- * WordPress editor both already render.
+ * Each marker applies to its own line, and a blank line ends a run. This is
+ * not "markdown support" and should not grow into it: every construct here is
+ * one the participant screens and the WordPress editor both already render.
  *
  * @package Platform_CLE
  */
@@ -85,82 +85,139 @@ function pcle_authoring_html_to_inline( $html ) {
 }
 
 /**
+ * What kind of block does this line begin?
+ *
+ * @param string $line One line of authored text.
+ * @return string blank|heading|list|quote|paragraph
+ */
+function pcle_authoring_line_type( $line ) {
+	if ( '' === trim( $line ) ) {
+		return 'blank';
+	}
+	if ( 0 === strpos( $line, '## ' ) || 0 === strpos( $line, '### ' ) ) {
+		return 'heading';
+	}
+	if ( 0 === strpos( $line, '- ' ) ) {
+		return 'list';
+	}
+	if ( 0 === strpos( $line, '> ' ) ) {
+		return 'quote';
+	}
+
+	return 'paragraph';
+}
+
+/**
+ * Closes an open run of lines into a block.
+ *
+ * @param array    $blocks   Blocks so far.
+ * @param string[] $run      Buffered lines.
+ * @param string   $run_type Their type.
+ * @return array Blocks, with the run appended.
+ */
+function pcle_authoring_flush_run( $blocks, $run, $run_type ) {
+	if ( ! $run ) {
+		return $blocks;
+	}
+
+	if ( 'list' === $run_type ) {
+		$items = array();
+		foreach ( $run as $line ) {
+			$items[] = trim( substr( $line, 2 ) );
+		}
+		$blocks[] = array(
+			'type'  => 'list',
+			'items' => $items,
+		);
+
+		return $blocks;
+	}
+
+	if ( 'quote' === $run_type ) {
+		$quoted = array();
+		foreach ( $run as $line ) {
+			$quoted[] = trim( substr( $line, 2 ) );
+		}
+		$blocks[] = array(
+			'type' => 'quote',
+			'text' => implode( ' ', $quoted ),
+		);
+
+		return $blocks;
+	}
+
+	$blocks[] = array(
+		'type' => 'paragraph',
+		// A single newline inside a paragraph is a soft break.
+		'text' => implode( ' ', array_map( 'trim', $run ) ),
+	);
+
+	return $blocks;
+}
+
+/**
  * Splits authored text into typed blocks.
+ *
+ * Markers are read per LINE, not per blank-line-separated chunk. They used to
+ * be per chunk: the first line decided the type and the rest of the chunk was
+ * swallowed into it, so
+ *
+ *     ## Detention review
+ *     Check the custody deadline.
+ *     - First point
+ *
+ * became a single <h2> containing all three lines. Nothing was lost — it read
+ * back out identically — but what a participant saw was wrong, and the only
+ * way to avoid it was to know that blank lines were load-bearing.
+ *
+ * Runs still matter where they mean something: consecutive "- " lines are one
+ * list, consecutive "> " lines are one quote, and consecutive plain lines are
+ * one paragraph with soft breaks. A blank line still ends any run, so text
+ * that was already written with blank lines parses exactly as it did before.
  *
  * @param string $text Authored text.
  * @return array<int,array{type:string, text:string, level?:int, items?:string[]}>
  */
 function pcle_authoring_text_to_blocks( $text ) {
-	$text   = str_replace( array( "\r\n", "\r" ), "\n", (string) $text );
-	$chunks = preg_split( '/\n{2,}/', trim( $text ) );
-	$blocks = array();
+	$text  = str_replace( array( "\r\n", "\r" ), "\n", (string) $text );
+	$lines = explode( "\n", trim( $text ) );
 
-	foreach ( $chunks as $chunk ) {
-		$chunk = trim( $chunk );
+	$blocks   = array();
+	$run      = array();
+	$run_type = null;
 
-		if ( '' === $chunk ) {
+	foreach ( $lines as $line ) {
+		$type = pcle_authoring_line_type( $line );
+
+		if ( 'blank' === $type ) {
+			$blocks   = pcle_authoring_flush_run( $blocks, $run, $run_type );
+			$run      = array();
+			$run_type = null;
 			continue;
 		}
 
-		$lines = explode( "\n", $chunk );
-
-		// A run of "- " lines is one list, not several paragraphs.
-		if ( 0 === strpos( $lines[0], '- ' ) ) {
-			$items = array();
-
-			foreach ( $lines as $line ) {
-				if ( 0 === strpos( $line, '- ' ) ) {
-					$items[] = trim( substr( $line, 2 ) );
-				}
-			}
-
-			$blocks[] = array(
-				'type'  => 'list',
-				'items' => $items,
-			);
-			continue;
+		// A heading is always one line, and any change of type ends the run.
+		if ( 'heading' === $type || $type !== $run_type ) {
+			$blocks   = pcle_authoring_flush_run( $blocks, $run, $run_type );
+			$run      = array();
+			$run_type = null;
 		}
 
-		if ( 0 === strpos( $chunk, '### ' ) ) {
+		if ( 'heading' === $type ) {
+			$level    = 0 === strpos( $line, '### ' ) ? 3 : 2;
 			$blocks[] = array(
 				'type'  => 'heading',
-				'level' => 3,
-				'text'  => trim( substr( $chunk, 4 ) ),
+				'level' => $level,
+				'text'  => trim( substr( $line, 3 === $level ? 4 : 3 ) ),
 			);
 			continue;
 		}
 
-		if ( 0 === strpos( $chunk, '## ' ) ) {
-			$blocks[] = array(
-				'type'  => 'heading',
-				'level' => 2,
-				'text'  => trim( substr( $chunk, 3 ) ),
-			);
-			continue;
-		}
-
-		if ( 0 === strpos( $chunk, '> ' ) ) {
-			$quoted = array();
-
-			foreach ( $lines as $line ) {
-				$quoted[] = 0 === strpos( $line, '> ' ) ? trim( substr( $line, 2 ) ) : trim( $line );
-			}
-
-			$blocks[] = array(
-				'type' => 'quote',
-				'text' => implode( ' ', $quoted ),
-			);
-			continue;
-		}
-
-		$blocks[] = array(
-			'type' => 'paragraph',
-			// A single newline inside a paragraph is a soft break.
-			'text' => implode( ' ', array_map( 'trim', $lines ) ),
-		);
+		$run_type = $type;
+		$run[]    = $line;
 	}
 
-	return $blocks;
+	return pcle_authoring_flush_run( $blocks, $run, $run_type );
 }
 
 /**

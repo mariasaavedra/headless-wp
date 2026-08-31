@@ -1278,6 +1278,69 @@ foreach ( $round_trips as $label => $text ) {
 	pcle_eq( trim( $back['text'] ), trim( $text ), "{$label} round-trips unchanged" );
 }
 
+/*
+ * Markers are read per line, not per blank-line chunk. They used to be per
+ * chunk, so the first line decided the type and swallowed the rest: a heading
+ * followed directly by text and a list became one enormous <h2>. Nothing was
+ * lost — it read back out identically, which is why the round-trip assertions
+ * above never caught it — but what a participant saw was wrong, and avoiding
+ * it meant knowing that blank lines were load-bearing.
+ */
+$tight   = "## Detention review\nCheck the deadline.\n- First point\n- Second point\n> Worth remembering\nClosing line.";
+$tight_b = pcle_authoring_text_to_blocks( $tight );
+$types   = array();
+foreach ( $tight_b as $block ) {
+	$types[] = $block['type'];
+}
+pcle_eq(
+	$types,
+	array( 'heading', 'paragraph', 'list', 'quote', 'paragraph' ),
+	'markers start a new block without needing a blank line'
+);
+pcle_eq( count( $tight_b[2]['items'] ), 2, 'consecutive list lines are still one list' );
+pcle_eq( $tight_b[0]['text'], 'Detention review', 'the heading takes only its own line' );
+
+$tight_stored = pcle_authoring_content_from_text( $tight );
+pcle_eq( substr_count( $tight_stored, '<!-- wp:heading' ), 1, 'and it stores exactly one heading block' );
+pcle_ok( false !== strpos( $tight_stored, '<!-- wp:list' ), 'with the list as its own block' );
+pcle_ok( false === strpos( $tight_stored, '<h2>Detention review' . "\n" ), 'nothing is swallowed into the heading' );
+
+/*
+ * Tight text does not round-trip byte for byte, and should not: reading it
+ * back emits one blank line between blocks. What has to hold is that the
+ * MEANING survives and then stays put — so the normalised form parses to the
+ * same blocks, and saving it again changes nothing.
+ */
+$tight_back = pcle_authoring_text_from_content( $tight_stored );
+pcle_eq( $tight_back['editable'], true, 'tight text survives as editable' );
+pcle_eq(
+	pcle_authoring_text_to_blocks( $tight_back['text'] ),
+	$tight_b,
+	'and reads back as the same blocks it was written as'
+);
+pcle_eq(
+	pcle_authoring_content_from_text( $tight_back['text'] ),
+	$tight_stored,
+	'saving the normalised text again is a no-op'
+);
+
+// Blank-line-separated text has to parse exactly as it always did.
+$spaced = "## Title\n\nOne.\n\n- a\n- b\n\n> Quoted.";
+pcle_eq(
+	pcle_authoring_text_to_blocks( $spaced ),
+	pcle_authoring_text_to_blocks( "## Title\nOne.\n- a\n- b\n> Quoted." ),
+	'blank lines and none produce the same blocks now'
+);
+
+// Two paragraphs separated by a blank line stay two paragraphs.
+$two = pcle_authoring_text_to_blocks( "First para.\n\nSecond para." );
+pcle_eq( count( $two ), 2, 'a blank line still separates two paragraphs' );
+
+// A soft break inside a paragraph still joins.
+$soft = pcle_authoring_text_to_blocks( "One line.\nSame paragraph." );
+pcle_eq( count( $soft ), 1, 'consecutive plain lines are still one paragraph' );
+pcle_eq( $soft[0]['text'], 'One line. Same paragraph.', 'joined with a space' );
+
 // What gets stored is block markup, which is what opens cleanly in wp-admin.
 $stored_blocks = pcle_authoring_content_from_text( "## Heading\n\nText." );
 pcle_ok( false !== strpos( $stored_blocks, '<!-- wp:heading' ), 'headings are stored as blocks, not bare HTML' );
