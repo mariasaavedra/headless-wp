@@ -14,9 +14,11 @@ WordPress REST API
 Next.js / React / TypeScript
 ```
 
-That boundary now exists, but it is thin. `apps/web` authenticates against WordPress over JWT (`/jwt-auth/v1/token`), keeps the token in an httpOnly cookie, and reads two things: the site name/tagline for the home page, and the signed-in user's programs and progress from `/platform-cle/v1/my-training`. Nothing else is wired up yet — there are no screens for browsing a program, week or module, so **the WordPress-rendered site remains the live interface** while `apps/web` is built out in parallel.
+That boundary is now real. `apps/web` authenticates against WordPress over JWT (`/jwt-auth/v1/token`), keeps the token in an httpOnly cookie, and covers the participant path end to end: a front door that offers each reader only the routes their role allows, the enrolled-programme list, and screens for a programme, a unit, a module and a quiz — with completion and quiz attempts written back through the plugin's own endpoints. Instructors and administrators additionally get a curriculum builder and cohort reports with CSV export. See [Routes](#routes) for the full list.
 
-The curriculum itself is readable headlessly (`/wp/v2/pcle_*`, with the parent-child relationships exposed in `meta`), so the remaining work is frontend, not API.
+**WordPress remains the system of record and the administrative surface**, and the WordPress-rendered site is still served — the plugin and theme are not being retired. What has changed is that `apps/web` is no longer a shell around two API calls.
+
+The curriculum is readable headlessly (`/wp/v2/pcle_*`, with the parent-child relationships exposed in `meta`), and the plugin adds task-shaped routes under `/platform-cle/v1/` — `my-training`, `programs`, `units`, `modules`, `progress`, `quizzes`, `reports`, `me`, and the `authoring/*` family behind the builder.
 
 ## Repository structure
 
@@ -24,19 +26,25 @@ The curriculum itself is readable headlessly (`/wp/v2/pcle_*`, with the parent-c
 .
 ├── apps/
 │   ├── web/                          # Next.js app (App Router, TypeScript, Tailwind)
-│   │   ├── src/app/                  # routes (layout.tsx, page.tsx, globals.css)
+│   │   ├── src/
+│   │   │   ├── app/                  # routes, layouts and server actions
+│   │   │   ├── components/           # app components, incl. the curriculum builder
+│   │   │   └── lib/                  # WordPress client, auth cookie, shared types
 │   │   └── Dockerfile
 │   └── wordpress/
 │       ├── bin/
 │       │   └── bootstrap.sh          # container entrypoint: install + configure WP
 │       ├── plugins/
-│       │   └── platform-cle/
-│       │       ├── plugin/           # Platform CLE plugin source
-│       │       ├── theme/            # Platform CLE child theme source
-│       │       └── docs/             # plugin architecture/dev/deployment docs
+│       │   ├── platform-cle/
+│       │   │   ├── plugin/           # Platform CLE plugin source (incl. tests/)
+│       │   │   ├── theme/            # Platform CLE child theme source
+│       │   │   └── docs/             # plugin architecture/dev/deployment docs
+│       │   └── jwt-authentication-for-wp-rest-api/   # vendored third-party plugin
 │       └── Dockerfile
+├── libs/
+│   └── ui/                           # @pcle/ui — shared components (Base UI + Tailwind)
 ├── docker-compose.yml
-├── package.json                      # npm workspaces root (apps/*)
+├── package.json                      # npm workspaces root (apps/*, libs/*)
 └── README.md
 ```
 
@@ -196,6 +204,22 @@ npm run start
 
 These root scripts delegate to the `apps/web` workspace.
 
+**The root `.env` does not reach the Next.js app.** Next reads env files from its
+own directory, so `apps/web` needs its own — the root `.env` is for Docker Compose
+and the WordPress bootstrap. Outside Docker, WordPress is on `localhost`, not on
+the `wordpress` hostname that only exists inside the compose network:
+
+```bash
+cat > apps/web/.env.local <<'EOF'
+WORDPRESS_API_URL=http://localhost:8080/wp-json
+WORDPRESS_SITE_URL=http://localhost:8080
+EOF
+```
+
+`WORDPRESS_API_URL` is where *this server* calls WordPress; `WORDPRESS_SITE_URL`
+is where a *browser* reaches it, and is what any rendered link has to use. Both
+`.env` and `.env.*` are gitignored (`.env.example` excepted).
+
 ## Platform CLE plugin and theme
 
 The `platform-cle` plugin (`apps/wordpress/plugins/platform-cle/plugin`) owns the application's domain logic: custom post types, roles/capabilities, access control, enrollment, progress tracking, and dynamic blocks. It includes an idempotent demo-data seeder (`plugin/bin/seed-demo.php`) invoked by the bootstrap script only on a fresh install.
@@ -222,16 +246,55 @@ Note: that plugin repository's own docs refer to the theme's source directory as
 
 ### Routes
 
+Every route below except `/` and `/login` redirects to `/login` without a token,
+and each is additionally guarded server-side by the plugin — the frontend decides
+what to *offer*, never what to *allow*.
+
+**Participants**
+
 | Route | What it does |
 |---|---|
-| `/` | Site name and tagline from `/wp-json/`. |
+| `/` | The front door: site name and tagline, plus the paths the signed-in reader's role allows. |
 | `/login` | Posts to `/jwt-auth/v1/token`; stores the token in an httpOnly cookie. |
-| `/my-training` | Requires the cookie, calls `/platform-cle/v1/my-training`. Currently renders the raw JSON — the programme cards and progress bars are still to build. |
+| `/my-training` | Enrolled programmes and progress, from `/platform-cle/v1/my-training`. |
+| `/programs/[id]` | A programme: its units, its modules, and how far through it the reader is. |
+| `/units/[id]` | A unit and the modules under it. |
+| `/modules/[id]` | Module content, resources and quizzes, with the completion toggle. |
+| `/quizzes/[id]` | Sits a quiz. Marking is server-side; past attempts are listed in full. |
+
+**Instructors and administrators**
+
+| Route | What it does |
+|---|---|
+| `/builder` | The programmes this person may author, and a way to create one. |
+| `/builder/programs/[id]` | The curriculum tree: add, rename, reorder, publish, set credit hours. |
+| `/builder/nodes/[id]` | One node's body — and, for a quiz, its questions and pass mark. |
+| `/reports` | Which cohort to report on. |
+| `/reports/[id]` | Cohort report: per-participant progress, credits and quiz results. |
+| `/reports/[id]/csv` | The same report as a download. The plugin composes the columns; this route only quotes and joins them. |
 
 Two things worth knowing before adding screens:
 
 - **Decode entities on text you render.** WordPress returns HTML-encoded strings (`Pen &amp; Sword`), and React escapes them again, so the entity shows up on screen. Pass plain-text fields through `decodeEntities()` (`src/lib/html.ts`). Never apply it to `content.rendered` — that is real HTML, and decoding it would turn an escaped `&lt;script&gt;` back into a live tag.
 - **The token lasts 7 days and cannot be revoked.** Logging out deletes the cookie, but the token stays valid until it expires. Shorten it and add refresh before any of this is exposed publicly.
+
+## Shared UI library
+
+`libs/ui` is the `@pcle/ui` workspace: [shadcn/ui](https://ui.shadcn.com/docs)
+components vendored into the repo (you own the code, not a black-box package),
+built on [Base UI](https://base-ui.com/react/overview/quick-start) primitives and
+Tailwind. `apps/web` depends on it as `"@pcle/ui": "*"` and imports by path:
+
+```ts
+import { Button } from "@pcle/ui/components/button";
+import { cn } from "@pcle/ui/lib/utils";
+```
+
+The design tokens live in `libs/ui/src/styles/globals.css`, which `apps/web`
+imports from its own `globals.css` — light and dark are defined there, not in the
+app. See [libs/ui/src/README.md](libs/ui/src/README.md) for the component index
+and how to add another.
+
 
 ## Troubleshooting
 
