@@ -572,7 +572,25 @@ function pcle_authoring_update_node( $request ) {
 	$changes = array( 'ID' => $id );
 
 	if ( null !== $request['title'] ) {
-		$changes['post_title'] = sanitize_text_field( (string) $request['title'] );
+		$title = sanitize_text_field( (string) $request['title'] );
+
+		/*
+		 * Refuse an empty title here rather than letting wp_update_post do it.
+		 * It would fail with "Content, title, and excerpt are empty" — its own
+		 * wording, about fields this caller may not have touched — which this
+		 * function then returned as a 500. Sending a blank title is a bad
+		 * request, not a server fault, and the caller deserves to be told
+		 * which field is wrong.
+		 */
+		if ( '' === trim( $title ) ) {
+			return new WP_Error(
+				'pcle_title_required',
+				__( 'A title is required.', 'platform-cle' ),
+				array( 'status' => 400 )
+			);
+		}
+
+		$changes['post_title'] = $title;
 	}
 
 	if ( null !== $request['excerpt'] ) {
@@ -726,15 +744,31 @@ function pcle_authoring_validate_sibling_set( $parent_id, $child_type, $ids ) {
 
 	$actual = wp_list_pluck( pcle_authoring_get_children( $parent_id, $child_type ), 'ID' );
 	$actual = array_map( 'intval', $actual );
+	$ids    = array_map( 'intval', (array) $ids );
 
 	foreach ( $ids as $id ) {
-		if ( ! in_array( (int) $id, $actual, true ) ) {
+		if ( ! in_array( $id, $actual, true ) ) {
 			return new WP_Error(
 				'pcle_not_a_sibling',
 				__( 'That list contains an item that does not belong here.', 'platform-cle' ),
 				array( 'status' => 400 )
 			);
 		}
+	}
+
+	/*
+	 * Uniqueness, checked before the count. Membership and count alone let
+	 * [7, 7, 7] through for three siblings — every id is a sibling and the
+	 * total matches — while naming one item three times and the other two not
+	 * at all. Those two would keep their old menu_order and end up tied with
+	 * the duplicate, which is an order nobody chose and no error reported.
+	 */
+	if ( count( array_unique( $ids ) ) !== count( $ids ) ) {
+		return new WP_Error(
+			'pcle_duplicate_order',
+			__( 'That list names the same item more than once.', 'platform-cle' ),
+			array( 'status' => 400 )
+		);
 	}
 
 	if ( count( $ids ) !== count( $actual ) ) {

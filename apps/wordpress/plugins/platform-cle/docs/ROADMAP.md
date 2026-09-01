@@ -91,7 +91,7 @@ Severity: 🔴 blocker · 🟡 important · 🟢 fine.
 
 **Engineering practices**
 - 🟡→✅ No automated tests. **Fixed** for the plugin (`tests/smoke-test.php`,
-  398 assertions across 31 sections). `apps/web` still has none: CI lints and
+  444 assertions across 31 sections). `apps/web` still has none: CI lints and
   builds it, and nothing more.
 - 🟡 Blocks registered without `block.json` → not in the editor inserter.
 - 🟡 No i18n catalog (`.pot`).
@@ -125,7 +125,7 @@ Goal: run the first real 4-week cohort safely.
 | 2 | Per-program REST guard (fix the no-op) | ✅ done + verified E2E |
 | 3 | Bulk enrollment by email | ✅ done + verified |
 | 4 | Emails (enrollment confirmation + session reminder) | ✅ done (`includes/emails.php`); verified via wp_mail capture. Needs SMTP on the host for real delivery. |
-| 5 | Smoke tests on access-control, progress, files, REST | ✅ done (`tests/smoke-test.php`, 398 assertions across 31 sections, dependency-free); green in CI on every push |
+| 5 | Smoke tests on access-control, progress, files, REST | ✅ done (`tests/smoke-test.php`, 444 assertions across 31 sections, dependency-free); green in CI on every push |
 | 6 | Deploy prep (health check + runbook) | ✅ done (`includes/health.php` + [DEPLOYMENT.md](DEPLOYMENT.md)); host/backups/DNS remain owner-driven |
 
 ---

@@ -1167,6 +1167,22 @@ pcle_eq(
 	400,
 	'an unknown status is refused'
 );
+
+/*
+ * A blank title used to reach wp_update_post, which refused it with "Content,
+ * title, and excerpt are empty" — its own wording, naming fields the caller
+ * never sent — and this endpoint returned that as a 500. Sending a blank title
+ * is a bad request, and a caller that is told 500 cannot tell its own mistake
+ * from a broken server.
+ */
+foreach ( array( '' => 'an empty title', '   ' => 'a whitespace-only title' ) as $blank => $label ) {
+	$refused = pcle_authoring_call( $admin, 'PATCH', "/platform-cle/v1/authoring/nodes/{$first_module['id']}", array( 'title' => $blank ) );
+
+	pcle_eq( $refused->get_status(), 400, "{$label} is refused as a bad request, not a server error" );
+	pcle_eq( $refused->get_data()['code'], 'pcle_title_required', "{$label} says which field is wrong" );
+}
+
+pcle_eq( get_post( $first_module['id'] )->post_title, 'TEST Renamed Module', 'and a refused blank title left the old one intact' );
 pcle_eq(
 	pcle_authoring_call( $student, 'PATCH', "/platform-cle/v1/authoring/nodes/{$first_module['id']}", array( 'title' => 'hijacked' ) )->get_status(),
 	403,
@@ -1204,6 +1220,36 @@ pcle_eq(
 	400,
 	'a partial list is refused rather than silently renumbering the rest'
 );
+
+/*
+ * Duplicates used to slip through both guards: every id in [A, A] really is a
+ * sibling, and the count really does match two siblings. The result named A
+ * twice and B not at all, so B kept its old menu_order and tied with A — an
+ * order nobody chose, reported as 200 OK.
+ */
+$dupe_order = wp_list_pluck( pcle_authoring_get_children( $created_unit['id'], 'pcle_module' ), 'ID' );
+
+$duplicated = pcle_authoring_call(
+	$admin,
+	'POST',
+	'/platform-cle/v1/authoring/reorder',
+	array( 'parent_id' => $created_unit['id'], 'child_type' => 'pcle_module', 'ids' => array( $first_module['id'], $first_module['id'] ) )
+);
+pcle_eq( $duplicated->get_status(), 400, 'a list naming the same item twice is refused' );
+pcle_eq( $duplicated->get_data()['code'], 'pcle_duplicate_order', 'and says so, rather than reporting an incomplete list' );
+pcle_eq(
+	wp_list_pluck( pcle_authoring_get_children( $created_unit['id'], 'pcle_module' ), 'ID' ),
+	$dupe_order,
+	'and the refused reorder left every sibling exactly where it was'
+);
+
+$menu_orders = array_map(
+	static function ( $sibling ) {
+		return (int) $sibling->menu_order;
+	},
+	pcle_authoring_get_children( $created_unit['id'], 'pcle_module' )
+);
+pcle_eq( count( array_unique( $menu_orders ) ), count( $menu_orders ), 'no two siblings share a menu_order' );
 
 // Moving.
 $move_target     = pcle_authoring_call( $admin, 'POST', '/platform-cle/v1/authoring/nodes', array( 'type' => 'pcle_unit', 'parent_id' => $prog_a, 'title' => 'TEST Move Target Unit' ) )->get_data();
