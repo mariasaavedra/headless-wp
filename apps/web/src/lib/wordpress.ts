@@ -6,15 +6,25 @@ import type {
   NodeDetail,
   NodeType,
   Program,
+  ProgramReport,
   QuizForTaking,
   QuizQuestion,
   QuizResult,
+  ReportCsv,
   TrainingProgram,
   TreeNode,
   UnitDetail,
 } from "@/lib/types";
 
 const WORDPRESS_API_URL = process.env.WORDPRESS_API_URL;
+
+/**
+ * Where WordPress lives for a BROWSER, which is not always where it lives for
+ * this server: in Docker the API is reached at http://wordpress/wp-json, a
+ * hostname only the container network can resolve. Anything rendered as a link
+ * has to use this instead, and simply not be offered when it is unset.
+ */
+const WORDPRESS_SITE_URL = process.env.WORDPRESS_SITE_URL ?? "";
 
 class WordPressAuthError extends Error {
   constructor(message = "Invalid username or password.") {
@@ -228,6 +238,25 @@ async function submitQuizAttempt(
   }) as Promise<QuizResult>;
 }
 
+async function getProgramReport(id: number): Promise<ProgramReport> {
+  return wordpressFetch(`/platform-cle/v1/reports/programs/${id}`, {
+    auth: true,
+  }) as Promise<ProgramReport>;
+}
+
+/**
+ * The export rows, as the plugin composed them.
+ *
+ * Rows rather than a finished file: the plugin already decides the columns,
+ * their order and their escaping, and a second implementation of that here
+ * would be a second thing to keep in step.
+ */
+async function getProgramReportCsv(id: number): Promise<ReportCsv> {
+  return wordpressFetch(`/platform-cle/v1/reports/programs/${id}/csv`, {
+    auth: true,
+  }) as Promise<ReportCsv>;
+}
+
 async function getMe(): Promise<Me> {
   return wordpressFetch("/platform-cle/v1/me", { auth: true }) as Promise<Me>;
 }
@@ -322,6 +351,7 @@ async function reorderChildren(input: {
 }
 
 export {
+  WORDPRESS_SITE_URL,
   wordpressFetch,
   login,
   logout,
@@ -331,6 +361,8 @@ export {
   getModule,
   setModuleCompletion,
   getMe,
+  getProgramReport,
+  getProgramReportCsv,
   getQuiz,
   submitQuizAttempt,
   getAuthoringPrograms,
