@@ -45,10 +45,16 @@ Severity: 🔴 blocker · 🟡 important · 🟢 fine.
 - 🟡 Progress computation is N+1 (loops per unit/module); no caching.
 
 **Engineering practices**
-- 🟡 No automated tests (planned — Option A #5).
+- 🟡→✅ No automated tests. **Fixed** for the plugin (`tests/smoke-test.php`,
+  72 assertions across 32 sections). `apps/web` still has none: CI lints and
+  builds it, and nothing more.
 - 🟡 Blocks registered without `block.json` → not in the editor inserter.
 - 🟡 No i18n catalog (`.pot`).
-- 🟡 Monorepo is a manual `rsync` snapshot (divergence risk); no CI.
+- 🟡→✅ Monorepo was a manual `rsync` snapshot with no CI. **Fixed**: the plugin
+  and theme are bind-mounted from the repo into the container, and
+  `.github/workflows/ci.yml` runs the smoke suite against a real stack plus a
+  web lint/build on every push and PR. `plugin/bin/sync.sh` survives from the
+  Local by Flywheel era and is no longer part of any workflow.
 
 **Ops**
 - 🟡 Only on Local; no staging/production host, backups, or deploy pipeline.
@@ -67,7 +73,7 @@ Goal: run the first real 4-week cohort safely.
 | 2 | Per-program REST guard (fix the no-op) | ✅ done + verified E2E |
 | 3 | Bulk enrollment by email | ✅ done + verified |
 | 4 | Emails (enrollment confirmation + session reminder) | ✅ done (`includes/emails.php`); verified via wp_mail capture. Needs SMTP on the host for real delivery. |
-| 5 | Smoke tests on access-control, progress, files, REST | ✅ done (`tests/smoke-test.php`, 36 assertions, dependency-free) |
+| 5 | Smoke tests on access-control, progress, files, REST | ✅ done (`tests/smoke-test.php`, 72 assertions across 32 sections, dependency-free); green in CI on every push |
 | 6 | Deploy prep (health check + runbook) | ✅ done (`includes/health.php` + [DEPLOYMENT.md](DEPLOYMENT.md)); host/backups/DNS remain owner-driven |
 
 ---

@@ -203,16 +203,6 @@ async function setModuleCompletion(
   });
 }
 
-/* ------------------------------------------------------------------ */
-/* Authoring                                                           */
-/* ------------------------------------------------------------------ */
-
-/**
- * Who is signed in, and what they may do.
- *
- * The rest of the app assumes a participant; this is what lets it offer the
- * builder to the people who have one and nobody else.
- */
 async function getQuiz(id: number): Promise<QuizForTaking> {
   return wordpressFetch(`/platform-cle/v1/quizzes/${id}`, {
     auth: true,
@@ -257,6 +247,16 @@ async function getProgramReportCsv(id: number): Promise<ReportCsv> {
   }) as Promise<ReportCsv>;
 }
 
+/* ------------------------------------------------------------------ */
+/* Authoring                                                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Who is signed in, and what they may do.
+ *
+ * The rest of the app assumes a participant; this is what lets it offer the
+ * builder to the people who have one and nobody else.
+ */
 async function getMe(): Promise<Me> {
   return wordpressFetch("/platform-cle/v1/me", { auth: true }) as Promise<Me>;
 }
