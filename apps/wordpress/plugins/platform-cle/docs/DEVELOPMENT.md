@@ -96,7 +96,7 @@ docker compose exec wordpress php /var/www/html/wp-content/plugins/platform-cle/
 
 ## Tests
 
-Dependency-free smoke tests (no PHPUnit, no composer) — **398 assertions across 31
+Dependency-free smoke tests (no PHPUnit, no composer) — **444 assertions across 31
 sections** covering access control, enrollment, progress, relationships,
 protected files, the REST guards, credit hours, attendance, certificates,
 quizzes and marking, the quiz completion gate, reporting and the authoring API.
