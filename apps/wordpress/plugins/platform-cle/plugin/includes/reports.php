@@ -3,9 +3,10 @@
  * Cohort reporting.
  *
  * The question a CLE has to answer about a finished programme: who was
- * enrolled, what did they complete, when, and which sessions did they attend.
+ * enrolled, what did they complete, when, which sessions did they attend, and
+ * which assessments did they pass.
  * Under the old serialized user meta that meant loading every user and
- * unserializing in PHP; it is now four queries for any cohort size, and the
+ * unserializing in PHP; it is now five queries for any cohort size, and the
  * report is deliberately built that way rather than by calling the per-user
  * helpers in a loop.
  *
@@ -13,6 +14,13 @@
  * are, including where they are incomplete — a completion with no date says
  * so instead of being quietly dropped or given a plausible one. Whether the
  * result supports a credit claim is a judgement for the person filing it.
+ *
+ * One reading that looks contradictory and is not: a participant can show
+ * every module complete AND a required quiz outstanding. The gate is applied
+ * when a completion is recorded, and nothing revokes a completion that was
+ * already recorded — marking a quiz required afterwards must not quietly
+ * rewrite what somebody had already been credited with. So the two columns
+ * describe different moments, and both are true.
  *
  * @package Platform_CLE
  */
@@ -33,7 +41,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  * @return array<int,array{
  *     user:WP_User, enrolled_at:string|null, completed:int, total:int,
  *     percent:int, finished:bool, completed_at:string|null, undated:int,
- *     attended:int, sessions:int
+ *     attended:int, sessions:int, quizzes_passed:int, quizzes:int,
+ *     required_outstanding:int
  * }>
  */
 function pcle_get_program_report( $program_id ) {
@@ -42,6 +51,8 @@ function pcle_get_program_report( $program_id ) {
 	$program_id = (int) $program_id;
 	$modules    = pcle_get_program_module_ids( $program_id );
 	$events     = pcle_get_program_event_ids( $program_id );
+	$quizzes    = pcle_get_program_quiz_ids( $program_id );
+	$required   = pcle_get_program_required_quiz_ids( $program_id );
 
 	// 1) The roster, with when each enrollment happened.
 	$enrollments_table = pcle_enrollments_table();
@@ -114,7 +125,36 @@ function pcle_get_program_report( $program_id ) {
 		}
 	}
 
-	// 4) The users themselves.
+	/*
+	 * 4) Quizzes passed, for the whole cohort at once.
+	 *
+	 * DISTINCT pairs rather than a count: a participant may sit a quiz several
+	 * times and pass more than once, and "how many quizzes has this person
+	 * passed" must not become "how many passing attempts do they have". The
+	 * pairs also carry which quizzes, which is what lets a required quiz be
+	 * told apart from an optional one without a second query.
+	 */
+	$passed_quizzes = array();
+	if ( $quizzes ) {
+		$attempts_table = pcle_quiz_attempts_table();
+		$placeholders   = implode( ',', array_fill( 0, count( $quizzes ), '%d' ) );
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT DISTINCT user_id, quiz_id
+				 FROM {$attempts_table}
+				 WHERE quiz_id IN ({$placeholders}) AND passed = 1",
+				$quizzes
+			)
+		);
+
+		foreach ( $rows as $row ) {
+			$passed_quizzes[ (int) $row->user_id ][] = (int) $row->quiz_id;
+		}
+	}
+
+	// 5) The users themselves.
 	$users = get_users(
 		array(
 			'include' => $user_ids,
@@ -143,6 +183,16 @@ function pcle_get_program_report( $program_id ) {
 			'undated'     => $undated,
 			'attended'    => isset( $attendance[ $id ] ) ? $attendance[ $id ] : 0,
 			'sessions'    => count( $events ),
+			'quizzes_passed' => isset( $passed_quizzes[ $id ] ) ? count( $passed_quizzes[ $id ] ) : 0,
+			'quizzes'     => count( $quizzes ),
+			/*
+			 * Required quizzes still to pass. Reported rather than derived from
+			 * the two counts above, because an optional quiz left unsat is not
+			 * the same fact: this one says why a module is not finished.
+			 */
+			'required_outstanding' => count(
+				array_diff( $required, isset( $passed_quizzes[ $id ] ) ? $passed_quizzes[ $id ] : array() )
+			),
 		);
 	}
 
@@ -191,6 +241,9 @@ function pcle_get_program_report_csv( $program_id ) {
 		__( 'Completions without a date', 'platform-cle' ),
 		__( 'Sessions attended', 'platform-cle' ),
 		__( 'Sessions total', 'platform-cle' ),
+		__( 'Quizzes passed', 'platform-cle' ),
+		__( 'Quizzes total', 'platform-cle' ),
+		__( 'Required quizzes outstanding', 'platform-cle' ),
 	);
 
 	foreach ( pcle_jurisdictions() as $code => $label ) {
@@ -213,6 +266,9 @@ function pcle_get_program_report_csv( $program_id ) {
 			(string) $row['undated'],
 			(string) $row['attended'],
 			(string) $row['sessions'],
+			(string) $row['quizzes_passed'],
+			(string) $row['quizzes'],
+			(string) $row['required_outstanding'],
 		);
 
 		// The programme's approved hours, repeated per row so each line stands
@@ -372,6 +428,7 @@ function pcle_render_reports_admin_page() {
 	echo '<th>' . esc_html__( 'Modules', 'platform-cle' ) . '</th>';
 	echo '<th>' . esc_html__( 'Completed on', 'platform-cle' ) . '</th>';
 	echo '<th>' . esc_html__( 'Sessions', 'platform-cle' ) . '</th>';
+	echo '<th>' . esc_html__( 'Quizzes', 'platform-cle' ) . '</th>';
 	echo '</tr></thead><tbody>';
 
 	$date_format = get_option( 'date_format' );
@@ -422,6 +479,27 @@ function pcle_render_reports_admin_page() {
 		echo '</td>';
 
 		printf( '<td>%1$d / %2$d</td>', (int) $row['attended'], (int) $row['sessions'] );
+
+		echo '<td>';
+		printf( '%1$d / %2$d', (int) $row['quizzes_passed'], (int) $row['quizzes'] );
+
+		/*
+		 * Outstanding required quizzes get their own line rather than being
+		 * left for the reader to work out from the ratio. An optional quiz
+		 * unsat is a gap in someone's practice; a required one unsat is the
+		 * reason their module is not finished, and a report that treats those
+		 * the same is not much use for chasing anybody.
+		 */
+		if ( $row['required_outstanding'] > 0 ) {
+			echo '<br /><span class="description">';
+			printf(
+				/* translators: %d: number of quizzes. */
+				esc_html( _n( '%d required quiz outstanding', '%d required quizzes outstanding', (int) $row['required_outstanding'], 'platform-cle' ) ),
+				(int) $row['required_outstanding']
+			);
+			echo '</span>';
+		}
+		echo '</td>';
 
 		echo '</tr>';
 	}

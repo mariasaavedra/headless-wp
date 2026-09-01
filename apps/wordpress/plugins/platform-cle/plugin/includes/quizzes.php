@@ -736,3 +736,49 @@ function pcle_module_completion_blockers( $module_id, $user_id = null ) {
 
 	return $blockers;
 }
+
+/**
+ * Every published quiz in a programme.
+ *
+ * Walks the hierarchy the way pcle_get_program_module_ids() does, so a quiz
+ * counts for reporting on exactly the terms a module does — published, and
+ * reachable from the programme.
+ *
+ * @param int $program_id Programme ID.
+ * @return int[]
+ */
+function pcle_get_program_quiz_ids( $program_id ) {
+	$ids = array();
+
+	foreach ( pcle_get_units( $program_id ) as $unit ) {
+		foreach ( pcle_get_modules( $unit->ID ) as $module ) {
+			foreach ( pcle_get_children( $module->ID, 'pcle_quiz' ) as $quiz ) {
+				$ids[] = (int) $quiz->ID;
+			}
+		}
+	}
+
+	return $ids;
+}
+
+/**
+ * The quizzes in a programme that must be passed to complete their module.
+ *
+ * The subset a report has to treat differently: an unpassed optional quiz is
+ * a gap in someone's practice, while an unpassed required one is the reason
+ * their module — and therefore their certificate — is not finished.
+ *
+ * @param int $program_id Programme ID.
+ * @return int[]
+ */
+function pcle_get_program_required_quiz_ids( $program_id ) {
+	$required = array();
+
+	foreach ( pcle_get_program_quiz_ids( $program_id ) as $quiz_id ) {
+		if ( pcle_quiz_gates_completion( $quiz_id ) && pcle_get_quiz_questions( $quiz_id ) ) {
+			$required[] = $quiz_id;
+		}
+	}
+
+	return $required;
+}
