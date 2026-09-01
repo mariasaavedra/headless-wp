@@ -11,7 +11,8 @@ is the runbook and go-live checklist.
 - A production host: managed WordPress hosting or a VPS with **PHP 8.1+**,
   **MySQL 5.7+/MariaDB 10.4+**, and **HTTPS**.
 - A domain and DNS access.
-- The repo (`github.com/rafaelcd8892/platform-cle`) for the plugin + theme.
+- The repo (`github.com/mariasaavedra/headless-wp`) — the plugin and theme live
+  under `apps/wordpress/plugins/platform-cle/`.
 
 ## 1. Provision the host
 
@@ -30,15 +31,22 @@ Either:
   serialized data safely). Recreate `wp-config.php` with the new DB credentials
   and fresh salts.
 
-Then install the plugin + theme (via the migration, or `bin/sync.sh push` /
-`git` on the server).
+Then install the plugin + theme — via the migration, or by deploying
+`apps/wordpress/plugins/platform-cle/plugin/` to `wp-content/plugins/platform-cle/`
+and `.../theme/` to `wp-content/themes/platform-cle/`.
+
+> `bin/sync.sh` in the plugin directory is **obsolete** — it rsynced to a Local by
+> Flywheel install and is not part of any current workflow.
 
 ## 3. Activate and flush
 
-1. **Activate the `platform-cle` plugin.** Activation creates the roles, the
-   protected-uploads directory, schedules the reminder cron, and flushes rewrite
-   rules. (If it was already active pre-migration, deactivate + reactivate once
-   so these run on the new host.)
+1. **Activate the `platform-cle` plugin.** Activation creates the roles, **the
+   four database tables** (`pcle_enrollments`, `pcle_progress`,
+   `pcle_attendance`, `pcle_quiz_attempts`), the protected-uploads directory,
+   schedules the reminder cron, and flushes rewrite rules. (If it was already
+   active pre-migration, deactivate + reactivate once so these run on the new
+   host.) On upgrade, `pcle_maybe_upgrade_schema()` applies any pending
+   migration against the `pcle_db_version` option.
 2. **Activate the `platform-cle-theme`.**
 3. Confirm permalinks are **Post name** (Settings → Permalinks → Save to flush).
 
@@ -93,11 +101,16 @@ Run these on production before announcing:
       the raw `/wp-content/uploads/pcle-protected/…` URL returns 403/404.
 - [ ] REST: `curl https://YOURSITE/wp-json/wp/v2/pcle_program` (anonymous) → 401.
 - [ ] Bulk-enroll a real test email → the confirmation email **arrives**.
+- [ ] An enrolled student can sit a quiz and see it marked; a module whose quiz
+      gates completion cannot be completed until they pass.
+- [ ] A cohort report renders and its CSV downloads.
 - [ ] Smoke tests pass on the server:
-      `php wp-content/plugins/platform-cle/tests/smoke-test.php` → `exit 0`.
+      `php wp-content/plugins/platform-cle/tests/smoke-test.php` → `exit 0`
+      (398 assertions across 31 sections).
 
 ## Rollback
 
 Keep the pre-launch backup. If a critical issue appears, restore the backup and
-repoint DNS. Because enrollment/progress live in user meta and content in CPTs, a
-DB restore fully reverts state.
+repoint DNS. All state is in the database — content in CPTs and post meta,
+enrollment/progress/attendance/quiz attempts in the plugin's four tables — so a DB
+restore fully reverts it. Uploads are on disk; back those up too.
