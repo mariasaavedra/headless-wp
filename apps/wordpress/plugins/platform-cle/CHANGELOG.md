@@ -8,6 +8,35 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and the proje
 
 ### Added
 
+- **Cohort reporting.** What a CLE has to be able to answer about a finished
+  programme: who was enrolled, what they completed and when, which sessions they
+  attended, which assessments they passed, and the hours the programme is
+  approved for. Available in wp-admin and in the app at `/reports`, with a CSV
+  export.
+
+  Built from five queries at any cohort size rather than by calling the per-user
+  helpers in a loop. That is what the move of enrollment and progress into real
+  tables bought — under the old serialized user meta the same question meant
+  loading every user and unserializing in PHP.
+
+  It decides nothing. A completion with no recorded date says so rather than
+  being dropped or given a plausible one, because the report may end up
+  supporting a credit claim and a plausible date is a fabricated one. Whether
+  the result supports that claim is a judgement for the person filing it.
+
+  The plugin composes the CSV's columns, order and escaping — including
+  `pcle_csv_safe()`, which neutralises spreadsheet formula injection so a
+  participant named `=HYPERLINK(...)` cannot execute on the machine of whoever
+  opens the file. The app's download route only quotes and joins what it is
+  given, so there is no second implementation to drift.
+
+- **A front door with somewhere to go.** The app's home page was the site's name
+  and tagline over nothing. It now offers each reader the paths their role
+  actually allows — training for participants, the builder and reports for
+  staff — and fails closed: a stale or expired token means no staff paths rather
+  than a broken page. Every route stays guarded server-side regardless; what the
+  front door offers is never what decides what is allowed.
+
 - **Quizzes.** A `pcle_quiz` post type hanging off a module, alongside practice
   scenarios and templates, with authoring in the builder, server-side marking,
   and a per-quiz switch making a pass required to complete the module.

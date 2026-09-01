@@ -8,9 +8,37 @@ and the planned milestones (so decisions don't live only in chat).
 ## Viability verdict
 
 Well-architected for its stated purpose (a lightweight, authenticated learning
-platform — MVP level). Clean separation of plugin logic vs theme presentation,
-native WP roles/caps, single sources of truth for capabilities and relationships.
-The gaps below are **additions, not rewrites**.
+platform). Clean separation of plugin logic vs theme presentation, native WP
+roles/caps, single sources of truth for capabilities and relationships. The gaps
+below are **additions, not rewrites** — and most of the ones this audit opened
+have since been closed.
+
+**What the critical path is now.** Not engineering. Email delivery, payment-driven
+enrollment and real certificates each sit behind the same prerequisite: a
+production host with SSL. Everything reachable without one has largely been
+built.
+
+## Open at a glance
+
+Everything still outstanding, shortest path first. Everything not listed here has
+been closed — see the findings below for what and how.
+
+| | Item | Blocked on |
+|---|---|---|
+| 🟡 | Production host, backups, deploy pipeline | **owner** — the critical path |
+| 🟡 | SMTP delivery for enrollment and reminder emails | production host |
+| 🟡 | Certificates: provider numbers, signatory, per-bar wording | **owner** — accreditation input |
+| 🟡 | Payment-driven enrollment | provider choice + production host |
+| 🟡 | No login rate limiting / brute-force protection | — |
+| 🟡 | Blocks lack `block.json` (invisible in the editor inserter) | — |
+| 🟡 | No i18n catalog (`.pot`) | — |
+| 🟡 | `apps/web` has no tests; CI only lints and builds it | — |
+| 🟡 | `FROM wordpress:latest` is unpinned | — |
+| 🟡 | Progress computation is N+1; nothing cached | — |
+| 🟡 | Live sessions carry a date but no video/conferencing link | — |
+| 🟢 | Deleting a parent from wp-admin still orphans children | — |
+
+---
 
 ## Findings from the audit
 
@@ -31,22 +59,39 @@ Severity: 🔴 blocker · 🟡 important · 🟢 fine.
 - 🟡 No brute-force / rate limiting on login (standard WP concern).
 
 **Domain / CLE-specific (largest product gaps)**
-- 🔴 (product) No CLE-credit / MCLE compliance: no attendance verification for
-  live sessions, no completion certificates, no credit-hours tracking/reporting.
+- 🔴→🟡 (product) No CLE-credit / MCLE compliance. **Mostly resolved.** Credit
+  hours per jurisdiction (`credits.php`), attendance at live sessions
+  (`attendance.php`) and cohort reporting including both (`reports.php`, plus
+  the CSV export) are built and covered by the smoke suite. Certificates
+  (`certificates.php`) are deliberately a **scaffold**: the mechanism works and
+  draws on real records, but the accreditation identity — the provider numbers
+  each bar issues, the authorised signatory, the wording a bar requires on the
+  face of the document — is a business input, not something code can supply.
+  That input is the only thing left on this item.
 - 🟡 Live sessions have no video/conferencing integration (just a date).
-- 🟡 No email notifications yet.
+- 🟡→✅ No email notifications. **Fixed** (`emails.php`; Option A #4). Still
+  needs SMTP on the production host to actually deliver.
 
 **Data model / scale**
-- 🟡 Enrollment & progress are serialized user-meta arrays. Fine for tens–low
-  hundreds; "who is enrolled in program X" iterates users in PHP and can't be
-  queried/reported via SQL.
-- 🟡 Relationships have no referential integrity (deleting a parent orphans
-  children; no cascade).
-- 🟡 Progress computation is N+1 (loops per unit/module); no caching.
+- 🟡→✅ Enrollment & progress were serialized user-meta arrays that could not be
+  queried. **Fixed**: both are real tables now (`pcle_enrollments`,
+  `pcle_progress`), one row per pair, carrying the completion timestamp that a
+  credit claim needs and a serialized array had no room for.
+  `pcle_migrate_legacy_meta()` moves existing installs across. A cohort report
+  is five queries at any size rather than a loop over every user.
+- 🟡→🟢 Relationships had no referential integrity. **Largely fixed**: a child
+  cannot be reparented onto the wrong type, a non-existent post, or itself
+  (asserted in the smoke suite); the authoring API refuses a delete that would
+  orphan descendants unless the caller explicitly asks for a cascade; and
+  `deleted_post` clears the tables. **Remaining gap:** deleting a parent from
+  wp-admin still orphans its children — only the authoring API guards that.
+- 🟡 Progress computation is still N+1 (loops per unit/module) and nothing is
+  cached. Reporting no longer goes through those helpers, so the sharp edge is
+  gone; the per-page cost remains.
 
 **Engineering practices**
 - 🟡→✅ No automated tests. **Fixed** for the plugin (`tests/smoke-test.php`,
-  72 assertions across 32 sections). `apps/web` still has none: CI lints and
+  398 assertions across 31 sections). `apps/web` still has none: CI lints and
   builds it, and nothing more.
 - 🟡 Blocks registered without `block.json` → not in the editor inserter.
 - 🟡 No i18n catalog (`.pot`).
@@ -57,13 +102,20 @@ Severity: 🔴 blocker · 🟡 important · 🟢 fine.
   Local by Flywheel era and is no longer part of any workflow.
 
 **Ops**
-- 🟡 Only on Local; no staging/production host, backups, or deploy pipeline.
-- 🟡 WordPress version reported as "7.0" — verify (current stable is 6.x).
-- 🟡 No data-model versioning (no upgrade path for future schema changes).
+- 🟡 No staging or production host, backups, or deploy pipeline. Local
+  development is Docker Compose now, not Local by Flywheel, but neither is a
+  place to run a cohort. **This is the critical path** — SMTP delivery, payments
+  and real certificates all sit behind it.
+- 🟡 `apps/wordpress/Dockerfile` is `FROM wordpress:latest` — unpinned, so a
+  rebuild can change WordPress version underneath you. Pin it. (This is also the
+  likely source of the puzzling "version 7.0" this audit originally recorded.)
+- 🟡→✅ No data-model versioning. **Fixed**: `PCLE_DB_VERSION` (currently 4) with
+  the applied version in the `pcle_db_version` option, `dbDelta` migrations, and
+  `pcle_maybe_upgrade_schema()` running them on upgrade.
 
 ---
 
-## Option A — Pilot-ready hardening (in progress)
+## Option A — Pilot-ready hardening (complete)
 
 Goal: run the first real 4-week cohort safely.
 
@@ -73,7 +125,7 @@ Goal: run the first real 4-week cohort safely.
 | 2 | Per-program REST guard (fix the no-op) | ✅ done + verified E2E |
 | 3 | Bulk enrollment by email | ✅ done + verified |
 | 4 | Emails (enrollment confirmation + session reminder) | ✅ done (`includes/emails.php`); verified via wp_mail capture. Needs SMTP on the host for real delivery. |
-| 5 | Smoke tests on access-control, progress, files, REST | ✅ done (`tests/smoke-test.php`, 72 assertions across 32 sections, dependency-free); green in CI on every push |
+| 5 | Smoke tests on access-control, progress, files, REST | ✅ done (`tests/smoke-test.php`, 398 assertions across 31 sections, dependency-free); green in CI on every push |
 | 6 | Deploy prep (health check + runbook) | ✅ done (`includes/health.php` + [DEPLOYMENT.md](DEPLOYMENT.md)); host/backups/DNS remain owner-driven |
 
 ---
