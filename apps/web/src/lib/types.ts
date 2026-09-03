@@ -336,16 +336,28 @@ type TreeNode = {
   credits?: CreditHours[];
 };
 
+/** A region of the body the authored syntax cannot spell. */
+type PreservedRegion = {
+  /** The token standing in for it in `body`. */
+  token: string;
+  /** What it is, for the note beside the editor — "Table", "Image gallery". */
+  label: string;
+};
+
 /**
  * One node opened for editing.
  *
  * `body` is the authored text, not HTML — the server turns it into block
- * markup. `editable` is false when the stored content contains something the
- * builder cannot express, in which case it must be shown read-only.
+ * markup. Anything the syntax cannot spell appears in it as a token, listed in
+ * `preserved`: the author can move or delete one, and its content is copied
+ * back from the stored post on save rather than round-tripped through here.
+ *
+ * `editable` is always true and kept only so older callers keep working.
  */
 type NodeDetail = Omit<TreeNode, "questions"> & {
   body: string;
   editable: boolean;
+  preserved: PreservedRegion[];
   excerpt: string;
   rendered: string;
   parent: Ref | null;
@@ -369,4 +381,5 @@ export type {
   CreditHours,
   TreeNode,
   NodeDetail,
+  PreservedRegion,
 };

@@ -32,11 +32,21 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Inserts a demo post, marks it, and assigns its parent.
  */
 function pcle_seed_post( $type, $title, $content, $order, $author_id, $parent_meta = null, $parent_id = 0 ) {
+	/*
+	 * Seeded bodies go in as the builder's own authored text, converted here
+	 * to block markup. They used to be written as bare `<p>` HTML, which
+	 * `pcle_authoring_text_from_content()` cannot round-trip: every seeded
+	 * node therefore opened in the builder read-only, behind the "written in
+	 * WordPress" notice, and demo content that cannot be edited teaches the
+	 * wrong thing about the builder on the first click.
+	 */
+	$body = pcle_authoring_content_from_text( $content );
+
 	$id = wp_insert_post(
 		array(
 			'post_type'    => $type,
 			'post_title'   => $title,
-			'post_content' => $content,
+			'post_content' => $body,
 			'post_status'  => 'publish',
 			'post_author'  => $author_id,
 			'menu_order'   => $order,
@@ -364,7 +374,7 @@ function pcle_seed_demo_data() {
 		$program_id = pcle_seed_post(
 			'pcle_program',
 			sprintf( '%s — %s', $program['title'], $year ),
-			'<p>' . esc_html( $program['summary'] ) . '</p>',
+			$program['summary'],
 			$counts['program'] + 1,
 			$author_id
 		);
@@ -390,7 +400,7 @@ function pcle_seed_demo_data() {
 			$unit_id = pcle_seed_post(
 				'pcle_unit',
 				sprintf( 'Unit %d — %s', $w + 1, $unit['title'] ),
-				'<p>' . esc_html( $unit['desc'] ) . '</p>',
+				$unit['desc'],
 				$w + 1,
 				$author_id,
 				$meta_program,
@@ -406,7 +416,7 @@ function pcle_seed_demo_data() {
 			$event_id = pcle_seed_post(
 				'pcle_event',
 				sprintf( 'Unit %d — Live Discussion', $w + 1 ),
-				'<p>Weekly live discussion and Q&amp;A with faculty.</p>',
+				'Weekly live discussion and Q&A with faculty.',
 				$w + 1,
 				$author_id,
 				$meta_unit,
@@ -429,7 +439,7 @@ function pcle_seed_demo_data() {
 				$module_id = pcle_seed_post(
 					'pcle_module',
 					$module_title,
-					'<p>Module content for: ' . esc_html( $module_title ) . '.</p>',
+					'Module content for: ' . $module_title . '.',
 					$m + 1,
 					$author_id,
 					$meta_unit,
@@ -445,11 +455,11 @@ function pcle_seed_demo_data() {
 
 				// A scenario and a template on the first module of each unit.
 				if ( 0 === $m ) {
-					$scenario_body = "<p>Your client has been detained for 7 months without a bond hearing. "
-						. "Draft the core jurisdictional argument for a § 2241 petition.</p>\n"
-						. "[pcle_model_answer]<p><strong>Model answer:</strong> Frame the prolonged detention "
+					$scenario_body = "Your client has been detained for 7 months without a bond hearing. "
+						. "Draft the core jurisdictional argument for a § 2241 petition.\n\n"
+						. "! **Model answer:** Frame the prolonged detention "
 						. "as raising due-process concerns and establish jurisdiction under § 2241 in the district "
-						. "of confinement, naming the immediate custodian (the facility warden) as respondent.</p>[/pcle_model_answer]";
+						. "of confinement, naming the immediate custodian (the facility warden) as respondent.";
 
 					pcle_seed_post(
 						'pcle_scenario',
@@ -465,7 +475,7 @@ function pcle_seed_demo_data() {
 					pcle_seed_post(
 						'pcle_template',
 						sprintf( '%s Checklist', $unit['title'] ),
-						'<p>Fill-in-the-blank starting point you can adapt for a real filing.</p>',
+						'Fill-in-the-blank starting point you can adapt for a real filing.',
 						1,
 						$author_id,
 						$meta_module,
@@ -481,14 +491,14 @@ function pcle_seed_demo_data() {
 	pcle_seed_post(
 		'pcle_case_update',
 		'Case Update: Circuit Split on Immediate Custodian Rule',
-		'<p>A recent decision deepens the circuit split over who counts as the immediate custodian in transferred-detainee cases.</p>',
+		'A recent decision deepens the circuit split over who counts as the immediate custodian in transferred-detainee cases.',
 		1,
 		$author_id
 	);
 	pcle_seed_post(
 		'pcle_case_update',
 		'Case Update: New Guidance on Prolonged Detention',
-		'<p>Updated district court guidance on what constitutes "prolonged" detention triggering a bond hearing.</p>',
+		'Updated district court guidance on what constitutes "prolonged" detention triggering a bond hearing.',
 		2,
 		$author_id
 	);

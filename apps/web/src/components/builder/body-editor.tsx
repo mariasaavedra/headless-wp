@@ -5,10 +5,13 @@ import {
   BoldIcon,
   Heading2Icon,
   Heading3Icon,
+  ImageIcon,
   ItalicIcon,
+  KeyRoundIcon,
   LinkIcon,
   ListIcon,
   QuoteIcon,
+  VideoIcon,
 } from "lucide-react";
 
 import { Button } from "@pcle/ui/components/button";
@@ -21,6 +24,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@pcle/ui/components/tooltip";
+
+import type { PreservedRegion } from "@/lib/types";
 
 /**
  * The body field, with the formatting applied for you.
@@ -38,8 +43,14 @@ import {
  * rather type it can — and anyone who would rather not, no longer has to.
  */
 
-/** Block markers the toggles recognise, so switching between them is clean. */
-const BLOCK_MARKERS = /^(#{2,3} |- |> )/;
+/**
+ * Block markers the toggles recognise, so switching between them is clean.
+ *
+ * "! " is the model answer. The image marker "![" is deliberately not here:
+ * it has no space after the bang, so it cannot be mistaken for one, and it is
+ * not a line prefix anything toggles into.
+ */
+const BLOCK_MARKERS = /^(#{2,3} |- |> |! )/;
 
 /**
  * Is this text already wrapped in the marker?
@@ -92,11 +103,18 @@ function ToolButton({
 export default function BodyEditor({
   name = "body",
   defaultValue,
+  preserved = [],
   rows = 18,
   id = "node-body",
 }: {
   name?: string;
   defaultValue: string;
+  /**
+   * Regions of the body the authored syntax cannot spell. They appear in the
+   * text as tokens; the note below the field says what each one is, because a
+   * bare `[[block:2:9f1c…]]` in the middle of a draft is otherwise unreadable.
+   */
+  preserved?: PreservedRegion[];
   rows?: number;
   id?: string;
 }) {
@@ -204,6 +222,32 @@ export default function BodyEditor({
     notify(textarea);
   }
 
+  /**
+   * Inserts a marker that takes a URL, and selects the URL for typing over.
+   *
+   * Images and embeds are both "a line naming a location", so they differ only
+   * in what surrounds the address.
+   */
+  function applyUrlBlock(before: string, after: string) {
+    const textarea = ref.current;
+    if (!textarea) return;
+
+    const { selectionStart, selectionEnd, value } = textarea;
+    const placeholder = "https://";
+
+    // Start on a line of its own: both markers are whole-line constructs.
+    const atLineStart =
+      selectionStart === 0 || value[selectionStart - 1] === "\n";
+    const lead = atLineStart ? "" : "\n";
+    const snippet = `${lead}${before}${placeholder}${after}`;
+
+    textarea.setRangeText(snippet, selectionStart, selectionEnd, "end");
+
+    const urlStart = selectionStart + lead.length + before.length;
+    textarea.setSelectionRange(urlStart, urlStart + placeholder.length);
+    notify(textarea);
+  }
+
   return (
     <div className="mt-1">
       <ButtonGroup className="mb-2">
@@ -225,6 +269,30 @@ export default function BodyEditor({
         </ToolButton>
         <ToolButton label="Quotation" hint="&gt;" onClick={() => applyBlock("> ")}>
           <QuoteIcon className="size-4" />
+        </ToolButton>
+        <ToolButton
+          label="Model answer"
+          hint="!"
+          onClick={() => applyBlock("! ")}
+        >
+          <KeyRoundIcon className="size-4" />
+        </ToolButton>
+
+        <ButtonGroupSeparator />
+
+        <ToolButton
+          label="Image"
+          hint="![ ]( )"
+          onClick={() => applyUrlBlock("![](", ")")}
+        >
+          <ImageIcon className="size-4" />
+        </ToolButton>
+        <ToolButton
+          label="Video or embed"
+          hint="@"
+          onClick={() => applyUrlBlock("@ ", "")}
+        >
+          <VideoIcon className="size-4" />
         </ToolButton>
 
         <ButtonGroupSeparator />
@@ -249,6 +317,32 @@ export default function BodyEditor({
         spellCheck
         className="w-full rounded-lg border border-input bg-transparent px-3 py-2 font-mono text-sm leading-relaxed outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
       />
+
+      {preserved.length > 0 && (
+        <div className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+          <p className="text-sm text-zinc-700">
+            This body has {preserved.length === 1 ? "a part" : "parts"} the
+            builder keeps exactly as {preserved.length === 1 ? "it is" : "they are"}.
+            Move the {preserved.length === 1 ? "marker" : "markers"} to move{" "}
+            {preserved.length === 1 ? "it" : "them"}, or delete{" "}
+            {preserved.length === 1 ? "it" : "them"} to remove{" "}
+            {preserved.length === 1 ? "it" : "them"}. To change what{" "}
+            {preserved.length === 1 ? "is" : "they are"} inside, open the page in
+            WordPress.
+          </p>
+
+          <ul className="mt-2 space-y-1">
+            {preserved.map((region) => (
+              <li key={region.token} className="text-sm text-zinc-600">
+                <code className="rounded bg-white px-1 py-0.5 font-mono text-xs text-zinc-800">
+                  {region.token}
+                </code>{" "}
+                — {region.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
