@@ -336,6 +336,20 @@ type TreeNode = {
   credits?: CreditHours[];
 };
 
+/** A file attached to a node through the builder. */
+type UploadedMedia = {
+  id: number;
+  /** What to drop into the body — `[[media:12]]`. */
+  token: string;
+  filename: string;
+  title: string;
+  mime: string;
+  is_image: boolean;
+  url: string;
+  /** True when it lives behind the per-programme download gate. */
+  protected: boolean;
+};
+
 /** A region of the body the authored syntax cannot spell. */
 type PreservedRegion = {
   /** The token standing in for it in `body`. */
@@ -382,4 +396,5 @@ export type {
   TreeNode,
   NodeDetail,
   PreservedRegion,
+  UploadedMedia,
 };

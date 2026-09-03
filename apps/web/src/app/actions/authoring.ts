@@ -2,12 +2,18 @@
 
 import { revalidatePath } from "next/cache";
 
-import type { NodeType, QuizQuestion, QuizQuestionType } from "@/lib/types";
+import type {
+  NodeType,
+  QuizQuestion,
+  QuizQuestionType,
+  UploadedMedia,
+} from "@/lib/types";
 import {
   createNode,
   deleteNode,
   reorderChildren,
   updateNode,
+  uploadNodeMedia,
   WordPressApiError,
 } from "@/lib/wordpress";
 
@@ -456,8 +462,37 @@ async function saveQuizAction(
   return {};
 }
 
+/**
+ * Attaches a file to a node and hands back the token for its body.
+ *
+ * Called imperatively rather than as a form action: the editor is already
+ * inside the save form, and a nested submit would post the body too — saving a
+ * half-written draft as a side effect of picking a file.
+ *
+ * Nothing is revalidated. The upload changes no rendered page until the author
+ * puts the token in the body and saves, and refreshing the route here would
+ * throw away whatever they have typed so far.
+ */
+async function uploadMediaAction(
+  id: number,
+  formData: FormData
+): Promise<{ media?: UploadedMedia; error?: string }> {
+  const file = formData.get("file");
+
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "Choose a file to attach." };
+  }
+
+  try {
+    return { media: await uploadNodeMedia(id, file) };
+  } catch (error) {
+    return { error: describe(error) };
+  }
+}
+
 export {
   createNodeAction,
+  uploadMediaAction,
   saveQuizAction,
   createProgramAction,
   saveBodyAction,
