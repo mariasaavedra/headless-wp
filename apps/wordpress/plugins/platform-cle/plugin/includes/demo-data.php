@@ -56,6 +56,23 @@ function pcle_seed_post( $type, $title, $content, $order, $author_id, $parent_me
 }
 
 /**
+ * A timestamp N weeks from now, where N may be negative.
+ *
+ * One unit of a programme is paced a week apart, so every demo date — the
+ * programme's year, its live sessions, its backdated completions — is derived
+ * from a week offset. This exists so that arithmetic happens in exactly one
+ * place: it was previously spelled `strtotime( "{$n} units" )`, and because
+ * "units" is not an interval strtotime understands, the offset was silently
+ * dropped and every date collapsed onto the moment of seeding.
+ *
+ * @param int $weeks Offset in weeks; negative is in the past.
+ * @return int Unix timestamp.
+ */
+function pcle_demo_weeks_from_now( $weeks ) {
+	return time() + ( (int) $weeks * WEEK_IN_SECONDS );
+}
+
+/**
  * The programmes to build.
  *
  * `starts_in_weeks` is relative to now: negative is a course that already ran,
@@ -240,14 +257,14 @@ function pcle_demo_participants() {
  *
  * @param int $user_id      Participant.
  * @param int $module_id    Module.
- * @param int $units_offset Unit offset of the module relative to now.
+ * @param int $week_offset  Offset in weeks of the unit this module sits in, relative to now.
  * @param int $jitter_days  Per-participant spread, in days.
  * @return void
  */
-function pcle_seed_backdate_progress( $user_id, $module_id, $units_offset, $jitter_days ) {
+function pcle_seed_backdate_progress( $user_id, $module_id, $week_offset, $jitter_days ) {
 	global $wpdb;
 
-	$when = strtotime( "{$units_offset} units" ) + ( $jitter_days * DAY_IN_SECONDS );
+	$when = pcle_demo_weeks_from_now( $week_offset ) + ( $jitter_days * DAY_IN_SECONDS );
 
 	// Nobody completed anything tomorrow. Programmes that have not started yet
 	// still allow a little pre-reading, so clamp to just before now rather
@@ -342,7 +359,7 @@ function pcle_seed_demo_data() {
 	$built = array();
 
 	foreach ( pcle_demo_programs() as $key => $program ) {
-		$year = (int) gmdate( 'Y', strtotime( $program['starts_in_weeks'] . ' weeks' ) );
+		$year = (int) gmdate( 'Y', pcle_demo_weeks_from_now( $program['starts_in_weeks'] ) );
 
 		$program_id = pcle_seed_post(
 			'pcle_program',
@@ -402,7 +419,7 @@ function pcle_seed_demo_data() {
 				update_post_meta(
 					$event_id,
 					'_pcle_event_datetime',
-					gmdate( 'Y-m-d 18:00:00', strtotime( "{$offset} units" ) )
+					gmdate( 'Y-m-d 18:00:00', pcle_demo_weeks_from_now( $offset ) )
 				);
 				$counts['event']++;
 				$built[ $key ]['events'][] = $event_id;
