@@ -4,6 +4,7 @@ import type {
   Me,
   ModuleDetail,
   NodeDetail,
+  UploadedMedia,
   NodeType,
   Program,
   ProgramReport,
@@ -281,6 +282,26 @@ async function getNode(id: number): Promise<NodeDetail> {
   }) as Promise<NodeDetail>;
 }
 
+/**
+ * Attaches a file to one node.
+ *
+ * The FormData is passed through untouched: setting a Content-Type here would
+ * be wrong, because only fetch knows the multipart boundary it generated.
+ */
+async function uploadNodeMedia(
+  id: number,
+  file: File
+): Promise<UploadedMedia> {
+  const body = new FormData();
+  body.set("file", file);
+
+  return wordpressFetch(`/platform-cle/v1/authoring/nodes/${id}/media`, {
+    auth: true,
+    method: "POST",
+    body,
+  }) as Promise<UploadedMedia>;
+}
+
 async function createNode(input: {
   type: NodeType;
   parentId: number;
@@ -368,6 +389,7 @@ export {
   getAuthoringPrograms,
   getNode,
   getProgramTree,
+  uploadNodeMedia,
   createNode,
   updateNode,
   deleteNode,

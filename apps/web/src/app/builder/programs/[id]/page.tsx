@@ -164,8 +164,8 @@ export default async function BuilderProgramPage({
       </Card>
 
       <p className="mt-6 text-sm text-zinc-500">
-        Click any title to write its body. Attaching files and embedding video
-        are still done in WordPress for now.
+        Click any title to write its body, attach a document or image, or embed
+        a video by its address.
       </p>
     </PageShell>
   );

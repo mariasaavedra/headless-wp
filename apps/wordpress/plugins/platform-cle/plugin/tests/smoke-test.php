@@ -1587,7 +1587,106 @@ $with_credits = pcle_authoring_call(
 pcle_eq( $with_credits->get_status(), 200, 'credit hours can be set from the builder' );
 pcle_eq( pcle_get_credit_hours( $new_program->get_data()['id'] )['ks'], 2.5, 'and are rounded to the quarter hour' );
 pcle_eq( pcle_get_credit_hours( $new_program->get_data()['id'] )['mo'], 0.0, 'a blank jurisdiction stays unaccredited' );
+
+/* ------------------------------------------------------------------ */
+/* Attaching files                                                     */
+/* ------------------------------------------------------------------ */
+pcle_section( '# Attaching files' );
+
+/**
+ * Posts a file to the media endpoint the way an upload arrives.
+ *
+ * The bytes are written to a fresh temp file per call because
+ * media_handle_sideload() MOVES what it is given: reusing one path would leave
+ * the second call pointing at a file that is no longer there.
+ */
+function pcle_upload_to_node( $node_id, $filename, $bytes ) {
+	// Plain tempnam(): wp_tempnam() lives in wp-admin/includes/file.php, which
+	// this CLI context has not loaded.
+	$tmp = tempnam( sys_get_temp_dir(), 'pcle' );
+	file_put_contents( $tmp, $bytes ); // phpcs:ignore WordPress.WP.AlternativeFunctions
+
+	$request = new WP_REST_Request( 'POST', "/platform-cle/v1/authoring/nodes/{$node_id}/media" );
+	$request->set_file_params(
+		array(
+			'file' => array(
+				'name'     => $filename,
+				'tmp_name' => $tmp,
+				'error'    => 0,
+				'size'     => strlen( $bytes ),
+			),
+		)
+	);
+
+	return rest_do_request( $request );
+}
+
+$pdf_bytes = "%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n";
+$png_bytes = base64_decode( 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' );
+
+wp_set_current_user( $admin );
+
+$up_pdf = pcle_upload_to_node( $editable_module, 'brief.pdf', $pdf_bytes );
+pcle_eq( $up_pdf->get_status(), 200, 'staff can attach a document' );
+$pdf_id = $up_pdf->get_data()['id'];
+$created_posts[] = $pdf_id;
+pcle_eq( $up_pdf->get_data()['token'], "[[media:{$pdf_id}]]", 'and are given the token for the body' );
+pcle_ok( $up_pdf->get_data()['protected'], 'the file lands behind the download gate' );
+pcle_ok(
+	false !== strpos( get_attached_file( $pdf_id ), '/' . PCLE_PROTECTED_SUBDIR . '/' ),
+	'in the protected directory on disk'
+);
+pcle_ok(
+	false !== strpos( wp_get_attachment_url( $pdf_id ), 'pcle_download=' ),
+	'and its URL is the gated endpoint, not the raw path'
+);
+
+$up_png = pcle_upload_to_node( $editable_module, 'exhibit.png', $png_bytes );
+pcle_eq( $up_png->get_status(), 200, 'an image can be attached too' );
+$png_id = $up_png->get_data()['id'];
+$created_posts[] = $png_id;
+pcle_ok( $up_png->get_data()['is_image'], 'and is reported as an image' );
+
+// The allowlist is checked against the bytes, not the name.
+$up_php = pcle_upload_to_node( $editable_module, 'shell.php', '<?php echo 1;' );
+pcle_eq( $up_php->get_status(), 400, 'a script is refused' );
+pcle_eq( $up_php->get_data()['code'], 'pcle_file_type_not_allowed', 'by type, and named as such' );
+
+$up_disguised = pcle_upload_to_node( $editable_module, 'sneaky.pdf', '<?php echo 1;' );
+pcle_eq( $up_disguised->get_status(), 400, 'a script wearing a .pdf name is refused' );
+
+// Each kind becomes the block that suits it.
+$doc_markup = pcle_authoring_content_from_text( "[[media:{$pdf_id}]]" );
+pcle_ok( false !== strpos( $doc_markup, '<!-- wp:file' ), 'a document becomes a file block' );
+pcle_ok( false !== strpos( $doc_markup, 'pcle_download=' ), 'pointing at the gated URL' );
+
+$img_markup = pcle_authoring_content_from_text( "[[media:{$png_id}]]" );
+pcle_ok( false !== strpos( $img_markup, '<!-- wp:image' ), 'an image becomes an image block' );
+
+// And reads back as the file, not as the URL it currently resolves to.
+$media_back = pcle_authoring_text_from_content( $doc_markup . "\n\n" . $img_markup );
+pcle_eq(
+	trim( $media_back['text'] ),
+	"[[media:{$pdf_id}]]\n\n[[media:{$png_id}]]",
+	'both round trip as their attachment'
+);
+pcle_eq( count( $media_back['preserved'] ), 0, 'and neither needs preserving' );
+
+// A reference to something that is not there leaves nothing behind.
+pcle_eq(
+	trim( pcle_authoring_content_from_text( '[[media:99999999]]' ) ),
+	'',
+	'a token for a missing attachment writes nothing'
+);
+
+// Someone with no rights over the programme cannot attach to it.
+wp_set_current_user( $student );
+$up_student = pcle_upload_to_node( $editable_module, 'brief.pdf', $pdf_bytes );
+pcle_eq( $up_student->get_status(), 403, 'a participant cannot attach files' );
+
 wp_set_current_user( 0 );
+$up_out = pcle_upload_to_node( $editable_module, 'brief.pdf', $pdf_bytes );
+pcle_eq( $up_out->get_status(), 401, 'nor can a signed-out visitor' );
 
 /* ------------------------------------------------------------------ */
 /* 25) The week-to-unit migration                                     */

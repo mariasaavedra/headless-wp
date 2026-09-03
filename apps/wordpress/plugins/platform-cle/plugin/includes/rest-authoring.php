@@ -328,6 +328,18 @@ function pcle_register_authoring_routes() {
 
 	register_rest_route(
 		'platform-cle/v1',
+		'/authoring/nodes/(?P<id>\\d+)/media',
+		array(
+			'methods'             => 'POST',
+			'callback'            => 'pcle_authoring_upload_media',
+			// The same gate as editing the node itself: whoever may write the
+			// body may attach a file to it.
+			'permission_callback' => 'pcle_authoring_guard_node',
+		)
+	);
+
+	register_rest_route(
+		'platform-cle/v1',
 		'/authoring/reorder',
 		array(
 			'methods'             => 'POST',
@@ -989,4 +1001,188 @@ function pcle_authoring_get_node( $request ) {
 	$node['program'] = pcle_rest_shape_ref( get_post( pcle_get_program_for_post( $post->ID ) ) );
 
 	return rest_ensure_response( $node );
+}
+
+/**
+ * The file types the builder accepts.
+ *
+ * An allowlist, checked against what the file actually contains rather than
+ * what it is called: `wp_check_filetype_and_ext()` sniffs the real type, so a
+ * PHP script renamed to .pdf is rejected here rather than stored and served.
+ *
+ * Video is deliberately absent. Self-hosted video needs byte-range delivery to
+ * be seekable at all — pcle_stream_file() sends whole files — and gets no
+ * transcoding, no adaptive bitrate and no CDN from us. The "@ url" embed the
+ * authored syntax already has is the better answer, and it works today.
+ *
+ * @return array<string,string> Extension(s) => MIME type.
+ */
+function pcle_authoring_upload_types() {
+	/**
+	 * Filters the file types the builder accepts.
+	 *
+	 * @param array<string,string> $types Extension(s) => MIME type.
+	 */
+	return apply_filters(
+		'pcle_authoring_upload_types',
+		array(
+			'pdf'  => 'application/pdf',
+			'doc'  => 'application/msword',
+			'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+			'jpg|jpeg' => 'image/jpeg',
+			'png'  => 'image/png',
+			'gif'  => 'image/gif',
+			'webp' => 'image/webp',
+		)
+	);
+}
+
+/**
+ * POST /authoring/nodes/<id>/media — attach a file to one node.
+ *
+ * The upload is routed into the protected directory before anything touches
+ * the filesystem: pcle_protected_upload_override() states the parent outright
+ * rather than leaving it to be inferred from the request, so a file cannot
+ * land in the public uploads root because a parameter was spelled differently.
+ * The override is cleared afterwards whatever happens, since it is static for
+ * the request and a stray value would misroute the next upload.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return WP_REST_Response|WP_Error
+ */
+function pcle_authoring_upload_media( $request ) {
+	$node_id = (int) $request['id'];
+	$files   = $request->get_file_params();
+
+	if ( empty( $files['file'] ) ) {
+		return new WP_Error(
+			'pcle_no_file',
+			__( 'No file was sent.', 'platform-cle' ),
+			array( 'status' => 400 )
+		);
+	}
+
+	$file = $files['file'];
+
+	if ( ! empty( $file['error'] ) ) {
+		// UPLOAD_ERR_INI_SIZE / FORM_SIZE are the ones an author will actually
+		// hit, and "the server said error 1" helps nobody.
+		$too_big = in_array( (int) $file['error'], array( UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE ), true );
+
+		return new WP_Error(
+			$too_big ? 'pcle_file_too_large' : 'pcle_upload_failed',
+			$too_big
+				? sprintf(
+					/* translators: %s: maximum upload size, e.g. "2 MB". */
+					__( 'That file is larger than the %s this site accepts.', 'platform-cle' ),
+					size_format( wp_max_upload_size() )
+				)
+				: __( 'The file did not upload correctly. Try again.', 'platform-cle' ),
+			array( 'status' => 400 )
+		);
+	}
+
+	$allowed = pcle_authoring_upload_types();
+	$checked = wp_check_filetype_and_ext( $file['tmp_name'], $file['name'], $allowed );
+
+	if ( empty( $checked['type'] ) || ! in_array( $checked['type'], $allowed, true ) ) {
+		return new WP_Error(
+			'pcle_file_type_not_allowed',
+			__( 'That kind of file cannot be attached. Documents and images only.', 'platform-cle' ),
+			array( 'status' => 400 )
+		);
+	}
+
+	require_once ABSPATH . 'wp-admin/includes/file.php';
+	require_once ABSPATH . 'wp-admin/includes/media.php';
+	require_once ABSPATH . 'wp-admin/includes/image.php';
+
+	pcle_protected_upload_override( $node_id );
+
+	$payload = array(
+		'name'     => $file['name'],
+		'tmp_name' => $file['tmp_name'],
+		'type'     => $checked['type'],
+		'error'    => 0,
+		'size'     => isset( $file['size'] ) ? (int) $file['size'] : filesize( $file['tmp_name'] ),
+	);
+
+	$overrides = array(
+		'test_form' => false,
+		'mimes'     => $allowed,
+	);
+
+	/*
+	 * Which mover applies depends on where the bytes came from, and the two are
+	 * not interchangeable. A real HTTP upload sits in PHP's upload tmp dir and
+	 * MUST be moved with move_uploaded_file() — that is wp_handle_upload().
+	 * wp_handle_sideload() uses rename(), which PHP refuses for an uploaded
+	 * file and which fails across filesystems anyway.
+	 *
+	 * Sideload is kept for the other case: a file this code was handed
+	 * directly, which is how the tests drive it, since set_file_params() never
+	 * populates $_FILES and so nothing there is an uploaded file.
+	 */
+	$handled = is_uploaded_file( $file['tmp_name'] )
+		? wp_handle_upload( $payload, $overrides )
+		: wp_handle_sideload( $payload, $overrides );
+
+	if ( isset( $handled['error'] ) ) {
+		pcle_protected_upload_override( 0 );
+
+		return new WP_Error( 'pcle_upload_failed', $handled['error'], array( 'status' => 500 ) );
+	}
+
+	$attachment_id = wp_insert_attachment(
+		array(
+			'post_mime_type' => $handled['type'],
+			'post_title'     => sanitize_text_field( pathinfo( $file['name'], PATHINFO_FILENAME ) ),
+			'post_content'   => '',
+			'post_status'    => 'inherit',
+		),
+		$handled['file'],
+		$node_id,
+		true
+	);
+
+	if ( is_wp_error( $attachment_id ) ) {
+		pcle_protected_upload_override( 0 );
+
+		return new WP_Error( 'pcle_upload_failed', $attachment_id->get_error_message(), array( 'status' => 500 ) );
+	}
+
+	wp_update_attachment_metadata(
+		$attachment_id,
+		wp_generate_attachment_metadata( $attachment_id, $handled['file'] )
+	);
+
+	// Cleared only once the attachment exists: generating metadata makes
+	// thumbnails, and those go through the same upload_dir filter.
+	pcle_protected_upload_override( 0 );
+
+	return rest_ensure_response( pcle_authoring_shape_attachment( (int) $attachment_id ) );
+}
+
+/**
+ * How one attachment is described to the builder.
+ *
+ * `token` is what the author drops into the body; the rest is what the editor
+ * shows beside it, so the file has a name on screen rather than a number.
+ *
+ * @param int $attachment_id Attachment ID.
+ * @return array<string,mixed>
+ */
+function pcle_authoring_shape_attachment( $attachment_id ) {
+	$mime = get_post_mime_type( $attachment_id );
+
+	return array(
+		'id'        => (int) $attachment_id,
+		'token'     => sprintf( '[[media:%d]]', (int) $attachment_id ),
+		'filename'  => wp_basename( get_attached_file( $attachment_id ) ),
+		'title'     => get_the_title( $attachment_id ),
+		'mime'      => $mime,
+		'is_image'  => (bool) preg_match( '#^image/#', (string) $mime ),
+		'url'       => wp_get_attachment_url( $attachment_id ),
+		'protected' => pcle_is_protected_attachment( $attachment_id ),
+	);
 }

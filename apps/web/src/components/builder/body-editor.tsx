@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState, useTransition } from "react";
 import {
   BoldIcon,
   Heading2Icon,
@@ -10,6 +10,8 @@ import {
   KeyRoundIcon,
   LinkIcon,
   ListIcon,
+  Loader2Icon,
+  PaperclipIcon,
   QuoteIcon,
   VideoIcon,
 } from "lucide-react";
@@ -25,6 +27,7 @@ import {
   TooltipTrigger,
 } from "@pcle/ui/components/tooltip";
 
+import { uploadMediaAction } from "@/app/actions/authoring";
 import type { PreservedRegion } from "@/lib/types";
 
 /**
@@ -104,11 +107,17 @@ export default function BodyEditor({
   name = "body",
   defaultValue,
   preserved = [],
+  nodeId,
   rows = 18,
   id = "node-body",
 }: {
   name?: string;
   defaultValue: string;
+  /**
+   * The node files are attached to. Without it the attach button is not
+   * offered at all, because there is nothing to attach them to.
+   */
+  nodeId?: number;
   /**
    * Regions of the body the authored syntax cannot spell. They appear in the
    * text as tokens; the note below the field says what each one is, because a
@@ -119,6 +128,12 @@ export default function BodyEditor({
   id?: string;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, startUpload] = useTransition();
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [attached, setAttached] = useState<{ token: string; name: string }[]>(
+    []
+  );
 
   /** Uncontrolled on purpose: the form posts the textarea, not React state. */
   function notify(textarea: HTMLTextAreaElement) {
@@ -248,6 +263,67 @@ export default function BodyEditor({
     notify(textarea);
   }
 
+  /**
+   * Drops text at the caret as its own paragraph.
+   *
+   * Blank lines on both sides: the parser treats a marker as its own block
+   * either way, but butted against the next sentence it reads as though it
+   * belongs to it, and the author has to fix the spacing by hand.
+   */
+  function insertLine(text: string) {
+    const textarea = ref.current;
+    if (!textarea) return;
+
+    const { selectionStart, selectionEnd, value } = textarea;
+    const before = value.slice(0, selectionStart);
+    const after = value.slice(selectionEnd);
+
+    const lead = before === "" || before.endsWith("\n\n") ? "" : before.endsWith("\n") ? "\n" : "\n\n";
+    const trail = after === "" ? "" : after.startsWith("\n\n") ? "" : after.startsWith("\n") ? "\n" : "\n\n";
+
+    textarea.setRangeText(
+      `${lead}${text}${trail}`,
+      selectionStart,
+      selectionEnd,
+      "end"
+    );
+    notify(textarea);
+  }
+
+  /**
+   * Uploads the chosen file and puts its token where the caret was.
+   *
+   * The input is cleared afterwards so that picking the same file twice still
+   * fires a change event — otherwise a failed upload could not be retried
+   * without choosing a different file first.
+   */
+  function onFileChosen(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file || !nodeId) return;
+
+    setUploadError(null);
+
+    startUpload(async () => {
+      const body = new FormData();
+      body.set("file", file);
+
+      const result = await uploadMediaAction(nodeId, body);
+
+      if (result.error || !result.media) {
+        setUploadError(result.error ?? "The file could not be attached.");
+        return;
+      }
+
+      insertLine(result.media.token);
+      setAttached((current) => [
+        ...current,
+        { token: result.media!.token, name: result.media!.filename },
+      ]);
+    });
+  }
+
   return (
     <div className="mt-1">
       <ButtonGroup className="mb-2">
@@ -295,6 +371,20 @@ export default function BodyEditor({
           <VideoIcon className="size-4" />
         </ToolButton>
 
+        {nodeId !== undefined && (
+          <ToolButton
+            label={uploading ? "Attaching…" : "Attach a document or image"}
+            hint="PDF, Word, image"
+            onClick={() => fileRef.current?.click()}
+          >
+            {uploading ? (
+              <Loader2Icon className="size-4 animate-spin" />
+            ) : (
+              <PaperclipIcon className="size-4" />
+            )}
+          </ToolButton>
+        )}
+
         <ButtonGroupSeparator />
 
         <ToolButton label="Bold" hint="**" onClick={() => applyInline("**")}>
@@ -317,6 +407,45 @@ export default function BodyEditor({
         spellCheck
         className="w-full rounded-lg border border-input bg-transparent px-3 py-2 font-mono text-sm leading-relaxed outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
       />
+
+      {nodeId !== undefined && (
+        <input
+          ref={fileRef}
+          type="file"
+          className="hidden"
+          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.webp"
+          onChange={onFileChosen}
+          disabled={uploading}
+        />
+      )}
+
+      {uploadError && (
+        <p className="mt-2 text-sm text-red-700" role="alert">
+          {uploadError}
+        </p>
+      )}
+
+      {attached.length > 0 && (
+        <div className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+          <p className="text-sm text-zinc-700">
+            Attached to this page. The {attached.length === 1 ? "marker" : "markers"}{" "}
+            below {attached.length === 1 ? "is" : "are"} already in the body —
+            move {attached.length === 1 ? "it" : "them"} where you want{" "}
+            {attached.length === 1 ? "it" : "them"}, then save.
+          </p>
+
+          <ul className="mt-2 space-y-1">
+            {attached.map((item) => (
+              <li key={item.token} className="text-sm text-zinc-600">
+                <code className="rounded bg-white px-1 py-0.5 font-mono text-xs text-zinc-800">
+                  {item.token}
+                </code>{" "}
+                — {item.name}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {preserved.length > 0 && (
         <div className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3">

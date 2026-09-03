@@ -106,7 +106,11 @@ export default async function BuilderNodePage({
               >
                 Body
               </label>
-              <BodyEditor defaultValue={node.body} preserved={node.preserved} />
+              <BodyEditor
+                defaultValue={node.body}
+                preserved={node.preserved}
+                nodeId={node.id}
+              />
 
               <Button type="submit" className="mt-6">
                 Save

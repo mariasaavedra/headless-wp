@@ -19,6 +19,7 @@
  *   ## Heading            → h2          - item            → list
  *   ### Heading           → h3          > quoted          → quote
  *   ![alt](url)           → image       @ url             → embed
+ *   [[media:N]]           → an uploaded file: image, or a download link
  *   ! Model answer        → the [pcle_model_answer] shortcode
  *   [[block:N:hash]]      → a preserved region (see the token constant below)
  *   anything else         → paragraph
@@ -111,6 +112,21 @@ function pcle_authoring_html_to_inline( $html ) {
 const PCLE_AUTHORING_TOKEN_PATTERN = '/^\[\[block:(\d+):([0-9a-f]{8})\]\]$/';
 
 /**
+ * The marker for an uploaded file.
+ *
+ * Unlike a preserved region this carries no hash, because it does not stand in
+ * for stored markup: it names an attachment, and the block is built fresh from
+ * whatever that attachment is now. Renaming a file in WordPress therefore
+ * updates every body that references it, which is the behaviour an author
+ * expects from "the brief I attached".
+ *
+ * Which block it becomes is the server's decision, from the attachment's MIME
+ * type — an image renders inline, anything else becomes a download link. The
+ * author says "this file", not "this markup".
+ */
+const PCLE_AUTHORING_MEDIA_PATTERN = '/^\[\[media:(\d+)\]\]$/';
+
+/**
  * The token identifying one stored block.
  *
  * @param int    $index      Position among the stored top-level blocks.
@@ -197,6 +213,9 @@ function pcle_authoring_line_type( $line ) {
 	}
 	if ( preg_match( PCLE_AUTHORING_TOKEN_PATTERN, $trimmed ) ) {
 		return 'token';
+	}
+	if ( preg_match( PCLE_AUTHORING_MEDIA_PATTERN, $trimmed ) ) {
+		return 'media';
 	}
 	// Before the model answer test: an image opens "![", which has no space
 	// after the bang, and a model answer opens "! ", which does.
@@ -303,7 +322,7 @@ function pcle_authoring_text_to_blocks( $text ) {
 	$run_type = null;
 
 	// Types that are always exactly one line, and so never form a run.
-	$singles = array( 'heading', 'image', 'embed', 'token' );
+	$singles = array( 'heading', 'image', 'embed', 'token', 'media' );
 
 	foreach ( $lines as $line ) {
 		$type = pcle_authoring_line_type( $line );
@@ -345,6 +364,15 @@ function pcle_authoring_text_to_blocks( $text ) {
 			$blocks[] = array(
 				'type' => 'embed',
 				'url'  => trim( substr( trim( $line ), 2 ) ),
+			);
+			continue;
+		}
+
+		if ( 'media' === $type ) {
+			preg_match( PCLE_AUTHORING_MEDIA_PATTERN, trim( $line ), $m );
+			$blocks[] = array(
+				'type' => 'media',
+				'id'   => (int) $m[1],
 			);
 			continue;
 		}
@@ -448,6 +476,21 @@ function pcle_authoring_blocks_to_parts( $blocks ) {
 						$url
 					),
 				);
+				break;
+
+			case 'media':
+				$markup = pcle_authoring_media_markup( $block['id'] );
+
+				// An attachment that has been deleted leaves nothing behind
+				// rather than a block pointing at a missing file. Saying so is
+				// the editor's job; the stored content should not carry a
+				// broken image an author cannot see is broken.
+				if ( '' !== $markup ) {
+					$out[] = array(
+						'type'   => 'markup',
+						'markup' => $markup,
+					);
+				}
 				break;
 
 			case 'list':
@@ -602,6 +645,19 @@ function pcle_authoring_text_from_content( $content ) {
 				break;
 
 			case 'core/image':
+				/*
+				 * An id means the image is an upload of ours, and it reads back
+				 * as the file rather than as the URL it currently resolves to.
+				 * Keeping the URL would freeze it: the protected endpoint's
+				 * address is derived from the attachment, so a body that stored
+				 * the address instead of the file would rot the moment either
+				 * changed.
+				 */
+				if ( ! empty( $parsed['attrs']['id'] ) && 'attachment' === get_post_type( (int) $parsed['attrs']['id'] ) ) {
+					$parts[] = sprintf( '[[media:%d]]', (int) $parsed['attrs']['id'] );
+					break;
+				}
+
 				if ( ! preg_match( '#<img[^>]*src="([^"]*)"#', $inner, $src ) ) {
 					$parts[] = pcle_authoring_preserve( $index, $block, $preserved );
 					break;
@@ -609,6 +665,15 @@ function pcle_authoring_text_from_content( $content ) {
 
 				$alt     = preg_match( '#<img[^>]*alt="([^"]*)"#', $inner, $a ) ? $a[1] : '';
 				$parts[] = sprintf( '![%s](%s)', html_entity_decode( $alt, ENT_QUOTES, get_bloginfo( 'charset' ) ), $src[1] );
+				break;
+
+			case 'core/file':
+				if ( empty( $parsed['attrs']['id'] ) || 'attachment' !== get_post_type( (int) $parsed['attrs']['id'] ) ) {
+					$parts[] = pcle_authoring_preserve( $index, $block, $preserved );
+					break;
+				}
+
+				$parts[] = sprintf( '[[media:%d]]', (int) $parsed['attrs']['id'] );
 				break;
 
 			case 'core/embed':
@@ -695,4 +760,61 @@ function pcle_authoring_preserve( $index, $block, &$preserved ) {
 	);
 
 	return $token;
+}
+
+/**
+ * The block markup for one uploaded file.
+ *
+ * An image is shown; anything else becomes a download link, because a PDF has
+ * nothing to render inline and a bare URL tells a participant nothing about
+ * what they are about to open.
+ *
+ * The URL comes from wp_get_attachment_url(), which protected-files.php filters
+ * to the ?pcle_download= endpoint for anything in the protected directory. So
+ * the raw path is never written into a body, and access is still checked per
+ * programme when the file is actually fetched.
+ *
+ * @param int $attachment_id Attachment ID.
+ * @return string Block markup, or '' when the attachment is gone.
+ */
+function pcle_authoring_media_markup( $attachment_id ) {
+	$attachment_id = (int) $attachment_id;
+
+	if ( 'attachment' !== get_post_type( $attachment_id ) ) {
+		return '';
+	}
+
+	$url = wp_get_attachment_url( $attachment_id );
+
+	if ( ! $url ) {
+		return '';
+	}
+
+	$mime = (string) get_post_mime_type( $attachment_id );
+
+	if ( preg_match( '#^image/#', $mime ) ) {
+		$alt = get_post_meta( $attachment_id, '_wp_attachment_image_alt', true );
+
+		if ( '' === $alt ) {
+			$alt = get_the_title( $attachment_id );
+		}
+
+		return sprintf(
+			"<!-- wp:image {\"id\":%d} -->\n<figure class=\"wp-block-image\"><img src=\"%s\" alt=\"%s\" class=\"wp-image-%d\"/></figure>\n<!-- /wp:image -->",
+			$attachment_id,
+			esc_url( $url ),
+			esc_attr( $alt ),
+			$attachment_id
+		);
+	}
+
+	return sprintf(
+		"<!-- wp:file {\"id\":%d,\"href\":\"%s\"} -->\n<div class=\"wp-block-file\"><a href=\"%s\">%s</a><a href=\"%s\" class=\"wp-block-file__button\" download>%s</a></div>\n<!-- /wp:file -->",
+		$attachment_id,
+		esc_url( $url ),
+		esc_url( $url ),
+		esc_html( get_the_title( $attachment_id ) ),
+		esc_url( $url ),
+		esc_html__( 'Download', 'platform-cle' )
+	);
 }
