@@ -607,7 +607,22 @@ function pcle_authoring_update_node( $request ) {
 	 * request is not something to assume.
 	 */
 	if ( null !== $request['body'] ) {
-		$changes['post_content'] = pcle_authoring_content_from_text( (string) $request['body'] );
+		/*
+		 * The stored content is passed in because the body may carry tokens
+		 * standing for regions the authored syntax cannot spell. They are
+		 * resolved against what is on the post right now, so preserved content
+		 * is copied rather than rebuilt — and a token that no longer matches
+		 * means the post changed underneath this edit, which is a conflict to
+		 * report, not something to guess at.
+		 */
+		$stored  = get_post_field( 'post_content', $id );
+		$content = pcle_authoring_content_from_text( (string) $request['body'], (string) $stored );
+
+		if ( is_wp_error( $content ) ) {
+			return $content;
+		}
+
+		$changes['post_content'] = $content;
 	} elseif ( null !== $request['content'] ) {
 		$changes['post_content'] = wp_kses_post( (string) $request['content'] );
 	}
@@ -928,10 +943,15 @@ function pcle_authoring_guard_move( $request ) {
  * otherwise ship every module's prose to draw a list of titles. This is what
  * the editor screen asks for when an author opens one thing.
  *
- * `editable` false means the stored content contains something the builder
- * cannot express — a block from the WordPress inserter, or pre-block HTML. The
- * caller must then show it read-only: re-serialising content we could not
- * fully parse would destroy an author's work while looking like a save.
+ * `preserved` lists the regions the authored syntax cannot spell — a gallery,
+ * a table, a third-party block, classic HTML — each as the token standing in
+ * for it in `body` and a human name for what it is. The author can move or
+ * delete a token; its content is copied back from the stored post on save and
+ * never travels through the client.
+ *
+ * `editable` is always true now and remains only so that existing clients keep
+ * working. It used to be false whenever the body held any of the above, which
+ * meant a single image made a whole module read-only.
  *
  * @param WP_REST_Request $request Request.
  * @return WP_REST_Response
@@ -941,9 +961,10 @@ function pcle_authoring_get_node( $request ) {
 	$node = pcle_authoring_shape_node( $post );
 	$body = pcle_authoring_text_from_content( $post->post_content );
 
-	$node['body']     = $body['text'];
-	$node['editable'] = $body['editable'];
-	$node['excerpt']  = $post->post_excerpt;
+	$node['body']      = $body['text'];
+	$node['editable']  = $body['editable'];
+	$node['preserved'] = $body['preserved'];
+	$node['excerpt']   = $post->post_excerpt;
 
 	// What the participant will actually see, so the editor can preview it
 	// without a second round trip and without a second renderer.

@@ -80,7 +80,7 @@ export default async function BuilderNodePage({
       */}
       {node.type === "pcle_quiz" ? (
         <QuizEditor node={node} />
-      ) : node.editable ? (
+      ) : (
         <ActionForm action={saveBodyAction} className="mt-8">
           <Card className="p-6">
             <CardContent className="p-0">
@@ -106,7 +106,7 @@ export default async function BuilderNodePage({
               >
                 Body
               </label>
-              <BodyEditor defaultValue={node.body} />
+              <BodyEditor defaultValue={node.body} preserved={node.preserved} />
 
               <Button type="submit" className="mt-6">
                 Save
@@ -114,18 +114,6 @@ export default async function BuilderNodePage({
             </CardContent>
           </Card>
         </ActionForm>
-      ) : (
-        <div className="mt-8 rounded-lg border border-amber-200 bg-amber-50 p-6">
-          <h2 className="font-medium text-amber-900">
-            This was written in WordPress
-          </h2>
-          <p className="mt-2 text-sm text-amber-900">
-            It contains formatting the builder cannot represent — an image, an
-            embed, or content from before the builder existed. Editing it here
-            would mean rewriting it into something simpler, so the builder
-            leaves it alone. Open it in WordPress to change it.
-          </p>
-        </div>
       )}
 
       {node.type !== "pcle_quiz" && (

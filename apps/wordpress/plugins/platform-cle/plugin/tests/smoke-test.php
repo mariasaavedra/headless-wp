@@ -1418,19 +1418,57 @@ pcle_eq( strpos( $scheme, 'javascript:' ), false, 'a javascript URL does not bec
 pcle_ok( false !== strpos( $scheme, 'this' ), 'and its label survives as plain text' );
 
 /*
- * Content the builder cannot express is reported, not rewritten. Silently
- * re-serialising something we could not fully parse would destroy an author's
- * work while looking like a save.
+ * Images and embeds are authored syntax now, so they come back as text rather
+ * than as a preserved region.
  */
-$unrepresentable = array(
-	'pre-block HTML' => '<p>Written before the builder existed.</p>',
-	'an image block' => "<!-- wp:image {\"id\":1} -->\n<figure class=\"wp-block-image\"><img src=\"/x.png\"/></figure>\n<!-- /wp:image -->",
-	'an embed block' => "<!-- wp:embed {\"url\":\"https://example.org/v\"} -->\n<figure class=\"wp-block-embed\"></figure>\n<!-- /wp:embed -->",
+$image_block = "<!-- wp:image {\"id\":1} -->\n<figure class=\"wp-block-image\"><img src=\"/x.png\" alt=\"A map\"/></figure>\n<!-- /wp:image -->";
+$image_read  = pcle_authoring_text_from_content( $image_block );
+pcle_eq( trim( $image_read['text'] ), '![A map](/x.png)', 'an image block reads back as authored text' );
+pcle_eq( count( $image_read['preserved'] ), 0, 'and needs no preserved region' );
+
+$embed_block = "<!-- wp:embed {\"url\":\"https://example.org/v\"} -->\n<figure class=\"wp-block-embed\"></figure>\n<!-- /wp:embed -->";
+$embed_read  = pcle_authoring_text_from_content( $embed_block );
+pcle_eq( trim( $embed_read['text'] ), '@ https://example.org/v', 'an embed block reads back as authored text' );
+
+$answer_block = "<!-- wp:shortcode -->\n[pcle_model_answer]<p>Because the warden holds them.</p>[/pcle_model_answer]\n<!-- /wp:shortcode -->";
+$answer_read  = pcle_authoring_text_from_content( $answer_block );
+pcle_eq( trim( $answer_read['text'] ), '! Because the warden holds them.', 'a model answer reads back as authored text' );
+pcle_ok(
+	false !== strpos( pcle_authoring_content_from_text( $answer_read['text'] ), '[pcle_model_answer]' ),
+	'and writes back out as its shortcode'
 );
 
-foreach ( $unrepresentable as $label => $content ) {
-	pcle_eq( pcle_authoring_text_from_content( $content )['editable'], false, "{$label} is reported as not editable" );
+/*
+ * Everything else is preserved rather than refused. Its content is copied from
+ * the stored post on save, never rebuilt from the client, so re-serialising
+ * something we could not fully parse still never happens.
+ */
+$preserved_cases = array(
+	'pre-block HTML' => '<p>Written before the builder existed.</p>',
+	'a table'        => "<!-- wp:table -->\n<figure class=\"wp-block-table\"><table><tr><td>x</td></tr></table></figure>\n<!-- /wp:table -->",
+	'another plugin' => "<!-- wp:acme/widget {\"n\":1} /-->",
+);
+
+foreach ( $preserved_cases as $label => $content ) {
+	$read = pcle_authoring_text_from_content( $content );
+	pcle_eq( $read['editable'], true, "{$label} is editable" );
+	pcle_eq( count( $read['preserved'] ), 1, "{$label} becomes one preserved region" );
+	pcle_eq( trim( $read['text'] ), $read['preserved'][0]['token'], "{$label} is stood in for by its token" );
+
+	// The round trip puts it back exactly as it was found.
+	pcle_eq(
+		trim( pcle_authoring_content_from_text( $read['text'], $content ) ),
+		trim( $content ),
+		"{$label} round trips byte for byte"
+	);
 }
+
+pcle_eq( pcle_authoring_block_label( 'core/table' ), 'Table', 'a preserved region is named for what it is' );
+pcle_eq( pcle_authoring_block_label( 'acme/widget' ), 'Widget', 'including one this plugin has never heard of' );
+pcle_ok(
+	is_wp_error( pcle_authoring_content_from_text( '[[block:0:deadbeef]]', '<p>Something else.</p>' ) ),
+	'a token that does not match the stored block is an error'
+);
 
 pcle_eq( pcle_authoring_text_from_content( '' )['editable'], true, 'empty content is editable' );
 
@@ -1459,11 +1497,75 @@ pcle_eq( trim( $reopened['body'] ), "## Section\n\nBody with **emphasis**.", 'an
 pcle_ok( false !== strpos( $reopened['rendered'], '<strong>emphasis</strong>' ), 'the preview is the server rendering, with the emphasis applied' );
 pcle_ok( isset( $reopened['program'] ) && $reopened['program']['id'] === $prog_a, 'the node knows which programme it belongs to' );
 
-// A body written in WordPress is offered read-only rather than flattened.
+// A body written in WordPress opens as a preserved region, not read-only.
 wp_update_post( array( 'ID' => $editable_module, 'post_content' => '<p>Legacy HTML from wp-admin.</p>' ) );
 $legacy = pcle_rest_get( $admin, "/platform-cle/v1/authoring/nodes/{$editable_module}" )->get_data();
-pcle_eq( $legacy['editable'], false, 'content the builder cannot express is flagged' );
-pcle_ok( false !== strpos( $legacy['rendered'], 'Legacy HTML' ), 'but it is still rendered for reading' );
+pcle_eq( $legacy['editable'], true, 'content the builder cannot express is still editable' );
+pcle_eq( count( $legacy['preserved'] ), 1, 'and is reported as one preserved region' );
+pcle_eq( $legacy['preserved'][0]['label'], 'Content written in WordPress', 'named for what it is' );
+pcle_eq( trim( $legacy['body'] ), $legacy['preserved'][0]['token'], 'the body is the token standing in for it' );
+pcle_ok( false !== strpos( $legacy['rendered'], 'Legacy HTML' ), 'and it is still rendered for reading' );
+
+// Editing around a preserved region keeps it byte-for-byte.
+$around = pcle_authoring_call(
+	$admin,
+	'PATCH',
+	"/platform-cle/v1/authoring/nodes/{$editable_module}",
+	array( 'body' => "## Before\n\n{$legacy['preserved'][0]['token']}\n\nAfter." )
+);
+pcle_eq( $around->get_status(), 200, 'a body carrying a preserved token saves' );
+$kept = get_post_field( 'post_content', $editable_module );
+pcle_ok( false !== strpos( $kept, '<p>Legacy HTML from wp-admin.</p>' ), 'the preserved region survives verbatim' );
+pcle_ok( false !== strpos( $kept, '<h2>Before</h2>' ), 'and the authored parts around it were written' );
+
+// A token that no longer matches the stored post is refused, not guessed at.
+$stale = pcle_authoring_call(
+	$admin,
+	'PATCH',
+	"/platform-cle/v1/authoring/nodes/{$editable_module}",
+	array( 'body' => '[[block:0:deadbeef]]' )
+);
+pcle_eq( $stale->get_status(), 409, 'a stale preserved token is a conflict' );
+
+// A token cannot be used to reach a block that is not there.
+$forged = pcle_authoring_call(
+	$admin,
+	'PATCH',
+	"/platform-cle/v1/authoring/nodes/{$editable_module}",
+	array( 'body' => '[[block:99:00000000]]' )
+);
+pcle_eq( $forged->get_status(), 409, 'a token pointing at nothing is refused' );
+
+// Images, embeds and model answers are first-class authored syntax.
+pcle_authoring_call(
+	$admin,
+	'PATCH',
+	"/platform-cle/v1/authoring/nodes/{$editable_module}",
+	array( 'body' => "![A filing](https://example.org/a.png)\n\n@ https://example.org/v\n\n! The answer." )
+);
+$rich = pcle_rest_get( $admin, "/platform-cle/v1/authoring/nodes/{$editable_module}" )->get_data();
+pcle_eq( count( $rich['preserved'] ), 0, 'none of it needs preserving' );
+pcle_eq(
+	trim( $rich['body'] ),
+	"![A filing](https://example.org/a.png)\n\n@ https://example.org/v\n\n! The answer.",
+	'image, embed and model answer all round trip'
+);
+$rich_stored = get_post_field( 'post_content', $editable_module );
+pcle_ok( false !== strpos( $rich_stored, '<!-- wp:image -->' ), 'the image is stored as a native image block' );
+pcle_ok( false !== strpos( $rich_stored, '<!-- wp:embed' ), 'the embed as a native embed block' );
+pcle_ok( false !== strpos( $rich_stored, '[pcle_model_answer]' ), 'and the model answer as its shortcode' );
+
+// The client still cannot smuggle markup in through the new syntax.
+pcle_authoring_call(
+	$admin,
+	'PATCH',
+	"/platform-cle/v1/authoring/nodes/{$editable_module}",
+	array( 'body' => '![x"onerror="alert(1)](javascript:alert(1))' )
+);
+$smuggled = get_post_field( 'post_content', $editable_module );
+pcle_ok( false === strpos( $smuggled, 'javascript:' ), 'an image URL with a script scheme is dropped' );
+pcle_ok( false === strpos( $smuggled, '"onerror="' ), 'and an alt attribute cannot break out of the tag' );
+pcle_ok( false !== strpos( $smuggled, '&quot;onerror=&quot;' ), 'its quotes having been escaped instead' );
 
 // The participant view shows what the author wrote.
 pcle_authoring_call( $admin, 'PATCH', "/platform-cle/v1/authoring/nodes/{$editable_module}", array( 'body' => '- alpha', 'status' => 'publish' ) );
