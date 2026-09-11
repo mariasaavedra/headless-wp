@@ -7,6 +7,16 @@ import { isAuthenticated } from "@/lib/auth";
 import { decodeEntities } from "@/lib/html";
 import { getMe, wordpressFetch, WORDPRESS_SITE_URL } from "@/lib/wordpress";
 
+/*
+ * Never prerendered. What this page shows depends on who is asking — the
+ * signed-in reader's role decides which paths are offered — and the site name
+ * and tagline come from WordPress at request time. Static generation would
+ * both bake in a signed-out page for everyone and make the build depend on
+ * WordPress being reachable, because the fetch above runs before the cookie
+ * read that would otherwise mark this route dynamic.
+ */
+export const dynamic = "force-dynamic";
+
 type WordPressSite = {
   name: string;
   description: string;
