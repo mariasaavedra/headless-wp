@@ -73,6 +73,46 @@ This builds and starts three services:
 | WordPress | http://localhost:8080       |
 | Next.js   | http://localhost:3000       |
 
+## Deployments
+
+Two hosts run this repository. A third one that looks related does not.
+
+| Host | What runs there | Source |
+|------|-----------------|--------|
+| [armory.thepen-and-swordkc.org](https://armory.thepen-and-swordkc.org) | The participant-facing app, on Vercel | `apps/web` |
+| [platform.thepen-and-swordkc.org](https://platform.thepen-and-swordkc.org) | WordPress — system of record and administrative surface — with the Platform CLE plugin and theme | `apps/wordpress` |
+| thepen-and-swordkc.org | The organisation's public marketing site, on WP Engine | **Not this repository.** A separate WordPress install without the Platform CLE plugin. |
+
+`armory` is the front door. It reads the site name and tagline from `platform`
+at request time, exchanges credentials for a JWT at `/jwt-auth/v1/token`, and
+calls the plugin's `/platform-cle/v1/` routes for everything else. Nothing it
+serves comes from the marketing site, and the marketing site knows nothing
+about this repository.
+
+Production configuration lives with each host, never in the repository:
+
+| Where | What it sets |
+|-------|--------------|
+| The Vercel project behind `armory` | `WORDPRESS_API_URL=https://platform.thepen-and-swordkc.org/wp-json` and `WORDPRESS_SITE_URL=https://platform.thepen-and-swordkc.org`. Optionally `NEXT_PUBLIC_SITE_URL`, which defaults to the `armory` host. |
+| `wp-config.php` on the WordPress host behind `platform` | Database credentials, fresh salts, and `JWT_AUTH_SECRET_KEY`. `PCLE_DEMO_USER_PASSWORD` is left unset there, which is what keeps the demo accounts from being created. |
+
+There is no deployment configuration checked in: no `vercel.json`, and
+`.github/workflows/ci.yml` only runs tests. The link between this repository
+and the Vercel project lives in the Vercel dashboard; the WordPress side is
+deployed by hand, following
+[`DEPLOYMENT.md`](apps/wordpress/plugins/platform-cle/docs/DEPLOYMENT.md).
+
+To see what is actually live:
+
+```bash
+curl -s https://platform.thepen-and-swordkc.org/wp-json/platform-cle/v1/health
+curl -s -o /dev/null -w '%{http_code}\n' https://armory.thepen-and-swordkc.org/
+```
+
+The first answers `{"status":"ok","plugin":"platform-cle","version":"0.1.0"}`
+when the plugin is active; the second answers `200` from the signed-out front
+door.
+
 ## Environment configuration
 
 Copy `.env.example` to `.env` and adjust as needed:

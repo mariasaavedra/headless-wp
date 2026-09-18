@@ -6,6 +6,21 @@ is the runbook and go-live checklist.
 
 ---
 
+## Where production lives today
+
+| Host | What it is |
+|------|------------|
+| `platform.thepen-and-swordkc.org` | The live WordPress: this plugin, this theme, and the system of record. |
+| `armory.thepen-and-swordkc.org` | The Next.js app (`apps/web`) on Vercel, which talks to the host above and to nothing else. |
+| `thepen-and-swordkc.org` | The organisation's marketing site, on different hosting. **Not part of this deployment** — do not migrate onto it or point the app at it. |
+
+The commands below use `platform.thepen-and-swordkc.org`; substitute your own
+host when standing up a second environment. Whatever host you choose, the
+Vercel project's `WORDPRESS_API_URL` and `WORDPRESS_SITE_URL` have to be
+repointed at it, or the Armory keeps reading the old one.
+
+---
+
 ## 0. Prerequisites
 
 - A production host: managed WordPress hosting or a VPS with **PHP 8.1+**,
@@ -70,7 +85,7 @@ and `.../theme/` to `wp-content/themes/platform-cle/`.
   ```
   and add a system cron hitting `wp-cron.php` every ~10 minutes:
   ```
-  */10 * * * * curl -s https://YOURSITE/wp-cron.php?doing_wp_cron >/dev/null 2>&1
+  */10 * * * * curl -s https://platform.thepen-and-swordkc.org/wp-cron.php?doing_wp_cron >/dev/null 2>&1
   ```
 
 ## 5. Harden (wp-config.php)
@@ -92,14 +107,14 @@ launch. Keep off-site copies.
 
 Run these on production before announcing:
 
-- [ ] Health check: `GET https://YOURSITE/wp-json/platform-cle/v1/health` returns
+- [ ] Health check: `GET https://platform.thepen-and-swordkc.org/wp-json/platform-cle/v1/health` returns
       `"status":"ok"`. Logged in as admin, `checks` are all `true`.
 - [ ] Anonymous visit to a program URL → redirected to `wp-login.php`.
 - [ ] A non-enrolled student → redirected to "My Training" with the notice.
 - [ ] An enrolled student → sees the program, can mark a module complete.
 - [ ] Upload a file to a Template → its link goes through `?pcle_download=…`;
       the raw `/wp-content/uploads/pcle-protected/…` URL returns 403/404.
-- [ ] REST: `curl https://YOURSITE/wp-json/wp/v2/pcle_program` (anonymous) → 401.
+- [ ] REST: `curl https://platform.thepen-and-swordkc.org/wp-json/wp/v2/pcle_program` (anonymous) → 401.
 - [ ] Bulk-enroll a real test email → the confirmation email **arrives**.
 - [ ] An enrolled student can sit a quiz and see it marked; a module whose quiz
       gates completion cannot be completed until they pass.

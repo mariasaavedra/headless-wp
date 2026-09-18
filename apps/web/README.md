@@ -1,36 +1,67 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# apps/web
 
-## Getting Started
+The participant-facing Next.js app for **Platform CLE** (App Router,
+TypeScript, Tailwind), served in production at
+**[armory.thepen-and-swordkc.org](https://armory.thepen-and-swordkc.org)** on
+Vercel.
 
-First, run the development server:
+WordPress remains the system of record. This app never touches its database: it
+authenticates over JWT and reads and writes through the Platform CLE plugin's
+REST routes.
+
+## Where it points
+
+| Environment | `WORDPRESS_API_URL` | Serves at |
+|-------------|---------------------|-----------|
+| Local, app outside Docker | `http://localhost:8080/wp-json` | http://localhost:3000 |
+| Local, app inside Docker | `http://wordpress/wp-json` | http://localhost:3000 |
+| Production | `https://platform.thepen-and-swordkc.org/wp-json` | https://armory.thepen-and-swordkc.org |
+
+Three variables matter:
+
+- `WORDPRESS_API_URL` — where **this server** reaches WordPress. Required.
+- `WORDPRESS_SITE_URL` — where a **browser** reaches WordPress, used for links
+  into `wp-admin`. Not always the same host, and when it is unset the app
+  simply stops offering those links.
+- `NEXT_PUBLIC_SITE_URL` — this app's own public address, used to resolve
+  metadata URLs. Defaults to the `armory` host.
+
+For the full picture of what runs where, see the "Deployments" section of the
+[root README](../../README.md).
+
+## Running it
+
+From the repository root, which starts WordPress and MySQL first:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Or on its own, against a WordPress that is already up:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run dev --workspace=apps/web
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+`apps/web/.env.local` holds the local values; it is not committed.
 
-## Learn More
+## Checks
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run lint --workspace=apps/web
+npm run build --workspace=apps/web
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Both run in CI on every push, in the `web` job of `.github/workflows/ci.yml`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Layout
 
-## Deploy on Vercel
+```text
+src/
+├── app/          # routes, layouts and server actions
+├── components/   # app components, including the curriculum builder
+└── lib/          # WordPress client, auth cookie, shared types
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Shared presentational components come from `@pcle/ui` (`libs/ui`), not from
+this workspace.
