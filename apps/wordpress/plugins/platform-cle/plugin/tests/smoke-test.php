@@ -2258,6 +2258,127 @@ wp_set_current_user( 0 );
 
 
 /* ------------------------------------------------------------------ */
+/* Enrollment over REST                                              */
+/* ------------------------------------------------------------------ */
+/*
+ * The frontend's half of the Participants screen. The gate is the staff one,
+ * the same as reports: the screen that lists a cohort is the screen that
+ * changes it.
+ */
+pcle_section( '# Enrollment over REST' );
+
+/**
+ * Posts an enrollment request as a given user.
+ *
+ * @param int    $uid        User to run as (0 = anonymous).
+ * @param int    $program_id Programme id to send.
+ * @param string $emails     The pasted list.
+ * @return WP_REST_Response
+ */
+function pcle_rest_enroll_as( $uid, $program_id, $emails ) {
+	wp_set_current_user( $uid );
+	$request = new WP_REST_Request( 'POST', '/platform-cle/v1/enrollments' );
+	$request->set_body_params(
+		array(
+			'program_id' => $program_id,
+			'emails'     => $emails,
+		)
+	);
+	return rest_do_request( $request );
+}
+
+$outsider_email = get_userdata( $outsider )->user_email;
+
+pcle_eq( pcle_rest_enroll_as( 0, $prog_b, $outsider_email )->get_status(), 401, 'anonymous cannot enrol anyone' );
+pcle_eq( pcle_rest_enroll_as( $student, $prog_b, $outsider_email )->get_status(), 403, 'a participant cannot enrol anyone' );
+pcle_eq( pcle_rest_enroll_as( $outsider, $prog_b, $outsider_email )->get_status(), 403, 'nor can someone enrolled in nothing' );
+pcle_eq( pcle_rest_enroll_as( $admin, $module, $outsider_email )->get_status(), 404, 'a non-programme id is a 404' );
+
+// Staff enrolling someone who already has an account.
+$enrol = pcle_rest_enroll_as( $admin, $prog_b, $outsider_email );
+$body  = $enrol->get_data();
+pcle_eq( $enrol->get_status(), 200, 'staff can enrol an existing account' );
+pcle_eq( $body['enrolled'], 1, 'and it reports one enrollment' );
+pcle_eq( $body['people'][0]['outcome'], 'enrolled', 'the outcome names what happened' );
+pcle_eq( $body['people'][0]['user_id'], $outsider, 'and identifies who' );
+pcle_ok( pcle_is_enrolled( $prog_b, $outsider ), 'the enrollment is really there' );
+
+// Again, unchanged. Re-pasting a list is the normal way this screen is used.
+$again = pcle_rest_enroll_as( $admin, $prog_b, $outsider_email )->get_data();
+pcle_eq( $again['enrolled'], 0, 'enrolling the same person again enrols nobody' );
+pcle_eq( $again['people'][0]['outcome'], 'already', 'and says they were already enrolled' );
+
+/*
+ * An address with no account. This route never creates one: account creation
+ * sends mail to a stranger and is awkward to undo, so it stays in wp-admin
+ * until it is built here deliberately.
+ */
+$stranger = 'test+stranger_' . wp_generate_password( 6, false ) . '@example.test';
+$unknown  = pcle_rest_enroll_as( $admin, $prog_b, $stranger )->get_data();
+pcle_eq( $unknown['skipped'], 1, 'an unknown address is skipped' );
+pcle_eq( $unknown['created'], 0, 'and nothing is created' );
+pcle_eq( $unknown['people'][0]['outcome'], 'unknown', 'the outcome says why' );
+pcle_ok( false === get_user_by( 'email', $stranger ), 'no account appeared for it' );
+
+// A list, pasted the way people paste lists.
+$mixed = pcle_rest_enroll_as( $admin, $prog_b, "{$outsider_email}, not-an-email; {$stranger}" )->get_data();
+pcle_eq( count( $mixed['people'] ), 3, 'commas and semicolons separate a list' );
+$outcomes = array_column( $mixed['people'], 'outcome' );
+pcle_ok( in_array( 'invalid', $outcomes, true ), 'a malformed address is reported as invalid' );
+pcle_ok( in_array( 'already', $outcomes, true ), 'and the known one as already enrolled' );
+
+// Removing someone.
+function pcle_rest_unenroll_as( $uid, $program_id, $user_id ) {
+	wp_set_current_user( $uid );
+	$request = new WP_REST_Request( 'DELETE', '/platform-cle/v1/enrollments' );
+	$request->set_query_params(
+		array(
+			'program_id' => $program_id,
+			'user_id'    => $user_id,
+		)
+	);
+	return rest_do_request( $request );
+}
+
+pcle_eq( pcle_rest_unenroll_as( $student, $prog_b, $outsider )->get_status(), 403, 'a participant cannot remove anyone' );
+pcle_eq( pcle_rest_unenroll_as( $admin, $prog_b, 99999999 )->get_status(), 404, 'removing a user who does not exist is a 404' );
+
+$removed = pcle_rest_unenroll_as( $admin, $prog_b, $outsider );
+pcle_eq( $removed->get_status(), 200, 'staff can remove a participant' );
+pcle_ok( ! pcle_is_enrolled( $prog_b, $outsider ), 'and the enrollment is gone' );
+pcle_ok( false !== get_userdata( $outsider ), 'while the account itself is untouched' );
+
+/*
+ * The other branch of the shared function, which only wp-admin exposes today:
+ * creating an account for an unknown address. Tested directly rather than
+ * through admin_init, since what matters is that both callers get the same
+ * behaviour out of one implementation.
+ */
+wp_set_current_user( $admin );
+$GLOBALS['pcle_mail'] = array();
+$invited              = 'test+invited_' . wp_generate_password( 6, false ) . '@example.test';
+$created              = pcle_bulk_enroll( $prog_b, array( $invited ), true );
+
+pcle_eq( $created['created'], 1, 'the shared function creates an account when asked' );
+pcle_eq( $created['people'][0]['outcome'], 'created', 'and says so' );
+$invited_user = get_user_by( 'email', $invited );
+pcle_ok( false !== $invited_user, 'the account exists' );
+if ( $invited_user ) {
+	$created_users[] = (int) $invited_user->ID;
+	pcle_ok( in_array( 'pcle_student', (array) $invited_user->roles, true ), 'as a CLE student' );
+	pcle_ok( pcle_is_enrolled( $prog_b, (int) $invited_user->ID ), 'enrolled in the programme' );
+}
+$invite_mail = false;
+foreach ( $GLOBALS['pcle_mail'] as $mail ) {
+	if ( false !== strpos( implode( ',', (array) $mail['to'] ), $invited ) ) {
+		$invite_mail = true;
+	}
+}
+pcle_ok( $invite_mail, 'and WordPress mailed them to set a password' );
+
+wp_set_current_user( 0 );
+
+/* ------------------------------------------------------------------ */
 /* Teardown                                                           */
 /* ------------------------------------------------------------------ */
 foreach ( $created_posts as $pid ) {

@@ -205,6 +205,35 @@ type ProgramReport = {
   participants: ReportParticipant[];
 };
 
+/**
+ * What became of one pasted address.
+ *
+ * Named rather than counted, because "I pasted twelve and it enrolled nine"
+ * is a question whoever pasted them has to be able to answer. `created` only
+ * arrives from wp-admin today: the frontend never creates accounts.
+ */
+type EnrollmentOutcome =
+  | "enrolled"
+  | "already"
+  | "created"
+  | "unknown"
+  | "invalid"
+  | "failed";
+
+type EnrollmentPerson = {
+  email: string;
+  outcome: EnrollmentOutcome;
+  user_id: number;
+  name: string;
+};
+
+type EnrollmentResult = {
+  enrolled: number;
+  created: number;
+  skipped: number;
+  people: EnrollmentPerson[];
+};
+
 /** The export, as the plugin decided its columns. */
 type ReportCsv = {
   filename: string;
@@ -219,6 +248,9 @@ type TrainingProgram = {
 };
 
 export type {
+  EnrollmentOutcome,
+  EnrollmentPerson,
+  EnrollmentResult,
   Progress,
   Ref,
   ReportParticipant,

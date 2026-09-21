@@ -1,6 +1,7 @@
 import { getAuthToken, setAuthCookie, clearAuthCookie } from "@/lib/auth";
 import type {
   AuthoringProgram,
+  EnrollmentResult,
   Me,
   ModuleDetail,
   NodeDetail,
@@ -249,6 +250,51 @@ async function getProgramReportCsv(id: number): Promise<ReportCsv> {
 }
 
 /* ------------------------------------------------------------------ */
+/* Participants                                                        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Enrols a pasted list of addresses into a programme.
+ *
+ * The list goes over as the string it was pasted as. Splitting it here would
+ * mean this and wp-admin each deciding what "a, b; c" means, and the plugin
+ * already has an answer.
+ */
+async function enrollByEmail(
+  programId: number,
+  emails: string
+): Promise<EnrollmentResult> {
+  return wordpressFetch("/platform-cle/v1/enrollments", {
+    auth: true,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ program_id: programId, emails }),
+  }) as Promise<EnrollmentResult>;
+}
+
+/**
+ * Removes one participant from a programme.
+ *
+ * Parameters in the query string rather than a body: a DELETE body is legal
+ * but not reliably forwarded, and a request whose parameters a proxy dropped
+ * would arrive as a malformed request rather than as nothing.
+ */
+async function unenrollParticipant(
+  programId: number,
+  userId: number
+): Promise<void> {
+  const query = new URLSearchParams({
+    program_id: String(programId),
+    user_id: String(userId),
+  });
+
+  await wordpressFetch(`/platform-cle/v1/enrollments?${query}`, {
+    auth: true,
+    method: "DELETE",
+  });
+}
+
+/* ------------------------------------------------------------------ */
 /* Authoring                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -384,6 +430,8 @@ export {
   getMe,
   getProgramReport,
   getProgramReportCsv,
+  enrollByEmail,
+  unenrollParticipant,
   getQuiz,
   submitQuizAttempt,
   getAuthoringPrograms,
