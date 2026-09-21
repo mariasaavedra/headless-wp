@@ -259,16 +259,21 @@ async function getProgramReportCsv(id: number): Promise<ReportCsv> {
  * The list goes over as the string it was pasted as. Splitting it here would
  * mean this and wp-admin each deciding what "a, b; c" means, and the plugin
  * already has an answer.
+ *
+ * `create` asks for accounts for the addresses that have none. It is a
+ * request, not an instruction: the plugin honours it only for a reader who
+ * may create users, and says in the result whether it did.
  */
 async function enrollByEmail(
   programId: number,
-  emails: string
+  emails: string,
+  create = false
 ): Promise<EnrollmentResult> {
   return wordpressFetch("/platform-cle/v1/enrollments", {
     auth: true,
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ program_id: programId, emails }),
+    body: JSON.stringify({ program_id: programId, emails, create }),
   }) as Promise<EnrollmentResult>;
 }
 

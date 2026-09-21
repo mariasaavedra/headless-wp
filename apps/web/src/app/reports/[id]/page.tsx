@@ -12,7 +12,7 @@ import RemoveParticipant from "@/components/remove-participant";
 import { isAuthenticated } from "@/lib/auth";
 import { decodeEntities } from "@/lib/html";
 import type { ProgramReport, ReportParticipant } from "@/lib/types";
-import { getProgramReport } from "@/lib/wordpress";
+import { getMe, getProgramReport } from "@/lib/wordpress";
 
 /** A date the site recorded, or an honest admission that it did not. */
 function RecordedDate({ value }: { value: string | null }) {
@@ -112,6 +112,19 @@ export default async function ProgramReportPage({
     });
   }
 
+  /*
+   * Whether to offer the invite control. Fails closed: the report itself has
+   * already loaded by here, and losing the whole screen because this second
+   * request failed would be a worse answer than not offering a checkbox.
+   */
+  let canInvite = false;
+
+  try {
+    canInvite = (await getMe()).can_invite;
+  } catch {
+    canInvite = false;
+  }
+
   const title = report.program ? decodeEntities(report.program.title) : "Report";
 
   return (
@@ -149,7 +162,7 @@ export default async function ProgramReportPage({
           .join(" · ")}
       </p>
 
-      <EnrollParticipants programId={Number(id)} />
+      <EnrollParticipants programId={Number(id)} canInvite={canInvite} />
 
       {report.participants.length === 0 ? (
         <p className="mt-8 text-zinc-600">

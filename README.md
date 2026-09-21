@@ -320,7 +320,7 @@ what to *offer*, never what to *allow*.
 | `/builder/programs/[id]` | The curriculum tree: add, rename, reorder, publish, set credit hours. |
 | `/builder/nodes/[id]` | One node's body — and, for a quiz, its questions and pass mark. |
 | `/reports` | Which cohort to report on. |
-| `/reports/[id]` | Cohort report: per-participant progress, credits and quiz results — and enrolling or removing participants, for people who already have an account. |
+| `/reports/[id]` | Cohort report: per-participant progress, credits and quiz results — and enrolling or removing participants. An administrator can also create accounts for addresses that have none; WordPress mails them a link to set their own password. |
 | `/reports/[id]/csv` | The same report as a download. The plugin composes the columns; this route only quotes and joins them. |
 
 Two things worth knowing before adding screens:

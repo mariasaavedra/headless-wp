@@ -49,7 +49,7 @@ comes first because everything storage-backed depends on the tables existing).
 | `uninstall.php` | Removes roles and records on uninstall. |
 | `bin/seed-demo.php` | Sample data (idempotent). |
 | `bin/setup-front-door.php` | Creates the "My Training" page + menu link. |
-| `tests/smoke-test.php` | Dependency-free smoke suite — 530 assertions across 33 sections. |
+| `tests/smoke-test.php` | Dependency-free smoke suite — 546 assertions across 34 sections. |
 
 ## 1. Custom Post Types
 
