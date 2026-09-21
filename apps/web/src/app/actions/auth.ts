@@ -29,7 +29,13 @@ async function loginAction(
     return { error: "Unable to log in right now. Please try again later." };
   }
 
-  redirect("/my-training");
+  /*
+   * The menu, not My Training. Signing in says nothing about what someone
+   * came to do: an instructor arriving at a participant's programme list had
+   * to leave it again, and the menu is the one screen that knows which paths
+   * this reader actually has.
+   */
+  redirect("/");
 }
 
 async function logoutAction(): Promise<void> {
