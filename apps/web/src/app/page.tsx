@@ -3,6 +3,8 @@ import Link from "next/link";
 import { Button } from "@pcle/ui/components/button";
 import { Card, CardContent } from "@pcle/ui/components/card";
 
+import { logoutAction } from "@/app/actions/auth";
+
 import { isAuthenticated } from "@/lib/auth";
 import { decodeEntities } from "@/lib/html";
 import { getMe, wordpressFetch, WORDPRESS_SITE_URL } from "@/lib/wordpress";
@@ -80,7 +82,7 @@ export default async function Home() {
     : { author: false, admin: false };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-zinc-50 px-6 py-16">
+    <main className="flex flex-1 items-center justify-center bg-zinc-50 px-6 py-16">
       <div className="w-full max-w-3xl text-center">
         <h1 className="text-5xl font-semibold tracking-tight text-zinc-950">
           {decodeEntities(site.name)}
@@ -141,6 +143,21 @@ export default async function Home() {
                 programme administrator.
               </p>
             )}
+
+            {/*
+              The way out.
+
+              This screen is where signing in now lands, and it was the only
+              one in the app with no way to leave: every other screen carries
+              the shared header, and this one carries nothing. A reader who
+              arrives here and wants to stop is not served by being told to
+              navigate somewhere else first.
+            */}
+            <form action={logoutAction} className="mt-10">
+              <Button type="submit" variant="link" className="text-zinc-500">
+                Log out
+              </Button>
+            </form>
           </>
         ) : (
           <div className="mt-10">

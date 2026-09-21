@@ -49,7 +49,12 @@ export default async function PageShell({
   const showBuilder = await canAuthor();
 
   return (
-    <div className="min-h-screen bg-zinc-50">
+    /*
+      flex-1, not min-h-screen. The body is a full-height flex column with the
+      version stamp as its last child; a screen-height shell would push that
+      below the fold on every page, which is a footer nobody ever reads.
+    */
+    <div className="flex flex-1 flex-col bg-zinc-50">
       <header className="border-b border-zinc-200 bg-white">
         <div className="mx-auto flex max-w-3xl items-center gap-4 px-6 py-4">
           <Link

@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 
 import { TooltipProvider } from "@pcle/ui/components/tooltip";
 
+import VersionStamp from "@/components/version-stamp";
+
 import "./globals.css";
 
 const geistSans = Geist({
@@ -41,6 +43,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         <TooltipProvider>{children}</TooltipProvider>
+        <VersionStamp />
       </body>
     </html>
   );
