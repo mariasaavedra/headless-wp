@@ -1,13 +1,14 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { Button } from "@pcle/ui/components/button";
 import { Card, CardContent } from "@pcle/ui/components/card";
 
 import { logoutAction } from "@/app/actions/auth";
-
 import { isAuthenticated } from "@/lib/auth";
 import { decodeEntities } from "@/lib/html";
-import { getMe, wordpressFetch, WORDPRESS_SITE_URL } from "@/lib/wordpress";
+import { pathsFor, type Path } from "@/lib/navigation";
+import { wordpressFetch } from "@/lib/wordpress";
 
 /*
  * Never prerendered. What this page shows depends on who is asking — the
@@ -28,40 +29,26 @@ async function getWordPressSite(): Promise<WordPressSite> {
   return wordpressFetch("/") as Promise<WordPressSite>;
 }
 
-/**
- * What may the signed-in reader do?
- *
- * Fails closed, the same way the shared header does: a stale or expired token
- * means no staff paths rather than a broken page. Every route is guarded
- * server-side regardless — this only decides what to offer.
- */
-async function whoIsThis(): Promise<{ author: boolean; admin: boolean }> {
-  try {
-    const me = await getMe();
-    return { author: me.can_author, admin: me.is_admin };
-  } catch {
-    return { author: false, admin: false };
-  }
-}
-
 /** One way in, with a word about where it leads. */
-function Path({
-  href,
-  title,
-  description,
-}: {
-  href: string;
-  title: string;
-  description: string;
-}) {
-  return (
-    <Link href={href} className="block transition hover:shadow-sm">
-      <Card className="h-full p-6 text-left hover:ring-foreground/20">
-        <CardContent className="p-0">
-          <h2 className="text-lg font-medium text-zinc-950">{title}</h2>
-          <p className="mt-1 text-sm text-zinc-600">{description}</p>
-        </CardContent>
-      </Card>
+function PathCard({ path }: { path: Path }) {
+  const card = (
+    <Card className="h-full p-6 text-left hover:ring-foreground/20">
+      <CardContent className="p-0">
+        <h2 className="text-lg font-medium text-zinc-950">{path.label}</h2>
+        <p className="mt-1 text-sm text-zinc-600">{path.description}</p>
+      </CardContent>
+    </Card>
+  );
+
+  const className = "block transition hover:shadow-sm";
+
+  return path.external ? (
+    <a href={path.href} className={className}>
+      {card}
+    </a>
+  ) : (
+    <Link href={path.href} className={className}>
+      {card}
     </Link>
   );
 }
@@ -75,11 +62,26 @@ function Path({
  * server already knows: whether they are signed in, and whether they teach.
  */
 export default async function Home() {
-  const site = await getWordPressSite();
   const signedIn = await isAuthenticated();
-  const { author, admin } = signedIn
-    ? await whoIsThis()
-    : { author: false, admin: false };
+  const paths = signedIn ? await pathsFor() : [];
+
+  /*
+   * A menu of one is not a menu.
+   *
+   * Signing in lands here, which is right for anyone with a choice to make
+   * and a toll gate for everyone else: a participant has exactly one path,
+   * and showing them a single card to click is asking them to confirm the
+   * only thing they could have wanted. They go straight there instead.
+   *
+   * Only for a path inside the app. Bouncing someone out to wp-admin before
+   * they have seen a single screen of this one would be a different and
+   * much ruder decision.
+   */
+  if (paths.length === 1 && !paths[0].external) {
+    redirect(paths[0].href);
+  }
+
+  const site = await getWordPressSite();
 
   return (
     <main className="flex flex-1 items-center justify-center bg-zinc-50 px-6 py-16">
@@ -95,63 +97,14 @@ export default async function Home() {
         {signedIn ? (
           <>
             <div className="mt-10 grid gap-4 sm:grid-cols-2">
-              <Path
-                href="/my-training"
-                title="My Training"
-                description="The programmes you are enrolled in, and how far through them you are."
-              />
-
-              {/*
-                Only shown to teaching staff. A participant seeing a door they
-                cannot open is worse than not knowing it is there.
-              */}
-              {author && (
-                <>
-                  <Path
-                    href="/builder"
-                    title="Build"
-                    description="Write and organise programmes, units, modules and quizzes."
-                  />
-
-                  <Path
-                    href="/reports"
-                    title="Reports"
-                    description="Who is enrolled, what they have completed, and what is outstanding."
-                  />
-                </>
-              )}
-
-              {/*
-                Administration stays in WordPress: enrolment, accounts and
-                settings live there and are not worth a second implementation.
-                Offered only when the public WordPress URL is known, because
-                the address this server uses for the API is not always one a
-                browser can reach.
-              */}
-              {admin && WORDPRESS_SITE_URL && (
-                <Path
-                  href={`${WORDPRESS_SITE_URL}/wp-admin/`}
-                  title="Administration"
-                  description="Accounts, enrolment and site settings, in WordPress."
-                />
-              )}
+              {paths.map((path) => (
+                <PathCard key={path.href} path={path} />
+              ))}
             </div>
 
-            {!author && (
-              <p className="mt-6 text-sm text-zinc-500">
-                Looking for something you cannot see here? Contact your
-                programme administrator.
-              </p>
-            )}
-
             {/*
-              The way out.
-
-              This screen is where signing in now lands, and it was the only
-              one in the app with no way to leave: every other screen carries
-              the shared header, and this one carries nothing. A reader who
-              arrives here and wants to stop is not served by being told to
-              navigate somewhere else first.
+              The way out. Every other screen carries the shared header; this
+              one carries nothing, and it is where signing in lands.
             */}
             <form action={logoutAction} className="mt-10">
               <Button type="submit" variant="link" className="text-zinc-500">
