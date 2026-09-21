@@ -99,8 +99,12 @@ jobs:
           fi
 
       - name: Sync the plugin
+        # --checksum, not rsync's default size-and-mtime check: a fresh
+        # checkout gives every file a new mtime, so without it a deploy
+        # rewrites all 28 files and the dry run prints 29 lines of noise for
+        # the one or two that actually changed.
         run: |
-          FLAGS="-az --delete --omit-dir-times --no-perms --itemize-changes"
+          FLAGS="-az --checksum --delete --omit-dir-times --no-perms --itemize-changes --exclude .DS_Store"
           if [ "${{ inputs.dry_run }}" = "true" ]; then
             FLAGS="$FLAGS --dry-run"
             echo "## Dry run — nothing was written" >> "$GITHUB_STEP_SUMMARY"
@@ -124,7 +128,7 @@ jobs:
         # the same claim: this one fails if any file still differs.
         if: ${{ inputs.dry_run != true }}
         run: |
-          LEFT=$(rsync -az --delete --omit-dir-times --no-perms --dry-run --itemize-changes \
+          LEFT=$(rsync -az --checksum --delete --omit-dir-times --no-perms --dry-run --itemize-changes --exclude .DS_Store \
             -e "ssh -i ~/.ssh/id_deploy -p $SSH_PORT" \
             "$LOCAL_PLUGIN" \
             "$SSH_USER@$SSH_HOST:$REMOTE/")
