@@ -1,0 +1,164 @@
+name: Deploy plugin
+
+# Copies apps/wordpress/plugins/platform-cle/plugin/ onto the live WordPress
+# host, which is the half of this repository with no deploy integration of its
+# own: Vercel builds apps/web from main by itself, SiteGround does not.
+#
+# It needs five secrets, in Settings → Secrets and variables → Actions:
+#
+#   SSH_HOST            host to connect to
+#   SSH_USER            SSH user
+#   SSH_PORT            SSH port (SiteGround listens on 18765)
+#   SSH_PRIVATE_KEY     private key whose public half is installed on the host
+#                       (SiteGround: Site Tools → Devs → SSH Keys Manager)
+#   REMOTE_PLUGIN_PATH  absolute path of the plugin directory on the host, e.g.
+#                       /home/customer/www/<site>/public_html/wp-content/plugins/platform-cle
+#
+# And optionally:
+#
+#   SSH_KNOWN_HOSTS     the host's public key line. Set it and the connection
+#                       is pinned to that key; leave it out and the first
+#                       connection trusts whatever answers.
+#
+# Until those secrets exist this workflow runs and fails at the first SSH
+# step. That is intended: merging it arms nothing.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Show what would change, write nothing
+        type: boolean
+        default: true
+
+  # Deploying on every merge that touches the plugin. Uncomment once you have
+  # watched a few manual runs do the right thing — a dry run costs nothing and
+  # prints the exact file list.
+  #
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - 'apps/wordpress/plugins/platform-cle/plugin/**'
+
+# One deploy at a time, and never cancel one half-way: an interrupted rsync
+# leaves the plugin directory in a state nobody chose.
+concurrency:
+  group: deploy-plugin
+  cancel-in-progress: false
+
+jobs:
+  tests:
+    name: Smoke tests
+    # The same job CI runs. A deploy that skips it would put code on the live
+    # host that nothing has exercised.
+    uses: ./.github/workflows/smoke-tests.yml
+
+  deploy:
+    name: Copy the plugin to the host
+    needs: tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SITE_URL: https://platform.thepen-and-swordkc.org
+      LOCAL_PLUGIN: apps/wordpress/plugins/platform-cle/plugin/
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_PORT: ${{ secrets.SSH_PORT }}
+      REMOTE: ${{ secrets.REMOTE_PLUGIN_PATH }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Load the SSH key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+
+          if [ -n "$SSH_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            echo "::warning::SSH_KNOWN_HOSTS is not set, so this run trusts whichever key the host offers."
+            ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          fi
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Check the target is the plugin directory
+        # rsync --delete against the wrong path would empty a directory nobody
+        # meant to touch. The remote has to already hold the plugin's own main
+        # file before anything is written.
+        run: |
+          if ! ssh -i ~/.ssh/id_deploy -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+               "test -f '$REMOTE/platform-cle.php'"; then
+            echo "::error::REMOTE_PLUGIN_PATH does not contain platform-cle.php. Refusing to sync."
+            exit 1
+          fi
+
+      - name: Sync the plugin
+        run: |
+          FLAGS="-az --delete --omit-dir-times --no-perms --itemize-changes"
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            FLAGS="$FLAGS --dry-run"
+            echo "## Dry run — nothing was written" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Deployed" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          rsync $FLAGS \
+            -e "ssh -i ~/.ssh/id_deploy -p $SSH_PORT" \
+            "$LOCAL_PLUGIN" \
+            "$SSH_USER@$SSH_HOST:$REMOTE/" | tee /tmp/rsync.log
+
+          {
+            echo '```'
+            cat /tmp/rsync.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Confirm the host matches the repository
+        # A second pass must find nothing left to do. rsync succeeding is not
+        # the same claim: this one fails if any file still differs.
+        if: ${{ inputs.dry_run != true }}
+        run: |
+          LEFT=$(rsync -az --delete --omit-dir-times --no-perms --dry-run --itemize-changes \
+            -e "ssh -i ~/.ssh/id_deploy -p $SSH_PORT" \
+            "$LOCAL_PLUGIN" \
+            "$SSH_USER@$SSH_HOST:$REMOTE/")
+
+          if [ -n "$LEFT" ]; then
+            echo "::error::The host still differs from the repository after the sync:"
+            echo "$LEFT"
+            exit 1
+          fi
+          echo "The plugin directory on the host is identical to this commit."
+
+      - name: Purge the host's cache
+        # Best effort. SiteGround serves a cached copy of REST responses, so a
+        # change can look like it did not land. If WP-CLI is not on the host,
+        # say so rather than failing a deploy that otherwise worked.
+        if: ${{ inputs.dry_run != true }}
+        continue-on-error: true
+        run: |
+          WP_ROOT="${REMOTE%/wp-content/plugins/platform-cle}"
+          ssh -i ~/.ssh/id_deploy -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+            "command -v wp >/dev/null 2>&1 && wp --path='$WP_ROOT' sg purge" \
+            || echo "::notice::Could not purge from here. If a stale response shows up, purge SG Cache in wp-admin."
+
+      - name: Verify the plugin answers
+        if: ${{ inputs.dry_run != true }}
+        run: |
+          for _ in $(seq 1 10); do
+            if curl -fsS "$SITE_URL/wp-json/platform-cle/v1/health" -o /tmp/health \
+               && grep -q '"status":"ok"' /tmp/health; then
+              echo "Health: $(cat /tmp/health)"
+              echo "Health: \`$(cat /tmp/health)\`" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 6
+          done
+          echo "::error::The health endpoint did not report ok after the deploy. Check the site before merging anything else."
+          exit 1
