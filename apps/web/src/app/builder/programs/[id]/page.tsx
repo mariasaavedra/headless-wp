@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PlusIcon } from "lucide-react";
 
@@ -63,17 +64,33 @@ export default async function BuilderProgramPage({
           <Badge className="bg-amber-100 text-amber-800">Draft</Badge>
         )}
 
-        <ActionForm action={setStatusAction} className="ml-auto">
-          <input type="hidden" name="id" value={tree.id} />
-          <input
-            type="hidden"
-            name="status"
-            value={isDraft ? "publish" : "draft"}
-          />
-          <Button type="submit" variant="outline">
-            {isDraft ? "Publish programme" : "Unpublish programme"}
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {/*
+            The cohort is the other half of the same programme: who is on it
+            and how far they have got. Reached from here rather than from the
+            menu, because the question "is anyone actually doing this?" is
+            asked while looking at the thing itself.
+          */}
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={<Link href={`/reports/${tree.id}`} />}
+          >
+            Cohort report
           </Button>
-        </ActionForm>
+
+          <ActionForm action={setStatusAction}>
+            <input type="hidden" name="id" value={tree.id} />
+            <input
+              type="hidden"
+              name="status"
+              value={isDraft ? "publish" : "draft"}
+            />
+            <Button type="submit" variant="outline">
+              {isDraft ? "Publish programme" : "Unpublish programme"}
+            </Button>
+          </ActionForm>
+        </div>
       </div>
 
       {/*

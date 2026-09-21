@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Badge } from "@pcle/ui/components/badge";
@@ -138,14 +139,38 @@ export default async function ProgramReportPage({
           {title}
         </h1>
 
-        <Button
-          variant="outline"
-          className="ml-auto"
-          nativeButton={false}
-          render={<a href={`/reports/${id}/csv`} />}
-        >
-          Download CSV
-        </Button>
+        {/*
+          The same programme has three screens — this one, the editor, and
+          what a participant sees — and until now no way between them. An
+          instructor reading that nobody has finished module three had to
+          return to the menu, open the builder and find the programme again
+          by name. They are the same object; these say so.
+        */}
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={<Link href={`/builder/programs/${id}`} />}
+          >
+            Open in builder
+          </Button>
+
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={<Link href={`/programs/${id}`} />}
+          >
+            View as participant
+          </Button>
+
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={<a href={`/reports/${id}/csv`} />}
+          >
+            Download CSV
+          </Button>
+        </div>
       </div>
 
       {/*
