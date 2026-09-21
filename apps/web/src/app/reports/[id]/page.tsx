@@ -6,7 +6,9 @@ import { Card, CardContent } from "@pcle/ui/components/card";
 
 import { renderAccessError } from "@/components/access-error";
 import Breadcrumbs from "@/components/breadcrumbs";
+import EnrollParticipants from "@/components/enroll-participants";
 import PageShell from "@/components/page-shell";
+import RemoveParticipant from "@/components/remove-participant";
 import { isAuthenticated } from "@/lib/auth";
 import { decodeEntities } from "@/lib/html";
 import type { ProgramReport, ReportParticipant } from "@/lib/types";
@@ -21,7 +23,13 @@ function RecordedDate({ value }: { value: string | null }) {
   return <>{value.slice(0, 10)}</>;
 }
 
-function ParticipantRow({ row }: { row: ReportParticipant }) {
+function ParticipantRow({
+  row,
+  programId,
+}: {
+  row: ReportParticipant;
+  programId: number;
+}) {
   return (
     <tr className="border-t border-zinc-100 align-top">
       <td className="py-3 pr-4">
@@ -64,12 +72,20 @@ function ParticipantRow({ row }: { row: ReportParticipant }) {
         )}
       </td>
 
-      <td className="py-3 text-sm">
+      <td className="py-3 pr-4 text-sm">
         {row.finished ? (
           <Badge className="bg-emerald-100 text-emerald-800">Finished</Badge>
         ) : (
           <span className="text-zinc-500">In progress</span>
         )}
+      </td>
+
+      <td className="py-3 text-right">
+        <RemoveParticipant
+          programId={programId}
+          userId={row.id}
+          name={row.name}
+        />
       </td>
     </tr>
   );
@@ -133,6 +149,8 @@ export default async function ProgramReportPage({
           .join(" · ")}
       </p>
 
+      <EnrollParticipants programId={Number(id)} />
+
       {report.participants.length === 0 ? (
         <p className="mt-8 text-zinc-600">
           Nobody is enrolled in this programme yet.
@@ -148,12 +166,17 @@ export default async function ProgramReportPage({
                   <th className="pb-2 pr-4">Modules</th>
                   <th className="pb-2 pr-4">Sessions</th>
                   <th className="pb-2 pr-4">Quizzes</th>
-                  <th className="pb-2">Status</th>
+                  <th className="pb-2 pr-4">Status</th>
+                  <th className="pb-2 sr-only">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {report.participants.map((row) => (
-                  <ParticipantRow key={row.id} row={row} />
+                  <ParticipantRow
+                    key={row.id}
+                    row={row}
+                    programId={Number(id)}
+                  />
                 ))}
               </tbody>
             </table>

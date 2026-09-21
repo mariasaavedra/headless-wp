@@ -18,7 +18,7 @@ That boundary is now real. `apps/web` authenticates against WordPress over JWT (
 
 **WordPress remains the system of record and the administrative surface**, and the WordPress-rendered site is still served — the plugin and theme are not being retired. What has changed is that `apps/web` is no longer a shell around two API calls.
 
-The curriculum is readable headlessly (`/wp/v2/pcle_*`, with the parent-child relationships exposed in `meta`), and the plugin adds task-shaped routes under `/platform-cle/v1/` — `my-training`, `programs`, `units`, `modules`, `progress`, `quizzes`, `reports`, `me`, and the `authoring/*` family behind the builder.
+The curriculum is readable headlessly (`/wp/v2/pcle_*`, with the parent-child relationships exposed in `meta`), and the plugin adds task-shaped routes under `/platform-cle/v1/` — `my-training`, `programs`, `units`, `modules`, `progress`, `quizzes`, `reports`, `enrollments`, `me`, and the `authoring/*` family behind the builder.
 
 ## Repository structure
 
@@ -320,7 +320,7 @@ what to *offer*, never what to *allow*.
 | `/builder/programs/[id]` | The curriculum tree: add, rename, reorder, publish, set credit hours. |
 | `/builder/nodes/[id]` | One node's body — and, for a quiz, its questions and pass mark. |
 | `/reports` | Which cohort to report on. |
-| `/reports/[id]` | Cohort report: per-participant progress, credits and quiz results. |
+| `/reports/[id]` | Cohort report: per-participant progress, credits and quiz results — and enrolling or removing participants, for people who already have an account. |
 | `/reports/[id]/csv` | The same report as a download. The plugin composes the columns; this route only quotes and joins them. |
 
 Two things worth knowing before adding screens:
