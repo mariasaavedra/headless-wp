@@ -596,10 +596,19 @@ function pcle_rest_guard_enrollment( $request ) {
 /**
  * Enrols a list of email addresses into a programme.
  *
- * Existing accounts only. An address nobody holds comes back as `unknown`
- * rather than becoming a new account: creating accounts is a heavier decision
- * than enrolling — it sends mail to a stranger and is awkward to undo — and
- * it stays in wp-admin until it is built here deliberately.
+ * With `create`, an address nobody holds becomes an account and WordPress
+ * mails them a link to set their own password. That is a heavier act than
+ * enrolling — it writes to a stranger, and deleting the account afterwards
+ * is not something this API offers — so it takes create_users, which an
+ * instructor does not have.
+ *
+ * Asking for it without the capability is not an error: the addresses come
+ * back as `unknown`, exactly as if it had never been asked for, and
+ * `create_permitted` says why. A caller that has to interpret a 403 to find
+ * out that half its list was fine is a caller that will guess.
+ *
+ * No password is ever chosen, transported or seen here. wp_insert_user()
+ * gets a random one nobody reads, and the set-password link replaces it.
  *
  * @param WP_REST_Request $request Request.
  * @return WP_REST_Response
@@ -607,19 +616,28 @@ function pcle_rest_guard_enrollment( $request ) {
 function pcle_rest_enroll( $request ) {
 	$program_id = (int) $request['program_id'];
 	$emails     = pcle_parse_email_list( $request['emails'] );
+	$asked      = (bool) $request['create'];
+	$permitted  = $asked && current_user_can( 'create_users' );
 
 	if ( empty( $emails ) ) {
 		return rest_ensure_response(
 			array(
-				'enrolled' => 0,
-				'created'  => 0,
-				'skipped'  => 0,
-				'people'   => array(),
+				'enrolled'         => 0,
+				'created'          => 0,
+				'skipped'          => 0,
+				'create_requested' => $asked,
+				'create_permitted' => $permitted,
+				'people'           => array(),
 			)
 		);
 	}
 
-	return rest_ensure_response( pcle_bulk_enroll( $program_id, $emails, false ) );
+	$result = pcle_bulk_enroll( $program_id, $emails, $permitted );
+
+	$result['create_requested'] = $asked;
+	$result['create_permitted'] = $permitted;
+
+	return rest_ensure_response( $result );
 }
 
 /**
@@ -683,6 +701,15 @@ function pcle_register_enrollment_routes() {
 					'emails'     => array(
 						'required' => true,
 						'type'     => 'string',
+					),
+					/*
+					 * Off unless asked for. A caller that forgets the field enrols
+					 * the people who already have accounts and reports the rest,
+					 * which is the harmless half of the two.
+					 */
+					'create'     => array(
+						'type'    => 'boolean',
+						'default' => false,
 					),
 				),
 			),

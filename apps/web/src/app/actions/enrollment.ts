@@ -47,6 +47,7 @@ async function enrollAction(
 ): Promise<EnrollActionState> {
   const programId = Number(formData.get("program_id"));
   const emails = String(formData.get("emails") ?? "").trim();
+  const create = formData.get("create") === "on";
 
   if (!Number.isInteger(programId) || programId <= 0) {
     return { error: "That programme could not be identified." };
@@ -59,7 +60,7 @@ async function enrollAction(
   let result: EnrollmentResult;
 
   try {
-    result = await enrollByEmail(programId, emails);
+    result = await enrollByEmail(programId, emails, create);
   } catch (error) {
     return {
       error: refusalMessage(

@@ -2348,33 +2348,104 @@ pcle_eq( $removed->get_status(), 200, 'staff can remove a participant' );
 pcle_ok( ! pcle_is_enrolled( $prog_b, $outsider ), 'and the enrollment is gone' );
 pcle_ok( false !== get_userdata( $outsider ), 'while the account itself is untouched' );
 
+/* ------------------------------------------------------------------ */
+/* Invitations                                                        */
+/* ------------------------------------------------------------------ */
 /*
- * The other branch of the shared function, which only wp-admin exposes today:
- * creating an account for an unknown address. Tested directly rather than
- * through admin_init, since what matters is that both callers get the same
- * behaviour out of one implementation.
+ * Creating an account for an address nobody holds. The capability is
+ * create_users, which an administrator has and an instructor does not, and
+ * asking for it without the capability has to be harmless rather than fatal:
+ * the known addresses in the same paste still get enrolled.
  */
-wp_set_current_user( $admin );
+pcle_section( '# Invitations' );
+
+/**
+ * Posts an enrollment request that asks for accounts to be created.
+ *
+ * @param int    $uid        User to run as.
+ * @param int    $program_id Programme id.
+ * @param string $emails     The pasted list.
+ * @return WP_REST_Response
+ */
+function pcle_rest_invite_as( $uid, $program_id, $emails ) {
+	wp_set_current_user( $uid );
+	$request = new WP_REST_Request( 'POST', '/platform-cle/v1/enrollments' );
+	$request->set_body_params(
+		array(
+			'program_id' => $program_id,
+			'emails'     => $emails,
+			'create'     => true,
+		)
+	);
+	return rest_do_request( $request );
+}
+
+// An instructor: staff enough to enrol, not to create accounts.
+$instructor = wp_insert_user(
+	array(
+		'user_login' => 'pcle_test_instructor_' . wp_generate_password( 5, false ),
+		'user_email' => 'test+teacher_' . wp_generate_password( 6, false ) . '@example.test',
+		'user_pass'  => wp_generate_password( 20 ),
+		'role'       => 'pcle_instructor',
+	)
+);
+$created_users[] = (int) $instructor;
+
+pcle_ok( pcle_user_is_staff( $instructor ), 'an instructor counts as staff' );
+pcle_ok( ! user_can( $instructor, 'create_users' ), 'but cannot create accounts' );
+
+$stranger_two    = 'test+stranger2_' . wp_generate_password( 6, false ) . '@example.test';
+$instructor_body = pcle_rest_invite_as( $instructor, $prog_b, "{$outsider_email}, {$stranger_two}" )->get_data();
+
+pcle_eq( $instructor_body['create_requested'], true, 'the request asked for accounts' );
+pcle_eq( $instructor_body['create_permitted'], false, 'and is told it was not allowed to' );
+pcle_eq( $instructor_body['created'], 0, 'nothing was created' );
+pcle_ok( false === get_user_by( 'email', $stranger_two ), 'the stranger has no account' );
+pcle_eq( $instructor_body['enrolled'], 1, 'while the address that had one was still enrolled' );
+pcle_ok( pcle_is_enrolled( $prog_b, $outsider ), 'really enrolled' );
+
+// An administrator, same request.
 $GLOBALS['pcle_mail'] = array();
 $invited              = 'test+invited_' . wp_generate_password( 6, false ) . '@example.test';
-$created              = pcle_bulk_enroll( $prog_b, array( $invited ), true );
+$admin_body           = pcle_rest_invite_as( $admin, $prog_b, $invited )->get_data();
 
-pcle_eq( $created['created'], 1, 'the shared function creates an account when asked' );
-pcle_eq( $created['people'][0]['outcome'], 'created', 'and says so' );
+pcle_eq( $admin_body['create_permitted'], true, 'an administrator may create accounts' );
+pcle_eq( $admin_body['created'], 1, 'and one was created' );
+pcle_eq( $admin_body['people'][0]['outcome'], 'created', 'the outcome says created' );
+
 $invited_user = get_user_by( 'email', $invited );
 pcle_ok( false !== $invited_user, 'the account exists' );
 if ( $invited_user ) {
 	$created_users[] = (int) $invited_user->ID;
 	pcle_ok( in_array( 'pcle_student', (array) $invited_user->roles, true ), 'as a CLE student' );
 	pcle_ok( pcle_is_enrolled( $prog_b, (int) $invited_user->ID ), 'enrolled in the programme' );
+	pcle_eq( $admin_body['people'][0]['user_id'], (int) $invited_user->ID, 'and the response identifies them' );
 }
+
 $invite_mail = false;
 foreach ( $GLOBALS['pcle_mail'] as $mail ) {
 	if ( false !== strpos( implode( ',', (array) $mail['to'] ), $invited ) ) {
 		$invite_mail = true;
 	}
 }
-pcle_ok( $invite_mail, 'and WordPress mailed them to set a password' );
+pcle_ok( $invite_mail, 'WordPress mailed them to set a password' );
+
+// Enrolling without asking still never creates anything, whoever asks.
+$quiet_stranger = 'test+quiet_' . wp_generate_password( 6, false ) . '@example.test';
+$quiet          = pcle_rest_enroll_as( $admin, $prog_b, $quiet_stranger )->get_data();
+pcle_eq( $quiet['create_requested'], false, 'a request without the field asks for nothing' );
+pcle_eq( $quiet['created'], 0, 'and creates nothing' );
+pcle_ok( false === get_user_by( 'email', $quiet_stranger ), 'no account appeared' );
+
+// /me carries the capability the frontend hides the control behind.
+wp_set_current_user( $admin );
+$me_admin = rest_do_request( new WP_REST_Request( 'GET', '/platform-cle/v1/me' ) )->get_data();
+pcle_eq( $me_admin['can_invite'], true, '/me tells an administrator they may invite' );
+
+wp_set_current_user( $instructor );
+$me_teacher = rest_do_request( new WP_REST_Request( 'GET', '/platform-cle/v1/me' ) )->get_data();
+pcle_eq( $me_teacher['can_invite'], false, 'and tells an instructor they may not' );
+pcle_eq( $me_teacher['can_author'], true, 'while still confirming they may author' );
 
 wp_set_current_user( 0 );
 

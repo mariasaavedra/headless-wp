@@ -406,6 +406,14 @@ function pcle_rest_get_me() {
 			'roles'        => array_values( $user->roles ),
 			'can_author'   => pcle_user_is_staff( $user->ID ),
 			'is_admin'     => user_can( $user->ID, 'manage_options' ),
+			/*
+			 * Whether this reader may create accounts, which is a different
+			 * question from teaching: an instructor enrols people who already
+			 * have one. Said here so the frontend can stop offering a control
+			 * whose request would only come back refused — the endpoint
+			 * decides regardless.
+			 */
+			'can_invite'   => user_can( $user->ID, 'create_users' ),
 		)
 	);
 }

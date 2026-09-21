@@ -231,6 +231,14 @@ type EnrollmentResult = {
   enrolled: number;
   created: number;
   skipped: number;
+  /** Whether the request asked for accounts to be created. */
+  create_requested: boolean;
+  /**
+   * Whether it was allowed to. Asking without the capability is not an
+   * error — the rest of the list is still enrolled — so the answer travels
+   * with the result rather than as a refusal.
+   */
+  create_permitted: boolean;
   people: EnrollmentPerson[];
 };
 
@@ -284,6 +292,8 @@ type Me = {
   roles: string[];
   can_author: boolean;
   is_admin: boolean;
+  /** May create accounts — which teaching alone does not grant. */
+  can_invite: boolean;
 };
 
 /** The curriculum post types the builder manages. */
