@@ -251,6 +251,25 @@ pcle_eq( pcle_rest_status( $student, "/wp/v2/pcle_program/{$prog_b}" ), 403, 'no
 pcle_eq( pcle_rest_status( $admin, "/wp/v2/pcle_program/{$prog_b}" ), 200, 'staff REST read → 200' );
 wp_set_current_user( 0 );
 
+/*
+ * User enumeration. Core answers /wp/v2/users for anyone, so the status alone
+ * is not the assertion: an empty list is also a 200, and a user with no
+ * published posts is refused by core whether or not our guard exists. Assert
+ * the error code too, so this fails if the guard is ever removed and core's
+ * own, laxer answer takes over.
+ */
+$anon_users = rest_do_request( new WP_REST_Request( 'GET', '/wp/v2/users' ) );
+pcle_eq( $anon_users->get_status(), 401, 'anon user listing → 401' );
+pcle_eq( $anon_users->as_error()->get_error_code(), 'pcle_rest_forbidden', 'the refusal is ours, not core listing published authors' );
+
+$anon_user = rest_do_request( new WP_REST_Request( 'GET', "/wp/v2/users/{$admin}" ) );
+pcle_eq( $anon_user->get_status(), 401, 'anon single user read → 401' );
+pcle_eq( $anon_user->as_error()->get_error_code(), 'pcle_rest_forbidden', 'single user read is refused by the guard too' );
+
+pcle_eq( pcle_rest_status( $student, '/wp/v2/users' ), 200, 'signed-in participant user listing → 200' );
+pcle_eq( pcle_rest_status( $student, "/wp/v2/users/{$student}" ), 200, 'signed-in participant reads their own user → 200' );
+wp_set_current_user( 0 );
+
 /* ------------------------------------------------------------------ */
 /* 7) REST: my-training                                               */
 /* ------------------------------------------------------------------ */

@@ -115,13 +115,15 @@ Run these on production before announcing:
 - [ ] Upload a file to a Template → its link goes through `?pcle_download=…`;
       the raw `/wp-content/uploads/pcle-protected/…` URL returns 403/404.
 - [ ] REST: `curl https://platform.thepen-and-swordkc.org/wp-json/wp/v2/pcle_program` (anonymous) → 401.
+- [ ] REST: `curl https://platform.thepen-and-swordkc.org/wp-json/wp/v2/users`
+      (anonymous) → 401, not a list of accounts.
 - [ ] Bulk-enroll a real test email → the confirmation email **arrives**.
 - [ ] An enrolled student can sit a quiz and see it marked; a module whose quiz
       gates completion cannot be completed until they pass.
 - [ ] A cohort report renders and its CSV downloads.
 - [ ] Smoke tests pass on the server:
       `php wp-content/plugins/platform-cle/tests/smoke-test.php` → `exit 0`
-      (444 assertions across 31 sections).
+      (450 assertions across 31 sections).
 
 ## Rollback
 
