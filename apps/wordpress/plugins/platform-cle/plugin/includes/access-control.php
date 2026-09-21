@@ -290,14 +290,54 @@ function pcle_register_rest_collection_filters() {
 add_action( 'rest_api_init', 'pcle_register_rest_collection_filters' );
 
 /**
+ * Closes anonymous user enumeration over REST.
+ *
+ * Core answers /wp/v2/users for anyone at all, listing every user who has
+ * published something: display names and the slugs derived from them. On a
+ * site whose whole purpose is private curriculum that is a roster leak, and
+ * it leaks more than it appears to — a display name is often the address the
+ * account was created from, and the slug is a login name by another route.
+ * Core's own reasoning (an author byline is public anyway) does not hold for
+ * a site with no public bylines.
+ *
+ * Signing in is the whole rule. Nothing needs this route anonymously: the app
+ * reads the signed-in reader from /platform-cle/v1/me, and the block editor's
+ * author controls only ever run for someone already logged in. Which users a
+ * signed-in reader may see is left to core, which already withholds emails,
+ * roles and capabilities outside the `edit` context.
+ *
+ * @param mixed           $result  Pre-dispatch result (WP_Error short-circuits).
+ * @param WP_REST_Server  $server  Server instance.
+ * @param WP_REST_Request $request Incoming request.
+ * @return mixed
+ */
+function pcle_guard_rest_user_reads( $result, $server, $request ) {
+	if ( is_wp_error( $result ) || is_user_logged_in() ) {
+		return $result;
+	}
+
+	if ( preg_match( '#^/wp/v2/users(?:/|$)#', $request->get_route() ) ) {
+		return pcle_rest_forbidden(
+			__( 'You must be signed in to read this.', 'platform-cle' )
+		);
+	}
+
+	return $result;
+}
+add_filter( 'rest_pre_dispatch', 'pcle_guard_rest_user_reads', 10, 3 );
+
+/**
  * The standard "forbidden" REST error for CLE content.
  *
+ * @param string $message Optional. Overrides the default message, for a
+ *                        refusal that has nothing to do with enrollment.
+ *                        Pass it already translated.
  * @return WP_Error
  */
-function pcle_rest_forbidden() {
+function pcle_rest_forbidden( $message = '' ) {
 	return new WP_Error(
 		'pcle_rest_forbidden',
-		__( 'You must be enrolled to access this content.', 'platform-cle' ),
+		'' !== $message ? $message : __( 'You must be enrolled to access this content.', 'platform-cle' ),
 		array( 'status' => rest_authorization_required_code() )
 	);
 }
