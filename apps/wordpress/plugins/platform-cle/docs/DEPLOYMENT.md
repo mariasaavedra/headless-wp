@@ -21,6 +21,66 @@ repointed at it, or the Armory keeps reading the old one.
 
 ---
 
+## Updating the plugin on a live site
+
+Sections 0 to 7 below are the one-time migration. A routine release is only
+the plugin directory, and there are two ways to move it.
+
+### Automated (GitHub Actions)
+
+[`.github/workflows/deploy-plugin.yml`](../../../../.github/workflows/deploy-plugin.yml)
+runs the smoke suite, rsyncs `plugin/` to the host, purges the cache and
+checks the health endpoint. **Actions → Deploy plugin → Run workflow.** Leave
+`dry run` ticked the first time: it prints the exact list of files it would
+add, change and delete, and writes nothing.
+
+It needs five repository secrets (Settings → Secrets and variables → Actions):
+`SSH_HOST`, `SSH_USER`, `SSH_PORT` (18765 on SiteGround), `SSH_PRIVATE_KEY`
+and `REMOTE_PLUGIN_PATH`. Optionally `SSH_KNOWN_HOSTS` pins the host key
+instead of trusting whatever answers on the first connection. Without the
+secrets the workflow fails at its first SSH step, so merging it arms nothing.
+
+Four things it refuses to do:
+
+- Deploy without the smoke suite passing first — the deploy job needs it.
+- Sync when `REMOTE_PLUGIN_PATH` does not already contain `platform-cle.php`.
+  `rsync --delete` against a mistyped path would empty a directory nobody
+  meant to touch.
+- Call itself done while anything still differs: it re-runs rsync in dry-run
+  mode afterwards and fails on any remaining change.
+- Stay quiet about a broken site — it fails if
+  `/wp-json/platform-cle/v1/health` does not report `ok` when it is finished.
+
+Deploying on every merge that touches the plugin is a commented-out `push`
+trigger in the same file. Uncomment it once a few manual runs have done the
+right thing.
+
+### By hand
+
+Build a zip whose root is a `platform-cle/` directory, then wp-admin →
+Plugins → Add New → Upload Plugin, and choose **Replace current with
+uploaded**:
+
+```bash
+cd apps/wordpress/plugins/platform-cle
+rm -rf /tmp/pcle && mkdir -p /tmp/pcle/platform-cle
+rsync -a --exclude '.DS_Store' plugin/ /tmp/pcle/platform-cle/
+( cd /tmp/pcle && zip -rq /tmp/platform-cle.zip platform-cle )
+```
+
+Then purge SG Cache in wp-admin and check the health endpoint. An upload does
+not remove files that were deleted from the repository, so when a release
+deletes one, use the workflow or plain SSH instead.
+
+### Either way
+
+Neither path touches the database, and neither needs the plugin deactivated:
+`pcle_maybe_upgrade_schema()` runs on `plugins_loaded`, so a pending
+migration applies itself on the next request. Deactivate/reactivate is only
+for the move to a new host, in section 3.
+
+---
+
 ## 0. Prerequisites
 
 - A production host: managed WordPress hosting or a VPS with **PHP 8.1+**,

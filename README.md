@@ -96,12 +96,21 @@ Production configuration lives with each host, never in the repository:
 | The Vercel project behind `armory` — `platform-ui`, built from `apps/web` | `WORDPRESS_API_URL=https://platform.thepen-and-swordkc.org/wp-json` and `WORDPRESS_SITE_URL=https://platform.thepen-and-swordkc.org`. Optionally `NEXT_PUBLIC_SITE_URL`, which defaults to the `armory` host. |
 | `wp-config.php` on the WordPress host behind `platform` | Database credentials, fresh salts, and `JWT_AUTH_SECRET_KEY`. `PCLE_DEMO_USER_PASSWORD` is left unset there, which is what keeps the demo accounts from being created. |
 
-There is no deployment configuration checked in: no `vercel.json`, and
-`.github/workflows/ci.yml` only runs tests. The link between this repository
-and the `platform-ui` project lives in the Vercel dashboard, which is also
-where a pull request's preview deployment comes from; the WordPress side is
-deployed by hand, following
-[`DEPLOYMENT.md`](apps/wordpress/plugins/platform-cle/docs/DEPLOYMENT.md).
+The two halves deploy by different means, which is worth knowing before
+wondering why a change is not live:
+
+- **`armory`** builds itself. The link between this repository and the
+  `platform-ui` project lives in the Vercel dashboard — there is no
+  `vercel.json` here — and that is also where a pull request's preview
+  deployment comes from. A merge to `main` is the whole procedure.
+- **`platform`** does not. SiteGround has no integration with this
+  repository, so the plugin directory has to be copied there.
+  [`.github/workflows/deploy-plugin.yml`](.github/workflows/deploy-plugin.yml)
+  does it — smoke suite, rsync, cache purge, health check — but only on
+  manual dispatch, and only once its SSH secrets exist. Failing that, or for
+  the first migration,
+  [`DEPLOYMENT.md`](apps/wordpress/plugins/platform-cle/docs/DEPLOYMENT.md)
+  is the runbook.
 
 To see what is actually live:
 
