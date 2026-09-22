@@ -154,15 +154,37 @@ jobs:
 
       - name: Verify the plugin answers
         if: ${{ inputs.dry_run != true }}
+        # Two minutes, and it says what it got.
+        #
+        # The first version gave the host 60 seconds and, when that ran out,
+        # reported only that it had. It failed once on a deploy that had in
+        # fact worked -- the endpoint was answering again a minute later --
+        # and left nobody able to tell a slow purge from a broken plugin.
+        # A guard rail that cannot say what it saw is a guard rail that gets
+        # ignored the second time it fires.
         run: |
-          for _ in $(seq 1 10); do
-            if curl -fsS "$SITE_URL/wp-json/platform-cle/v1/health" -o /tmp/health \
-               && grep -q '"status":"ok"' /tmp/health; then
-              echo "Health: $(cat /tmp/health)"
+          for attempt in $(seq 1 20); do
+            code=$(curl -sS -o /tmp/health -w '%{http_code}' --max-time 15 \
+              "$SITE_URL/wp-json/platform-cle/v1/health" || echo "000")
+
+            if [ "$code" = "200" ] && grep -q '"status":"ok"' /tmp/health; then
+              echo "Health after $attempt attempt(s): $(cat /tmp/health)"
               echo "Health: \`$(cat /tmp/health)\`" >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
+
+            echo "attempt $attempt: HTTP $code $(head -c 200 /tmp/health)"
             sleep 6
           done
-          echo "::error::The health endpoint did not report ok after the deploy. Check the site before merging anything else."
+
+          {
+            echo "## The health check never passed"
+            echo '```'
+            echo "last status: $code"
+            head -c 500 /tmp/health
+            echo
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "::error::The health endpoint did not report ok within two minutes of the deploy. The files are already on the host -- check the site itself, and the attempts above for what it answered instead."
           exit 1

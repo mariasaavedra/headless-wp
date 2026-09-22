@@ -256,6 +256,9 @@ type TrainingProgram = {
 };
 
 export type {
+  People,
+  Person,
+  GrantableRole,
   EnrollmentOutcome,
   EnrollmentPerson,
   EnrollmentResult,
@@ -294,6 +297,32 @@ type Me = {
   is_admin: boolean;
   /** May create accounts — which teaching alone does not grant. */
   can_invite: boolean;
+};
+
+/** An account, as a staff screen needs to see it. */
+type Person = {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  role_label: string;
+  /**
+   * Whether this reader may change this person's role. Decided by the
+   * plugin, which owns the rules — never your own, never an
+   * administrator's, and only with the capability.
+   */
+  editable: boolean;
+};
+
+/** A role the app is allowed to grant. Administrator is never among them. */
+type GrantableRole = {
+  role: string;
+  label: string;
+};
+
+type People = {
+  people: Person[];
+  roles: GrantableRole[];
 };
 
 /** The curriculum post types the builder manages. */

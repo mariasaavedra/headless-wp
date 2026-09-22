@@ -28,6 +28,7 @@ comes first because everything storage-backed depends on the tables existing).
 | `includes/schema.php` | The four custom tables, `PCLE_DB_VERSION`, migrations, and record cleanup on user/post delete. |
 | `includes/post-types.php` | Registers the 8 CPTs and the capability groups. |
 | `includes/roles.php` | Creates roles and assigns capabilities. |
+| `includes/people.php` | Accounts and roles over REST: who exists, and who may change what they do. Keeps the four rules — only CLE Student and CLE Instructor are grantable, never your own role, never an administrator's, and no deletions. |
 | `includes/access-control.php` | Login gate + per-program access + REST protection + `[pcle_model_answer]`. |
 | `includes/relationships.php` | Hierarchy via post meta + query helpers + reparenting validation. |
 | `includes/enrollment.php` | Per-program enrollment + form save + bulk enroll by email. |
@@ -49,7 +50,7 @@ comes first because everything storage-backed depends on the tables existing).
 | `uninstall.php` | Removes roles and records on uninstall. |
 | `bin/seed-demo.php` | Sample data (idempotent). |
 | `bin/setup-front-door.php` | Creates the "My Training" page + menu link. |
-| `tests/smoke-test.php` | Dependency-free smoke suite — 546 assertions across 34 sections. |
+| `tests/smoke-test.php` | Dependency-free smoke suite — 577 assertions across 35 sections. |
 
 ## 1. Custom Post Types
 

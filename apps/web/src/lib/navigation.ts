@@ -59,6 +59,12 @@ async function pathsFor(): Promise<Path[]> {
         label: "Reports",
         description:
           "Who is enrolled, what they have completed, and what is outstanding.",
+      },
+      {
+        href: "/people",
+        label: "People",
+        description:
+          "Who has an account and what they may do. Changing a role takes an administrator.",
       }
     );
   }

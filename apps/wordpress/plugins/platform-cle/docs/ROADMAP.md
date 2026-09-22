@@ -26,7 +26,7 @@ What remains is of three kinds, and only the first is engineering:
   confirmations, session reminders, password resets — leaves the server with
   nothing vouching for it. This now gates more than it did: the frontend can
   create accounts, and the link to set a password travels by email.
-- ~~**Tests on `apps/web`.**~~ Closed: 21 Playwright tests run in CI against a
+- ~~**Tests on `apps/web`.**~~ Closed: 27 Playwright tests run in CI against a
   real WordPress, covering signing in, what each role is offered, and managing
   a cohort. What they do not cover yet is the builder and the participant's
   path through a programme to a quiz.
@@ -46,7 +46,6 @@ been closed — see the findings below for what and how.
 | 🟡 | Login rate limiting / brute-force protection | — SG Security is active on the host; verify what it already covers before building |
 | 🟡 | Certificates: provider numbers, signatory, per-bar wording | **owner** — accreditation input |
 | 🟡 | Payment-driven enrollment | provider choice |
-| 🟡 | Roles editable from the frontend (enrolment, phase 3) | — its prerequisite, tests on `apps/web`, is now met |
 | 🟡 | Blocks lack `block.json` (invisible in the editor inserter) | — |
 | 🟡 | No i18n catalog (`.pot`) | — |
 | 🟡 | `FROM wordpress:latest` is unpinned | — |
@@ -55,8 +54,8 @@ been closed — see the findings below for what and how.
 | 🟢 | Deleting a parent from wp-admin still orphans children | — |
 
 Closed since the audit and not listed above: the production host, backups aside;
-the deploy pipeline; enrolment, removal and invitations from the frontend; and
-end-to-end tests on `apps/web`.
+the deploy pipeline; enrolment, removal, invitations and role changes from the
+frontend; and end-to-end tests on `apps/web`.
 
 ---
 
@@ -87,7 +86,7 @@ than wp-admin. Built in phases, because the risk is not evenly spread.
 |---|---|---|
 | 1 | Enrol and remove people who already have accounts | ✅ shipped |
 | 2 | Create accounts for unknown addresses, WordPress mails the set-password link | ✅ shipped |
-| 3 | Change roles | planned |
+| 3 | Change roles, and a screen listing who has an account | ✅ shipped |
 
 **Decisions made, so they do not live only in chat:**
 
@@ -104,11 +103,14 @@ than wp-admin. Built in phases, because the risk is not evenly spread.
 - Removal deletes the enrolment row only. Accounts, progress, attendance and
   quiz attempts survive, which is what makes the button safe without a
   confirmation step.
-- **Phase 3 must obey rules the first two did not need**, and is scheduled after
-  `apps/web` has tests for that reason: nobody grants a role above their own,
-  nobody changes their own role, and `administrator` is not grantable from the
-  app at all. Deleting accounts stays in wp-admin — it destroys records a credit
-  claim may depend on.
+- **Phase 3 obeys four rules the first two did not need**, each asserted in the
+  smoke suite: only CLE Student and CLE Instructor are grantable, never your
+  own role, never an administrator's, and nothing here deletes an account —
+  progress, attendance and quiz attempts hang off a user id, and a credit claim
+  may depend on them. The grantable set is stated once, in
+  `pcle_grantable_roles()`, rather than derived from the roles WordPress
+  happens to have: a list that grows by itself is how a role nobody discussed
+  becomes grantable from a dropdown.
 
 ---
 
@@ -165,11 +167,11 @@ Severity: 🔴 blocker · 🟡 important · 🟢 fine.
 
 **Engineering practices**
 - 🟡→✅ No automated tests. **Fixed** for the plugin (`tests/smoke-test.php`,
-  546 assertions across 34 sections) and now for `apps/web` too: 21 Playwright
+  577 assertions across 35 sections) and now for `apps/web` too: 27 Playwright
   tests in `apps/web/e2e/`, run in CI against a real stack rather than a
   mocked backend — what they check is precisely what depends on WordPress.
-  They arrange their own fixtures through the enrolment API instead of
-  inheriting whatever the last run left behind. The builder and the
+  They arrange their own fixtures through the enrolment and people APIs
+  instead of inheriting whatever the last run left behind. The builder and the
   participant's path to a quiz are not covered yet.
 - 🟡 Blocks registered without `block.json` → not in the editor inserter.
 - 🟡 No i18n catalog (`.pot`).
@@ -207,7 +209,7 @@ Goal: run the first real 4-week cohort safely.
 | 2 | Per-program REST guard (fix the no-op) | ✅ done + verified E2E |
 | 3 | Bulk enrollment by email | ✅ done + verified |
 | 4 | Emails (enrollment confirmation + session reminder) | ✅ done (`includes/emails.php`); verified via wp_mail capture. Needs SMTP on the host for real delivery. |
-| 5 | Smoke tests on access-control, progress, files, REST | ✅ done (`tests/smoke-test.php`, 546 assertions across 34 sections, dependency-free); green in CI on every push |
+| 5 | Smoke tests on access-control, progress, files, REST | ✅ done (`tests/smoke-test.php`, 577 assertions across 35 sections, dependency-free); green in CI on every push |
 | 6 | Deploy prep (health check + runbook) | ✅ done (`includes/health.php` + [DEPLOYMENT.md](DEPLOYMENT.md)), and since 18 Sep 2026 actually deployed: host, DNS and a deploy workflow all live. Backups remain unconfirmed. |
 
 ---
