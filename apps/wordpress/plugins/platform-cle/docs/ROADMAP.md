@@ -1,7 +1,8 @@
 # Roadmap & viability notes
 
-Living document. Captures the viability audit, what's being hardened for a pilot,
-and the planned milestones (so decisions don't live only in chat).
+Living document. Captures the viability audit, what is running in production,
+and the planned milestones — including the decisions behind them, so they do not
+live only in chat.
 
 ---
 
@@ -13,10 +14,23 @@ roles/caps, single sources of truth for capabilities and relationships. The gaps
 below are **additions, not rewrites** — and most of the ones this audit opened
 have since been closed.
 
-**What the critical path is now.** Not engineering. Email delivery, payment-driven
-enrollment and real certificates each sit behind the same prerequisite: a
-production host with SSL. Everything reachable without one has largely been
-built.
+**What the critical path is now.** Not the host — that arrived. The plugin has
+been serving `platform.thepen-and-swordkc.org` since 18 September 2026, the
+Next.js app serves `armory.thepen-and-swordkc.org`, and the plugin deploys
+through a workflow rather than by hand ([DEPLOYMENT.md](DEPLOYMENT.md)).
+
+What remains is of three kinds, and only the first is engineering:
+
+- **Mail that arrives.** No SMTP is configured, and the subdomain has no SPF or
+  DKIM record. Everything the platform sends — invitations, enrolment
+  confirmations, session reminders, password resets — leaves the server with
+  nothing vouching for it. This now gates more than it did: the frontend can
+  create accounts, and the link to set a password travels by email.
+- **Tests on `apps/web`.** The frontend carries enrolment, invitations, the
+  builder and the whole participant path, and nothing tests any of it. Each
+  release is verified by someone driving a browser.
+- **Business input.** The accreditation identity certificates need, and a
+  payment provider. Neither is blocked by code any more.
 
 ## Open at a glance
 
@@ -25,18 +39,75 @@ been closed — see the findings below for what and how.
 
 | | Item | Blocked on |
 |---|---|---|
-| 🟡 | Production host, backups, deploy pipeline | **owner** — the critical path |
-| 🟡 | SMTP delivery for enrollment and reminder emails | production host |
+| 🟡 | Confirm the host's backups run and restore | — minutes, and the deploy workflow writes to production |
+| 🟡 | SMTP delivery: nothing the platform emails is vouched for | a choice — relay through the org's Microsoft 365, or a transactional provider |
+| 🟡 | `apps/web` has no tests; CI only lints and builds it | — |
+| 🟡 | An administrator account's display name is the address it was created from, so it is the public byline on anything it authors | — wp-admin, data not code |
+| 🟡 | Login rate limiting / brute-force protection | — SG Security is active on the host; verify what it already covers before building |
 | 🟡 | Certificates: provider numbers, signatory, per-bar wording | **owner** — accreditation input |
-| 🟡 | Payment-driven enrollment | provider choice + production host |
-| 🟡 | No login rate limiting / brute-force protection | — |
+| 🟡 | Payment-driven enrollment | provider choice |
+| 🟡 | Roles editable from the frontend (enrolment, phase 3) | — deliberately after `apps/web` has tests |
 | 🟡 | Blocks lack `block.json` (invisible in the editor inserter) | — |
 | 🟡 | No i18n catalog (`.pot`) | — |
-| 🟡 | `apps/web` has no tests; CI only lints and builds it | — |
 | 🟡 | `FROM wordpress:latest` is unpinned | — |
-| 🟡 | Progress computation is N+1; nothing cached | — |
+| 🟡 | Progress computation is N+1; nothing cached | — no measurement yet says it costs anything at this size |
 | 🟡 | Live sessions carry a date but no video/conferencing link | — |
 | 🟢 | Deleting a parent from wp-admin still orphans children | — |
+
+Closed since the audit and not listed above: the production host, backups aside;
+the deploy pipeline; enrolment, removal and invitations from the frontend.
+
+---
+
+## In production
+
+| | Host | Deploys by |
+|---|---|---|
+| Plugin + theme | `platform.thepen-and-swordkc.org` (SiteGround) | [`deploy-plugin.yml`](../../../../.github/workflows/deploy-plugin.yml), run by hand |
+| Next.js app | `armory.thepen-and-swordkc.org` (Vercel) | itself, on every merge to `main` |
+
+Live since 18 September 2026. The asymmetry is the thing to remember: a merge
+publishes the app and does nothing to the plugin, so a change that spans both
+halves goes plugin-first or the app calls an endpoint that is not there yet.
+The runbook, the secrets it needs and the guard rails are in
+[DEPLOYMENT.md](DEPLOYMENT.md).
+
+Automatic plugin deploys on merge are written and commented out in that
+workflow, to enable once it has been driven by hand a few more times.
+
+---
+
+## Enrolment from the frontend
+
+Instructors and administrators manage a cohort from the report screen rather
+than wp-admin. Built in phases, because the risk is not evenly spread.
+
+| Phase | Scope | Status |
+|---|---|---|
+| 1 | Enrol and remove people who already have accounts | ✅ shipped |
+| 2 | Create accounts for unknown addresses, WordPress mails the set-password link | ✅ shipped |
+| 3 | Change roles | planned |
+
+**Decisions made, so they do not live only in chat:**
+
+- `pcle_bulk_enroll()` is the single implementation. wp-admin and the REST route
+  both call it, so what "a, b; c" means, who counts as already enrolled and what
+  happens to an address nobody holds are answered once.
+- **No password is ever chosen, transported or seen by the app.** Account
+  creation hands `wp_insert_user()` a random password nobody reads and lets
+  WordPress send the reset link. Phase 3 does not change this.
+- Creating accounts takes `create_users`; an instructor has neither the
+  capability nor the control. Asking for it without the capability is not an
+  error — the known addresses in the same paste are still enrolled, and
+  `create_permitted` says why the rest were not.
+- Removal deletes the enrolment row only. Accounts, progress, attendance and
+  quiz attempts survive, which is what makes the button safe without a
+  confirmation step.
+- **Phase 3 must obey rules the first two did not need**, and is scheduled after
+  `apps/web` has tests for that reason: nobody grants a role above their own,
+  nobody changes their own role, and `administrator` is not grantable from the
+  app at all. Deleting accounts stays in wp-admin — it destroys records a credit
+  claim may depend on.
 
 ---
 
@@ -69,8 +140,10 @@ Severity: 🔴 blocker · 🟡 important · 🟢 fine.
   face of the document — is a business input, not something code can supply.
   That input is the only thing left on this item.
 - 🟡 Live sessions have no video/conferencing integration (just a date).
-- 🟡→✅ No email notifications. **Fixed** (`emails.php`; Option A #4). Still
-  needs SMTP on the production host to actually deliver.
+- 🟡→✅ No email notifications. **Fixed** (`emails.php`; Option A #4). Delivery
+  is the open half and is now the platform's sharpest gap: the host sends
+  through its local MTA with no SMTP plugin, and `platform.thepen-and-swordkc.org`
+  publishes neither SPF nor DKIM. Mail leaves; nothing vouches for it.
 
 **Data model / scale**
 - 🟡→✅ Enrollment & progress were serialized user-meta arrays that could not be
@@ -102,10 +175,14 @@ Severity: 🔴 blocker · 🟡 important · 🟢 fine.
   Local by Flywheel era and is no longer part of any workflow.
 
 **Ops**
-- 🟡 No staging or production host, backups, or deploy pipeline. Local
-  development is Docker Compose now, not Local by Flywheel, but neither is a
-  place to run a cohort. **This is the critical path** — SMTP delivery, payments
-  and real certificates all sit behind it.
+- 🟡→✅ No staging or production host, backups, or deploy pipeline. **Mostly
+  fixed.** Both halves are live (see In production above) and the plugin
+  deploys through a workflow that runs the smoke suite, refuses a target that
+  does not already hold the plugin, re-checks that the host matches the
+  repository afterwards, and fails if the health endpoint stops answering.
+  **Remaining:** no staging environment — a plugin release is rehearsed with a
+  dry run against production rather than tried somewhere else first — and the
+  host's backups have not been confirmed to run or to restore.
 - 🟡 `apps/wordpress/Dockerfile` is `FROM wordpress:latest` — unpinned, so a
   rebuild can change WordPress version underneath you. Pin it. (This is also the
   likely source of the puzzling "version 7.0" this audit originally recorded.)
@@ -126,7 +203,7 @@ Goal: run the first real 4-week cohort safely.
 | 3 | Bulk enrollment by email | ✅ done + verified |
 | 4 | Emails (enrollment confirmation + session reminder) | ✅ done (`includes/emails.php`); verified via wp_mail capture. Needs SMTP on the host for real delivery. |
 | 5 | Smoke tests on access-control, progress, files, REST | ✅ done (`tests/smoke-test.php`, 546 assertions across 34 sections, dependency-free); green in CI on every push |
-| 6 | Deploy prep (health check + runbook) | ✅ done (`includes/health.php` + [DEPLOYMENT.md](DEPLOYMENT.md)); host/backups/DNS remain owner-driven |
+| 6 | Deploy prep (health check + runbook) | ✅ done (`includes/health.php` + [DEPLOYMENT.md](DEPLOYMENT.md)), and since 18 Sep 2026 actually deployed: host, DNS and a deploy workflow all live. Backups remain unconfirmed. |
 
 ---
 
@@ -159,8 +236,9 @@ same four things:
 - Account creation at checkout (email → user).
 - Refund → auto-unenroll?
 - Receipts / invoices (relevant if issuing CLE credit).
-- **Hard prerequisite:** production host + SSL (Option A #6); live payments can't
-  be tested on Local.
+- ~~**Hard prerequisite:** production host + SSL~~ — satisfied since 18 Sep 2026.
+  What is left is the provider choice and the decisions above; live payments can
+  be tested against the production host when there is one to test.
 
 ---
 
