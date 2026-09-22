@@ -195,8 +195,9 @@ Dependency-free, exits non-zero on failure, and runs in CI on every push
 npm run test:e2e --workspace=apps/web
 ```
 
-27 Playwright tests covering signing in, what each role is offered, and
-managing a cohort — against the same running WordPress, because what they
+36 Playwright tests covering signing in, what each role is offered,
+managing a cohort, the builder, and the participant's path from My Training
+through a module to a quiz — against the same running WordPress, because what they
 check is precisely what depends on it. They sign in as the demo accounts
 below and arrange what they need through the plugin's API, so they do not
 inherit whatever the last run left behind. A dev server on port 3000 is

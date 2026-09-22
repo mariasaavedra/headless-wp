@@ -1,5 +1,13 @@
 import { request, type APIRequestContext } from "@playwright/test";
 
+/** A node of the curriculum tree, as much of it as these tests read. */
+type TreeNode = {
+  id: number;
+  title: string;
+  type: string;
+  children?: TreeNode[];
+};
+
 import { people } from "./people";
 
 /*
@@ -69,6 +77,98 @@ class WordPress {
     }
 
     return { id: published.id, title: published.title };
+  }
+
+  /**
+   * A programme's curriculum, as the builder sees it.
+   *
+   * Tests ask this rather than naming post ids: the ids differ between a
+   * developer's database and the one CI builds from scratch, and a test that
+   * hard-codes 612 is a test that passes in exactly one place.
+   */
+  async tree(programmeId: number): Promise<TreeNode> {
+    const response = await this.api.get(
+      `${API}/platform-cle/v1/authoring/programs/${programmeId}/tree`,
+      { headers: this.headers }
+    );
+
+    return (await response.json()) as TreeNode;
+  }
+
+  /** Every node of a type, anywhere in the programme. */
+  private async nodesOfType(
+    programmeId: number,
+    type: string
+  ): Promise<TreeNode[]> {
+    const found: TreeNode[] = [];
+
+    const walk = (node: TreeNode) => {
+      if (node.type === type) {
+        found.push(node);
+      }
+      (node.children ?? []).forEach(walk);
+    };
+
+    walk(await this.tree(programmeId));
+
+    return found;
+  }
+
+  /**
+   * A module a participant can complete without passing anything first.
+   *
+   * A module whose quiz is required cannot be marked complete until that quiz
+   * is passed, which is a different test than "can somebody mark a module
+   * complete".
+   */
+  async completableModule(programmeId: number): Promise<TreeNode> {
+    const modules = await this.nodesOfType(programmeId, "pcle_module");
+
+    const free = modules.find(
+      (module) =>
+        !(module.children ?? []).some((child) => child.type === "pcle_quiz")
+    );
+
+    if (!free) {
+      throw new Error("Every module in this programme is gated by a quiz.");
+    }
+
+    return free;
+  }
+
+  async firstQuiz(programmeId: number): Promise<TreeNode> {
+    const [quiz] = await this.nodesOfType(programmeId, "pcle_quiz");
+
+    if (!quiz) {
+      throw new Error("No quiz in this programme to sit.");
+    }
+
+    return quiz;
+  }
+
+  /** Finds something the test made, so the test can unmake it. */
+  async findByTitle(
+    programmeId: number,
+    title: string
+  ): Promise<TreeNode | null> {
+    const found: TreeNode[] = [];
+
+    const walk = (node: TreeNode) => {
+      if (node.title === title) {
+        found.push(node);
+      }
+      (node.children ?? []).forEach(walk);
+    };
+
+    walk(await this.tree(programmeId));
+
+    return found[0] ?? null;
+  }
+
+  async deleteNode(id: number): Promise<void> {
+    await this.api.delete(`${API}/platform-cle/v1/authoring/nodes/${id}`, {
+      headers: this.headers,
+    });
   }
 
   async enrol(programmeId: number, email: string): Promise<void> {
@@ -153,3 +253,4 @@ class WordPress {
 }
 
 export { WordPress };
+export type { TreeNode };

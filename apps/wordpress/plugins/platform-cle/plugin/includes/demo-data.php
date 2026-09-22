@@ -334,7 +334,7 @@ function pcle_seed_demo_data() {
 	$author_id = $admins ? (int) $admins[0] : 1;
 
 	// 1) Clean up previous demos (idempotency).
-	$all_types = array( 'pcle_program', 'pcle_unit', 'pcle_module', 'pcle_scenario', 'pcle_template', 'pcle_event', 'pcle_case_update' );
+	$all_types = array( 'pcle_program', 'pcle_unit', 'pcle_module', 'pcle_scenario', 'pcle_template', 'pcle_event', 'pcle_case_update', 'pcle_quiz' );
 	$old       = get_posts(
 		array(
 			'post_type'   => $all_types,
@@ -362,6 +362,7 @@ function pcle_seed_demo_data() {
 		'template'    => 0,
 		'event'       => 0,
 		'case_update' => 0,
+		'quiz'        => 0,
 		'users'       => array(),
 	);
 
@@ -452,6 +453,102 @@ function pcle_seed_demo_data() {
 					'id'   => $module_id,
 					'unit' => $w,
 				);
+
+				/*
+				 * One quiz, on the very first module of the programme.
+				 *
+				 * The demo data claimed to represent every kind of content
+				 * and had no quiz in it, so nothing it produced could show
+				 * the feature that gates a module -- the one place where
+				 * this platform says no to a participant. Three questions,
+				 * one of each kind, because the kinds behave differently:
+				 * one answer, several answers, and a written one that is
+				 * read rather than marked.
+				 */
+				if ( 0 === $w && 0 === $m ) {
+					$quiz_id = pcle_seed_post(
+						'pcle_quiz',
+						sprintf( '%s — check your understanding', $unit['title'] ),
+						'A short check before moving on. You need 70% to continue.',
+						1,
+						$author_id,
+						$meta_module,
+						$module_id
+					);
+
+					if ( $quiz_id ) {
+						update_post_meta(
+							$quiz_id,
+							'_pcle_quiz_questions',
+							array(
+								array(
+									'key'      => 'jurisdiction',
+									'type'     => 'single',
+									'prompt'   => 'Where is a § 2241 petition filed?',
+									'help'     => 'Think about who holds the client, not who ordered it.',
+									'feedback' => 'The district of confinement, naming the immediate custodian.',
+									'required' => true,
+									'choices'  => array(
+										array(
+											'key'     => 'confinement',
+											'text'    => 'The district of confinement',
+											'correct' => true,
+										),
+										array(
+											'key'     => 'residence',
+											'text'    => "The district where the client lives",
+											'correct' => false,
+										),
+										array(
+											'key'     => 'any',
+											'text'    => 'Any district in the circuit',
+											'correct' => false,
+										),
+									),
+								),
+								array(
+									'key'      => 'respondent',
+									'type'     => 'multiple',
+									'prompt'   => 'What should you check before filing?',
+									'help'     => '',
+									'feedback' => 'Custody and the proper respondent both decide whether the petition survives.',
+									'required' => true,
+									'choices'  => array(
+										array(
+											'key'     => 'custody',
+											'text'    => 'Whether the client is in custody',
+											'correct' => true,
+										),
+										array(
+											'key'     => 'custodian',
+											'text'    => 'Who the immediate custodian is',
+											'correct' => true,
+										),
+										array(
+											'key'     => 'docket',
+											'text'    => 'How busy the docket looks',
+											'correct' => false,
+										),
+									),
+								),
+								array(
+									'key'      => 'reflection',
+									'type'     => 'text',
+									'prompt'   => 'Describe a detention case you would file on, and why.',
+									'help'     => 'Not scored — this is for discussion in the live session.',
+									'feedback' => '',
+									'required' => false,
+									'choices'  => array(),
+								),
+							)
+						);
+
+						update_post_meta( $quiz_id, '_pcle_quiz_pass_mark', 70 );
+						update_post_meta( $quiz_id, '_pcle_quiz_gates_completion', 1 );
+
+						$counts['quiz']++;
+					}
+				}
 
 				// A scenario and a template on the first module of each unit.
 				if ( 0 === $m ) {
