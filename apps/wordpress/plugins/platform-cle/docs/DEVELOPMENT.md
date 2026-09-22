@@ -110,7 +110,24 @@ echo "exit=$?"   # 0 = all passed, 1 = a test failed
 **These run in CI on every push and pull request** (`.github/workflows/ci.yml`),
 against a real stack rather than mocks: the workflow brings up WordPress and
 MySQL, waits for `/wp-json/platform-cle/v1/health` to answer, then runs the
-suite. A second job lints and builds `apps/web`.
+suite. Two more jobs lint and build `apps/web`, and run its end-to-end suite.
+
+## Testing the app
+
+21 Playwright tests in `apps/web/e2e/`, against the same running stack:
+
+```bash
+docker compose up -d wordpress        # if it is not already up
+npm run test:e2e --workspace=apps/web
+```
+
+They sign in as the demo accounts the seeder creates, and arrange what they
+need — an enrolment, a programme to report on — through the plugin's own API
+rather than depending on what the last run left behind. A dev server on port
+3000 is reused if one is running and started if not.
+
+`npm run test:e2e:ui --workspace=apps/web` opens Playwright's runner, which is
+worth it when a test fails for reasons the terminal will not explain.
 
 > Upgrade path (Option C): migrate these to WP-PHPUnit (`WP_UnitTestCase`) with a
 > dedicated test database. See [ROADMAP.md](ROADMAP.md).

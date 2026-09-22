@@ -189,6 +189,19 @@ docker compose exec wordpress php /var/www/html/wp-content/plugins/platform-cle/
 Dependency-free, exits non-zero on failure, and runs in CI on every push
 (`.github/workflows/ci.yml`).
 
+### Running the app's test suite
+
+```bash
+npm run test:e2e --workspace=apps/web
+```
+
+21 Playwright tests covering signing in, what each role is offered, and
+managing a cohort — against the same running WordPress, because what they
+check is precisely what depends on it. They sign in as the demo accounts
+below and arrange what they need through the plugin's API, so they do not
+inherit whatever the last run left behind. A dev server on port 3000 is
+reused if one is running, started if not.
+
 ### Demo accounts
 
 When `PCLE_DEMO_USER_PASSWORD` is set in `.env`, the sample-data seeder also

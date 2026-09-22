@@ -40,3 +40,49 @@ jobs:
         env:
           WORDPRESS_API_URL: http://localhost:8080/wp-json
         run: npm run build
+
+  e2e:
+    name: Web end-to-end
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Against a real WordPress, because what these tests check is precisely
+    # what depends on it: who you are, what you are offered, and what happens
+    # when you enrol someone. A mocked backend would assert the mock.
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/start-wordpress
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install the browser
+        run: npx playwright install --with-deps chromium
+        working-directory: apps/web
+
+      - name: Run the suite
+        env:
+          # The app talks to the stack this job just started; the tests
+          # arrange their fixtures through the same API.
+          WORDPRESS_API_URL: http://localhost:8080/wp-json
+          WORDPRESS_SITE_URL: http://localhost:8080
+        run: npm run test:e2e --workspace=apps/web
+
+      - name: Traces and screenshots from whatever failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          retention-days: 7
+
+      - name: Container logs
+        if: failure()
+        run: docker compose logs --no-color
