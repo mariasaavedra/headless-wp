@@ -112,6 +112,20 @@ class WordPress {
     return match ? match.id : null;
   }
 
+  /** Puts someone back the way a test found them. */
+  async setRole(email: string, role: string): Promise<void> {
+    const id = await this.userId(email);
+
+    if (id === null) {
+      return;
+    }
+
+    await this.api.patch(`${API}/platform-cle/v1/people/${id}`, {
+      headers: this.headers,
+      data: { role },
+    });
+  }
+
   /** The address an account was created with. */
   async emailOf(username: string): Promise<string> {
     const response = await this.api.get(

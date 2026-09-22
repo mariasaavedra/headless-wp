@@ -2450,6 +2450,123 @@ pcle_eq( $me_teacher['can_author'], true, 'while still confirming they may autho
 wp_set_current_user( 0 );
 
 /* ------------------------------------------------------------------ */
+/* People and roles                                                   */
+/* ------------------------------------------------------------------ */
+/*
+ * Changing what someone may do is the most dangerous thing this API offers,
+ * so the rules are asserted rather than trusted: only two roles are grantable,
+ * never your own, never an administrator's, and never by someone who only
+ * teaches.
+ */
+pcle_section( '# People and roles' );
+
+/**
+ * Sends a role change as a given user.
+ *
+ * @param int    $uid    User to run as.
+ * @param int    $target Whose role to change.
+ * @param string $role   Role slug to grant.
+ * @return WP_REST_Response
+ */
+function pcle_rest_set_role_as( $uid, $target, $role ) {
+	wp_set_current_user( $uid );
+	$request = new WP_REST_Request( 'PATCH', "/platform-cle/v1/people/{$target}" );
+	$request->set_body_params( array( 'role' => $role ) );
+	return rest_do_request( $request );
+}
+
+$people_route = '/platform-cle/v1/people';
+
+pcle_eq( pcle_rest_status( 0, $people_route ), 401, 'anonymous cannot list people' );
+pcle_eq( pcle_rest_status( $student, $people_route ), 403, 'a participant cannot list people' );
+pcle_eq( pcle_rest_status( $instructor, $people_route ), 200, 'an instructor can' );
+
+wp_set_current_user( $instructor );
+$people_body = rest_do_request( new WP_REST_Request( 'GET', $people_route ) )->get_data();
+
+pcle_ok( isset( $people_body['people'] ), 'the response carries people' );
+pcle_eq( count( $people_body['roles'] ), 2, 'and exactly two grantable roles' );
+$grantable = array_column( $people_body['roles'], 'role' );
+pcle_ok( in_array( 'pcle_student', $grantable, true ), 'CLE Student is grantable' );
+pcle_ok( in_array( 'pcle_instructor', $grantable, true ), 'CLE Instructor is grantable' );
+pcle_ok( ! in_array( 'administrator', $grantable, true ), 'administrator is not' );
+
+$listed = null;
+foreach ( $people_body['people'] as $person ) {
+	if ( (int) $person['id'] === $student ) {
+		$listed = $person;
+	}
+}
+pcle_ok( null !== $listed, 'the participant is in the list' );
+if ( $listed ) {
+	pcle_eq( $listed['role'], 'pcle_student', 'with their role' );
+	pcle_eq( $listed['role_label'], 'CLE Student', 'and its label' );
+	pcle_ok( ! $listed['editable'], 'an instructor is told they may not change it' );
+}
+
+// An instructor may read the list and may not act on it.
+pcle_eq( pcle_rest_set_role_as( $instructor, $student, 'pcle_instructor' )->get_status(), 403, 'an instructor cannot promote anyone' );
+pcle_ok( ! user_can( $student, 'edit_pcle_contents' ), 'and the attempt changed nothing' );
+
+// An administrator may.
+$promoted = pcle_rest_set_role_as( $admin, $student, 'pcle_instructor' );
+pcle_eq( $promoted->get_status(), 200, 'an administrator can promote' );
+pcle_eq( $promoted->get_data()['role'], 'pcle_instructor', 'the response reports the new role' );
+pcle_ok( user_can( $student, 'edit_pcle_contents' ), 'and the capabilities followed' );
+
+// And back, because later sections expect a participant.
+$demoted = pcle_rest_set_role_as( $admin, $student, 'pcle_student' );
+pcle_eq( $demoted->get_status(), 200, 'and demote' );
+pcle_ok( ! user_can( $student, 'edit_pcle_contents' ), 'losing the capabilities again' );
+
+/*
+ * The three refusals. Each is a way an account takes power it was not given,
+ * or a way an administrator locks themselves out while alone in the system.
+ */
+$own = pcle_rest_set_role_as( $admin, $admin, 'pcle_student' );
+pcle_eq( $own->get_status(), 403, 'nobody changes their own role' );
+pcle_eq( $own->as_error()->get_error_code(), 'pcle_cannot_change_own_role', 'and is told which rule it was' );
+pcle_ok( user_can( $admin, 'manage_options' ), 'the administrator is still an administrator' );
+
+$other_admin = wp_insert_user(
+	array(
+		'user_login' => 'pcle_test_admin_' . wp_generate_password( 5, false ),
+		'user_email' => 'test+admin_' . wp_generate_password( 6, false ) . '@example.test',
+		'user_pass'  => wp_generate_password( 20 ),
+		'role'       => 'administrator',
+	)
+);
+$created_users[] = (int) $other_admin;
+
+$theirs = pcle_rest_set_role_as( $admin, (int) $other_admin, 'pcle_student' );
+pcle_eq( $theirs->get_status(), 403, "nobody changes an administrator's role from here" );
+pcle_eq( $theirs->as_error()->get_error_code(), 'pcle_cannot_change_administrator', 'and is told which rule it was' );
+pcle_ok( user_can( (int) $other_admin, 'manage_options' ), 'who is still an administrator' );
+
+$ungrantable = pcle_rest_set_role_as( $admin, $student, 'administrator' );
+pcle_eq( $ungrantable->get_status(), 400, 'administrator cannot be granted from here' );
+pcle_ok( ! user_can( $student, 'manage_options' ), 'and the attempt changed nothing' );
+
+pcle_eq( pcle_rest_set_role_as( $admin, 99999999, 'pcle_student' )->get_status(), 404, 'a person who does not exist is a 404' );
+
+// What the administrator is shown about their own row, and their colleague's.
+wp_set_current_user( $admin );
+$admin_view = rest_do_request( new WP_REST_Request( 'GET', $people_route ) )->get_data();
+foreach ( $admin_view['people'] as $person ) {
+	if ( (int) $person['id'] === $admin ) {
+		pcle_ok( ! $person['editable'], 'an administrator is told they may not change their own role' );
+	}
+	if ( (int) $person['id'] === (int) $other_admin ) {
+		pcle_ok( ! $person['editable'], "nor another administrator's" );
+	}
+	if ( (int) $person['id'] === $student ) {
+		pcle_ok( $person['editable'], "but may change a participant's" );
+	}
+}
+
+wp_set_current_user( 0 );
+
+/* ------------------------------------------------------------------ */
 /* Teardown                                                           */
 /* ------------------------------------------------------------------ */
 foreach ( $created_posts as $pid ) {

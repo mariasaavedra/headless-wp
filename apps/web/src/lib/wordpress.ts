@@ -2,6 +2,8 @@ import { getAuthToken, setAuthCookie, clearAuthCookie } from "@/lib/auth";
 import type {
   AuthoringProgram,
   EnrollmentResult,
+  People,
+  Person,
   Me,
   ModuleDetail,
   NodeDetail,
@@ -300,6 +302,35 @@ async function unenrollParticipant(
 }
 
 /* ------------------------------------------------------------------ */
+/* People                                                              */
+/* ------------------------------------------------------------------ */
+
+/** Every account staff may see, with the roles the app may grant. */
+async function getPeople(search = ""): Promise<People> {
+  const query = search ? `?search=${encodeURIComponent(search)}` : "";
+
+  return wordpressFetch(`/platform-cle/v1/people${query}`, {
+    auth: true,
+  }) as Promise<People>;
+}
+
+/**
+ * Changes what someone may do.
+ *
+ * The refusals live in the plugin — your own role, an administrator's, a role
+ * outside the grantable two — so this sends the request and reports what came
+ * back rather than deciding anything.
+ */
+async function setPersonRole(id: number, role: string): Promise<Person> {
+  return wordpressFetch(`/platform-cle/v1/people/${id}`, {
+    auth: true,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ role }),
+  }) as Promise<Person>;
+}
+
+/* ------------------------------------------------------------------ */
 /* Authoring                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -437,6 +468,8 @@ export {
   getProgramReportCsv,
   enrollByEmail,
   unenrollParticipant,
+  getPeople,
+  setPersonRole,
   getQuiz,
   submitQuizAttempt,
   getAuthoringPrograms,
