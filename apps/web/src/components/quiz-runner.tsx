@@ -16,6 +16,7 @@ import {
   QuestionnaireNext,
   QuestionnairePrevious,
   QuestionnaireProgress,
+  QuestionnaireSkip,
   QuestionnaireSubmit,
   QuestionnaireTitle,
 } from "@pcle/ui/components/questionnaire";
@@ -238,6 +239,21 @@ export default function QuizRunner({ quiz }: { quiz: QuizForTaking }) {
 
       <QuestionnaireActions>
         <QuestionnairePrevious />
+
+        {/*
+          Leaving an optional question blank has to be something the reader
+          DOES, not something they omit.
+
+          The questionnaire counts a question as settled when it has been
+          answered or skipped, and nothing else — so without this control a
+          question marked "not scored, for discussion" could not be left
+          empty and could not be submitted either. A participant who had
+          nothing to write was stuck on a quiz they could not hand in, and
+          on the module it gated. The control hides itself on the questions
+          that are required.
+        */}
+        <QuestionnaireSkip>Skip this one</QuestionnaireSkip>
+
         <QuestionnaireNext />
         <QuestionnaireSubmit disabled={pending}>
           {pending ? "Submitting…" : "Submit"}

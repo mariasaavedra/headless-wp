@@ -131,6 +131,66 @@ test.describe("The path a participant walks", () => {
     await expect(page.getByText(/^(Passed|Not passed)$/).first()).toBeVisible();
   });
 
+  test("an optional question can be left blank", async ({ page }) => {
+    const quiz = await wordpress.firstQuiz(programme.id);
+
+    await signIn(page, people.participant);
+    await page.goto(`/quizzes/${quiz.id}`);
+
+    /*
+     * The regression this exists for: a question marked "not scored, for
+     * discussion" could be neither answered nor got past. The questionnaire
+     * counts a question as settled when it is answered or skipped, and the
+     * app rendered no way to skip — so a participant with nothing to write
+     * was stuck on a quiz they could not hand in.
+     *
+     * This walk never types a word into the written question.
+     */
+    for (let step = 0; step < 6; step += 1) {
+      const radio = page.getByRole("radio").first();
+      if (await radio.isVisible().catch(() => false)) {
+        await radio.check();
+      }
+
+      const box = page.getByRole("checkbox").first();
+      if (await box.isVisible().catch(() => false)) {
+        await box.check();
+      }
+
+      const written = page.locator('[data-slot="questionnaire-input"]');
+      const skip = page.locator('[data-slot="questionnaire-skip"]');
+
+      if (await written.isVisible().catch(() => false)) {
+        // Offered only where the question is optional.
+        await expect(skip).toBeVisible();
+        await skip.click();
+      }
+
+      const submit = page.locator('[data-slot="questionnaire-submit"]');
+      if (await submit.isVisible().catch(() => false)) {
+        /*
+         * Skipping the last question hands the quiz in by itself, which
+         * leaves this button disabled and reading "Submitting…". Clicking it
+         * then waits for an enabled state that is never coming.
+         */
+        if (await submit.isEnabled()) {
+          await submit.click();
+        }
+        break;
+      }
+
+      const next = page.locator('[data-slot="questionnaire-next"]');
+      if (await next.isVisible().catch(() => false)) {
+        await next.first().click();
+      }
+    }
+
+    await expect(page.getByRole("button", { name: "Sit it again" })).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.getByText("You left this blank.")).toBeVisible();
+  });
+
   test("someone enrolled in nothing is refused the programme", async ({
     page,
   }) => {
