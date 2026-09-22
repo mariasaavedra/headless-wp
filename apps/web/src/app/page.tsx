@@ -25,8 +25,29 @@ type WordPressSite = {
   description: string;
 };
 
+/**
+ * The site's own name and tagline, or the app's if WordPress cannot say.
+ *
+ * Never throws. This is the only page an anonymous visitor can reach that
+ * asks WordPress anything, so an unreachable backend — or an unset
+ * WORDPRESS_API_URL — used to turn the front door into a 500 while every
+ * other route carried on. The name and the tagline are decoration; the door's
+ * job is to offer a way in, and it can do that with neither.
+ *
+ * The failure is not hidden: it is logged, and a monitor that watches for a
+ * heading rather than a status code still sees the difference.
+ */
 async function getWordPressSite(): Promise<WordPressSite> {
-  return wordpressFetch("/") as Promise<WordPressSite>;
+  try {
+    return (await wordpressFetch("/")) as WordPressSite;
+  } catch (error) {
+    console.error("The front door could not read the site from WordPress.", error);
+
+    return {
+      name: "Platform CLE",
+      description: "",
+    };
+  }
 }
 
 /** One way in, with a word about where it leads. */
@@ -90,9 +111,11 @@ export default async function Home() {
           {decodeEntities(site.name)}
         </h1>
 
-        <p className="mt-4 text-xl text-zinc-600">
-          {decodeEntities(site.description)}
-        </p>
+        {site.description !== "" && (
+          <p className="mt-4 text-xl text-zinc-600">
+            {decodeEntities(site.description)}
+          </p>
+        )}
 
         {signedIn ? (
           <>
