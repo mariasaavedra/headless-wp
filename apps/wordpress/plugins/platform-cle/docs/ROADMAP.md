@@ -26,7 +26,7 @@ What remains is of three kinds, and only the first is engineering:
   confirmations, session reminders, password resets — leaves the server with
   nothing vouching for it. This now gates more than it did: the frontend can
   create accounts, and the link to set a password travels by email.
-- ~~**Tests on `apps/web`.**~~ Closed: 36 Playwright tests run in CI against a
+- ~~**Tests on `apps/web`.**~~ Closed: 37 Playwright tests run in CI against a
   real WordPress, covering signing in, what each role is offered, and managing
   a cohort. What they do not cover yet is the builder and the participant's
   path through a programme to a quiz.
@@ -167,7 +167,7 @@ Severity: 🔴 blocker · 🟡 important · 🟢 fine.
 
 **Engineering practices**
 - 🟡→✅ No automated tests. **Fixed** for the plugin (`tests/smoke-test.php`,
-  577 assertions across 35 sections) and now for `apps/web` too: 36 Playwright
+  577 assertions across 35 sections) and now for `apps/web` too: 37 Playwright
   tests in `apps/web/e2e/`, run in CI against a real stack rather than a
   mocked backend — what they check is precisely what depends on WordPress.
   They arrange their own fixtures through the enrolment and people APIs
