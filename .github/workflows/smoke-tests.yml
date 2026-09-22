@@ -17,30 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Write a .env for the stack
-        # docker-compose has no defaults for the WORDPRESS_SITE_* / ADMIN_*
-        # values, so without this the bootstrap installs WordPress with blank
-        # ones and never finishes.
-        run: |
-          cp .env.example .env
-          sed -i "s|^JWT_AUTH_SECRET_KEY=.*|JWT_AUTH_SECRET_KEY=$(openssl rand -hex 32)|" .env
-
-      - name: Start WordPress and MySQL
-        run: docker compose up --build --detach wordpress
-
-      - name: Wait for the bootstrap to finish
-        # The health endpoint only answers once WP is installed and the plugin
-        # is active, which is exactly the condition the tests need.
-        run: |
-          for _ in $(seq 1 60); do
-            if curl -fsS http://localhost:8080/wp-json/platform-cle/v1/health > /dev/null; then
-              echo "WordPress is up."
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "::error::WordPress did not come up within 5 minutes."
-          exit 1
+      - uses: ./.github/actions/start-wordpress
 
       - name: Run the smoke tests
         run: |

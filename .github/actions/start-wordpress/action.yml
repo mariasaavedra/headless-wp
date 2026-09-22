@@ -1,0 +1,38 @@
+name: Start WordPress
+description: >
+  Brings up WordPress and MySQL from the compose file and waits until the
+  Platform CLE plugin answers. One definition, because the smoke suite and the
+  end-to-end suite both need it and two copies drift.
+
+runs:
+  using: composite
+  steps:
+    - name: Write a .env for the stack
+      # docker-compose has no defaults for the WORDPRESS_SITE_* / ADMIN_*
+      # values, so without this the bootstrap installs WordPress with blank
+      # ones and never finishes. The demo password in .env.example is what
+      # creates demo.student and demo.instructor, which the e2e suite signs
+      # in as.
+      shell: bash
+      run: |
+        cp .env.example .env
+        sed -i "s|^JWT_AUTH_SECRET_KEY=.*|JWT_AUTH_SECRET_KEY=$(openssl rand -hex 32)|" .env
+
+    - name: Start WordPress and MySQL
+      shell: bash
+      run: docker compose up --build --detach wordpress
+
+    - name: Wait for the bootstrap to finish
+      # The health endpoint only answers once WP is installed and the plugin
+      # is active, which is exactly the condition the tests need.
+      shell: bash
+      run: |
+        for _ in $(seq 1 60); do
+          if curl -fsS http://localhost:8080/wp-json/platform-cle/v1/health > /dev/null; then
+            echo "WordPress is up."
+            exit 0
+          fi
+          sleep 5
+        done
+        echo "::error::WordPress did not come up within 5 minutes."
+        exit 1

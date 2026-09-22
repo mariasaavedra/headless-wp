@@ -26,9 +26,10 @@ What remains is of three kinds, and only the first is engineering:
   confirmations, session reminders, password resets — leaves the server with
   nothing vouching for it. This now gates more than it did: the frontend can
   create accounts, and the link to set a password travels by email.
-- **Tests on `apps/web`.** The frontend carries enrolment, invitations, the
-  builder and the whole participant path, and nothing tests any of it. Each
-  release is verified by someone driving a browser.
+- ~~**Tests on `apps/web`.**~~ Closed: 21 Playwright tests run in CI against a
+  real WordPress, covering signing in, what each role is offered, and managing
+  a cohort. What they do not cover yet is the builder and the participant's
+  path through a programme to a quiz.
 - **Business input.** The accreditation identity certificates need, and a
   payment provider. Neither is blocked by code any more.
 
@@ -41,12 +42,11 @@ been closed — see the findings below for what and how.
 |---|---|---|
 | 🟡 | Confirm the host's backups run and restore | — minutes, and the deploy workflow writes to production |
 | 🟡 | SMTP delivery: nothing the platform emails is vouched for | a choice — relay through the org's Microsoft 365, or a transactional provider |
-| 🟡 | `apps/web` has no tests; CI only lints and builds it | — |
 | 🟡 | An administrator account's display name is the address it was created from, so it is the public byline on anything it authors | — wp-admin, data not code |
 | 🟡 | Login rate limiting / brute-force protection | — SG Security is active on the host; verify what it already covers before building |
 | 🟡 | Certificates: provider numbers, signatory, per-bar wording | **owner** — accreditation input |
 | 🟡 | Payment-driven enrollment | provider choice |
-| 🟡 | Roles editable from the frontend (enrolment, phase 3) | — deliberately after `apps/web` has tests |
+| 🟡 | Roles editable from the frontend (enrolment, phase 3) | — its prerequisite, tests on `apps/web`, is now met |
 | 🟡 | Blocks lack `block.json` (invisible in the editor inserter) | — |
 | 🟡 | No i18n catalog (`.pot`) | — |
 | 🟡 | `FROM wordpress:latest` is unpinned | — |
@@ -55,7 +55,8 @@ been closed — see the findings below for what and how.
 | 🟢 | Deleting a parent from wp-admin still orphans children | — |
 
 Closed since the audit and not listed above: the production host, backups aside;
-the deploy pipeline; enrolment, removal and invitations from the frontend.
+the deploy pipeline; enrolment, removal and invitations from the frontend; and
+end-to-end tests on `apps/web`.
 
 ---
 
@@ -164,8 +165,12 @@ Severity: 🔴 blocker · 🟡 important · 🟢 fine.
 
 **Engineering practices**
 - 🟡→✅ No automated tests. **Fixed** for the plugin (`tests/smoke-test.php`,
-  546 assertions across 34 sections). `apps/web` still has none: CI lints and
-  builds it, and nothing more.
+  546 assertions across 34 sections) and now for `apps/web` too: 21 Playwright
+  tests in `apps/web/e2e/`, run in CI against a real stack rather than a
+  mocked backend — what they check is precisely what depends on WordPress.
+  They arrange their own fixtures through the enrolment API instead of
+  inheriting whatever the last run left behind. The builder and the
+  participant's path to a quiz are not covered yet.
 - 🟡 Blocks registered without `block.json` → not in the editor inserter.
 - 🟡 No i18n catalog (`.pot`).
 - 🟡→✅ Monorepo was a manual `rsync` snapshot with no CI. **Fixed**: the plugin
