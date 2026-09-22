@@ -83,11 +83,25 @@ test.describe("Managing a cohort", () => {
     await page.goto(`/reports/${programme.id}`);
     await expect(page.getByRole("table")).toContainText(participantEmail);
 
-    await page.getByRole("button", { name: /^Remove / }).first().click();
+    /*
+     * The row for this person, not the first Remove on the page. A seeded
+     * cohort has other participants in it, and .first() would quietly take
+     * one of them off the programme instead — which is the kind of test that
+     * passes on an empty local database and removes the wrong student in CI.
+     */
+    await page
+      .getByRole("row")
+      .filter({ hasText: participantEmail })
+      .getByRole("button", { name: /^Remove/ })
+      .click();
 
-    await expect(page.getByRole("table")).toHaveCount(0);
+    /*
+     * The row, not the table's text: a cohort of one leaves no table behind
+     * at all, and an assertion about the contents of an element that is not
+     * there fails for the wrong reason.
+     */
     await expect(
-      page.getByText("Nobody is enrolled in this programme yet.")
-    ).toBeVisible();
+      page.getByRole("row").filter({ hasText: participantEmail })
+    ).toHaveCount(0);
   });
 });
