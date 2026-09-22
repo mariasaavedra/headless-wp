@@ -38,6 +38,7 @@ echo "Scenarios:      {$counts['scenario']}\n";
 echo "Templates:      {$counts['template']}\n";
 echo "Events:         {$counts['event']}\n";
 echo "Case Updates:   {$counts['case_update']}\n";
+echo "Quizzes:        {$counts['quiz']}\n";
 
 if ( ! empty( $counts['users'] ) ) {
 	echo 'Demo accounts:  ' . implode( ', ', $counts['users'] ) . "\n";
