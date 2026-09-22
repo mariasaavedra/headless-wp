@@ -123,7 +123,61 @@ function pcle_rest_excerpt( $post ) {
  * @param array{completed:int, total:int, percent:int} $progress Progress struct.
  * @return array{completed:int, total:int, percentage:int}
  */
+/**
+ * Whether this request is answering as a participant with no history.
+ *
+ * Teaching staff can open any programme, and what they see is shaped by
+ * their own records: a quiz they passed while writing it leaves the module
+ * it gates unlocked, and a module they ticked to check the control shows as
+ * done. None of that is what the cohort will meet on their first morning.
+ *
+ * Preview answers the curriculum routes as a reader with nothing recorded
+ * against them: no completions, no passes, every gate closed. It changes
+ * only what is reported — no records are written, read or cleared — so
+ * turning it on and off costs nothing and leaves nothing behind.
+ *
+ * A static switch rather than a parameter threaded through a dozen helpers:
+ * the shaping functions are called from several routes and from each other,
+ * and a flag that has to be passed down correctly every time is a flag that
+ * will eventually not be.
+ *
+ * @param bool|null $set True or false to set it, null to read it.
+ * @return bool
+ */
+function pcle_previewing_as_participant( $set = null ) {
+	static $previewing = false;
+
+	if ( null !== $set ) {
+		$previewing = (bool) $set;
+	}
+
+	return $previewing;
+}
+
+/**
+ * Turns preview on when the request asked for it and the reader may.
+ *
+ * Only staff, and only on request. A participant asking for preview is
+ * already seeing what preview would show them, and honouring the parameter
+ * for them would mean hiding their own progress from them.
+ *
+ * @param WP_REST_Request $request Request.
+ */
+function pcle_rest_maybe_preview( $request ) {
+	pcle_previewing_as_participant(
+		! empty( $request['preview'] ) && pcle_user_is_staff()
+	);
+}
+
 function pcle_rest_shape_progress( $progress ) {
+	if ( pcle_previewing_as_participant() ) {
+		return array(
+			'completed'  => 0,
+			'total'      => (int) $progress['total'],
+			'percentage' => 0,
+		);
+	}
+
 	return array(
 		'completed'  => (int) $progress['completed'],
 		'total'      => (int) $progress['total'],
@@ -159,7 +213,7 @@ function pcle_rest_shape_module( $module ) {
 		'id'        => (int) $module->ID,
 		'title'     => get_the_title( $module ),
 		'excerpt'   => pcle_rest_excerpt( $module ),
-		'completed' => pcle_is_module_complete( $module->ID ),
+		'completed' => ( ! pcle_previewing_as_participant() && pcle_is_module_complete( $module->ID ) ),
 	);
 }
 
@@ -269,15 +323,38 @@ function pcle_register_curriculum_routes() {
 			'/' . $slug . '/(?P<id>\d+)',
 			array(
 				'methods'             => 'GET',
-				'callback'            => $callback,
+				'callback'            => function ( $request ) use ( $callback ) {
+					/*
+					 * Preview is decided once per request, here, rather than
+					 * inside each shaping function: they call one another,
+					 * and the answer must not change halfway down a response.
+					 */
+					pcle_rest_maybe_preview( $request );
+
+					$response = call_user_func( $callback, $request );
+
+					pcle_previewing_as_participant( false );
+
+					return $response;
+				},
 				'permission_callback' => function ( $request ) use ( $post_type ) {
 					return pcle_rest_guard_item( $request, $post_type );
 				},
 				'args'                => array(
-					'id' => array(
+					'id'      => array(
 						'required'          => true,
 						'type'              => 'integer',
 						'sanitize_callback' => 'absint',
+					),
+					/*
+					 * Answer as a participant with nothing recorded against
+					 * them. Honoured for teaching staff only: a participant
+					 * asking for it is already seeing what it would show, and
+					 * granting it would only hide their own progress.
+					 */
+					'preview' => array(
+						'type'    => 'boolean',
+						'default' => false,
 					),
 				),
 			)
@@ -377,7 +454,7 @@ function pcle_rest_get_module( $request ) {
 			'id'        => (int) $module->ID,
 			'title'     => get_the_title( $module ),
 			'content'   => pcle_rest_rendered_content( $module ),
-			'completed' => pcle_is_module_complete( $module->ID ),
+			'completed' => ( ! pcle_previewing_as_participant() && pcle_is_module_complete( $module->ID ) ),
 			'unit'      => pcle_rest_shape_ref( $unit ),
 			'program'   => pcle_rest_shape_ref( $program ),
 			'scenarios' => array_map( $shape_child, pcle_get_scenarios( $module->ID ) ),
@@ -404,7 +481,7 @@ function pcle_rest_shape_quiz_summary( $quiz ) {
 		'title'     => get_the_title( $quiz ),
 		'questions' => count( pcle_get_quiz_questions( $quiz->ID ) ),
 		'required'  => pcle_quiz_gates_completion( $quiz->ID ),
-		'passed'    => pcle_user_passed_quiz( $quiz->ID ),
+		'passed'    => ( ! pcle_previewing_as_participant() && pcle_user_passed_quiz( $quiz->ID ) ),
 	);
 }
 
@@ -432,7 +509,7 @@ function pcle_rest_get_quiz( $request ) {
 			'questions' => pcle_quiz_questions_for_taking( $quiz->ID ),
 			'pass_mark' => pcle_quiz_pass_mark( $quiz->ID ),
 			'required'  => pcle_quiz_gates_completion( $quiz->ID ),
-			'passed'    => pcle_user_passed_quiz( $quiz->ID ),
+			'passed'    => ( ! pcle_previewing_as_participant() && pcle_user_passed_quiz( $quiz->ID ) ),
 			'attempts'  => pcle_get_quiz_attempts( $quiz->ID ),
 			'module'    => pcle_rest_shape_ref( $module ),
 			'program'   => pcle_rest_shape_ref( $program ),
@@ -465,8 +542,10 @@ function pcle_rest_submit_quiz( $request ) {
 
 	$result['module'] = array(
 		'id'        => (int) $module_id,
-		'blockers'  => pcle_module_completion_blockers( $module_id ),
-		'completed' => pcle_is_module_complete( $module_id ),
+		'blockers'  => pcle_previewing_as_participant()
+			? pcle_module_required_quizzes( $module_id )
+			: pcle_module_completion_blockers( $module_id ),
+		'completed' => ( ! pcle_previewing_as_participant() && pcle_is_module_complete( $module_id ) ),
 	);
 
 	return rest_ensure_response( $result );

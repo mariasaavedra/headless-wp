@@ -71,6 +71,20 @@ export default async function BuilderProgramPage({
             menu, because the question "is anyone actually doing this?" is
             asked while looking at the thing itself.
           */}
+          {/*
+            What the cohort will meet, rather than what the author sees. An
+            author's own passes and completions shape the participant screens
+            for them: a quiz they passed while writing it leaves the module it
+            gates unlocked. Preview answers as somebody with nothing recorded.
+          */}
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={<Link href={`/programs/${tree.id}?preview=1`} />}
+          >
+            Preview as participant
+          </Button>
+
           <Button
             variant="outline"
             nativeButton={false}

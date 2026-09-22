@@ -3,33 +3,39 @@ import { redirect } from "next/navigation";
 import { renderAccessError } from "@/components/access-error";
 import Breadcrumbs from "@/components/breadcrumbs";
 import PageShell from "@/components/page-shell";
+import PreviewBanner from "@/components/preview-banner";
 import ProgressBar from "@/components/progress-bar";
 import UnitSection from "@/components/unit-section";
 import WpContent from "@/components/wp-content";
 import { isAuthenticated } from "@/lib/auth";
 import { decodeEntities } from "@/lib/html";
+import { isPreview } from "@/lib/preview";
 import type { Program } from "@/lib/types";
 import { getProgram } from "@/lib/wordpress";
 
 export default async function ProgramPage({
   params,
+  searchParams,
 }: PageProps<"/programs/[id]">) {
   if (!(await isAuthenticated())) {
     redirect("/login");
   }
 
   const { id } = await params;
+  const preview = isPreview(await searchParams);
 
   let program: Program;
 
   try {
-    program = await getProgram(Number(id));
+    program = await getProgram(Number(id), preview);
   } catch (error) {
     return renderAccessError(error);
   }
 
   return (
     <PageShell>
+      {preview && <PreviewBanner programmeId={Number(id)} />}
+
       <Breadcrumbs
         trail={[
           { label: "My Training", href: "/my-training" },
@@ -54,7 +60,7 @@ export default async function ProgramPage({
       ) : (
         <div className="mt-8 space-y-6">
           {program.units.map((unit) => (
-            <UnitSection key={unit.id} unit={unit} />
+            <UnitSection key={unit.id} unit={unit} preview={preview} />
           ))}
         </div>
       )}

@@ -183,7 +183,7 @@ Run these on production before announcing:
 - [ ] A cohort report renders and its CSV downloads.
 - [ ] Smoke tests pass on the server:
       `php wp-content/plugins/platform-cle/tests/smoke-test.php` → `exit 0`
-      (577 assertions across 35 sections).
+      (586 assertions across 36 sections).
 
 ## Rollback
 

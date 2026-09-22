@@ -195,7 +195,7 @@ Dependency-free, exits non-zero on failure, and runs in CI on every push
 npm run test:e2e --workspace=apps/web
 ```
 
-37 Playwright tests covering signing in, what each role is offered,
+41 Playwright tests covering signing in, what each role is offered,
 managing a cohort, the builder, and the participant's path from My Training
 through a module to a quiz — against the same running WordPress, because what they
 check is precisely what depends on it. They sign in as the demo accounts
@@ -334,6 +334,7 @@ what to *offer*, never what to *allow*.
 | `/builder/programs/[id]` | The curriculum tree: add, rename, reorder, publish, set credit hours. |
 | `/builder/nodes/[id]` | One node's body — and, for a quiz, its questions and pass mark. |
 | `/reports` | Which cohort to report on. |
+| `/programs/[id]?preview=1` | The same programme as a participant with nothing recorded meets it: no completions, no passes, every quiz gate closed. Staff only; reached from the builder. |
 | `/reports/[id]` | Cohort report: per-participant progress, credits and quiz results — and enrolling or removing participants. An administrator can also create accounts for addresses that have none; WordPress mails them a link to set their own password. |
 | `/people` | Who has an account and what they may do. Staff read it; an administrator can change a role, except their own and another administrator's. |
 | `/reports/[id]/csv` | The same report as a download. The plugin composes the columns; this route only quotes and joins them. |

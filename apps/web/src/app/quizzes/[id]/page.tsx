@@ -6,9 +6,11 @@ import { Card, CardContent } from "@pcle/ui/components/card";
 import { renderAccessError } from "@/components/access-error";
 import Breadcrumbs from "@/components/breadcrumbs";
 import PageShell from "@/components/page-shell";
+import PreviewBanner from "@/components/preview-banner";
 import QuizRunner from "@/components/quiz-runner";
 import WpContent from "@/components/wp-content";
 import { isAuthenticated } from "@/lib/auth";
+import { isPreview, keepPreview } from "@/lib/preview";
 import { decodeEntities } from "@/lib/html";
 import type { QuizAttempt, QuizForTaking } from "@/lib/types";
 import { getQuiz } from "@/lib/wordpress";
@@ -63,31 +65,47 @@ function Attempts({ attempts }: { attempts: QuizAttempt[] }) {
   );
 }
 
-export default async function QuizPage({ params }: PageProps<"/quizzes/[id]">) {
+export default async function QuizPage({
+  params,
+  searchParams,
+}: PageProps<"/quizzes/[id]">) {
   if (!(await isAuthenticated())) {
     redirect("/login");
   }
 
   const { id } = await params;
+  const preview = isPreview(await searchParams);
 
   let quiz: QuizForTaking;
 
   try {
-    quiz = await getQuiz(Number(id));
+    quiz = await getQuiz(Number(id), preview);
   } catch (error) {
     return renderAccessError(error);
   }
 
   return (
     <PageShell>
+      {preview && <PreviewBanner programmeId={quiz.program?.id} />}
+
       <Breadcrumbs
         trail={[
           { label: "My Training", href: "/my-training" },
           ...(quiz.program
-            ? [{ label: quiz.program.title, href: `/programs/${quiz.program.id}` }]
+            ? [
+                {
+                  label: quiz.program.title,
+                  href: keepPreview(`/programs/${quiz.program.id}`, preview),
+                },
+              ]
             : []),
           ...(quiz.module
-            ? [{ label: quiz.module.title, href: `/modules/${quiz.module.id}` }]
+            ? [
+                {
+                  label: quiz.module.title,
+                  href: keepPreview(`/modules/${quiz.module.id}`, preview),
+                },
+              ]
             : []),
           { label: quiz.title },
         ]}

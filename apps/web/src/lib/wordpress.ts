@@ -171,22 +171,33 @@ async function getMyTraining(): Promise<{ programs: TrainingProgram[] }> {
   }) as Promise<{ programs: TrainingProgram[] }>;
 }
 
-async function getProgram(id: number): Promise<Program> {
-  return wordpressFetch(`/platform-cle/v1/programs/${id}`, {
-    auth: true,
-  }) as Promise<Program>;
+/**
+ * A programme as this reader sees it.
+ *
+ * `preview` asks the plugin to answer as a participant with nothing
+ * recorded: no completions, no passes, every quiz gate closed. It is
+ * honoured for teaching staff only, and it writes nothing — see
+ * pcle_previewing_as_participant() in the plugin.
+ */
+async function getProgram(id: number, preview = false): Promise<Program> {
+  return wordpressFetch(
+    `/platform-cle/v1/programs/${id}${preview ? "?preview=1" : ""}`,
+    { auth: true }
+  ) as Promise<Program>;
 }
 
-async function getUnit(id: number): Promise<UnitDetail> {
-  return wordpressFetch(`/platform-cle/v1/units/${id}`, {
-    auth: true,
-  }) as Promise<UnitDetail>;
+async function getUnit(id: number, preview = false): Promise<UnitDetail> {
+  return wordpressFetch(
+    `/platform-cle/v1/units/${id}${preview ? "?preview=1" : ""}`,
+    { auth: true }
+  ) as Promise<UnitDetail>;
 }
 
-async function getModule(id: number): Promise<ModuleDetail> {
-  return wordpressFetch(`/platform-cle/v1/modules/${id}`, {
-    auth: true,
-  }) as Promise<ModuleDetail>;
+async function getModule(id: number, preview = false): Promise<ModuleDetail> {
+  return wordpressFetch(
+    `/platform-cle/v1/modules/${id}${preview ? "?preview=1" : ""}`,
+    { auth: true }
+  ) as Promise<ModuleDetail>;
 }
 
 /**
@@ -207,10 +218,11 @@ async function setModuleCompletion(
   });
 }
 
-async function getQuiz(id: number): Promise<QuizForTaking> {
-  return wordpressFetch(`/platform-cle/v1/quizzes/${id}`, {
-    auth: true,
-  }) as Promise<QuizForTaking>;
+async function getQuiz(id: number, preview = false): Promise<QuizForTaking> {
+  return wordpressFetch(
+    `/platform-cle/v1/quizzes/${id}${preview ? "?preview=1" : ""}`,
+    { auth: true }
+  ) as Promise<QuizForTaking>;
 }
 
 /**
