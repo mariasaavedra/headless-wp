@@ -114,7 +114,7 @@ suite. Two more jobs lint and build `apps/web`, and run its end-to-end suite.
 
 ## Testing the app
 
-27 Playwright tests in `apps/web/e2e/`, against the same running stack:
+36 Playwright tests in `apps/web/e2e/`, against the same running stack:
 
 ```bash
 docker compose up -d wordpress        # if it is not already up
