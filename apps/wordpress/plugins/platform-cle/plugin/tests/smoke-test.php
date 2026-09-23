@@ -95,6 +95,41 @@ $created_posts   = array();
 $created_users   = array();
 $created_files   = array();
 
+/**
+ * Deletes everything the run created. Safe to call more than once.
+ *
+ * Registered as a shutdown function as well as called at the end, because
+ * the end is not always reached: a fatal error or an uncaught exception
+ * part-way through used to leave that run's programmes, posts and accounts in
+ * the database. They then sat first in lists the e2e suite reads — "the first
+ * published programme" became a test fixture with no quiz — and failed tests
+ * that had nothing to do with the crash.
+ */
+function pcle_smoke_teardown() {
+	static $done = false;
+
+	if ( $done ) {
+		return;
+	}
+	$done = true;
+
+	foreach ( $GLOBALS['created_posts'] ?? array() as $pid ) {
+		wp_delete_post( $pid, true );
+	}
+	foreach ( $GLOBALS['created_users'] ?? array() as $uid ) {
+		wp_delete_user( $uid );
+	}
+	foreach ( $GLOBALS['created_files'] ?? array() as $f ) {
+		if ( file_exists( $f ) ) {
+			unlink( $f );
+		}
+	}
+	if ( ! empty( $GLOBALS['pdir'] ) ) {
+		@rmdir( $GLOBALS['pdir'] ); // phpcs:ignore
+	}
+}
+register_shutdown_function( 'pcle_smoke_teardown' );
+
 // Program A (student enrolled) → Unit → Module; plus a Case Update.
 $prog_a  = pcle_make_post( 'pcle_program', 'TEST Program A' );
 $prog_b  = pcle_make_post( 'pcle_program', 'TEST Program B' );
@@ -2962,18 +2997,7 @@ wp_set_current_user( 0 );
 /* ------------------------------------------------------------------ */
 /* Teardown                                                           */
 /* ------------------------------------------------------------------ */
-foreach ( $created_posts as $pid ) {
-	wp_delete_post( $pid, true );
-}
-foreach ( $created_users as $uid ) {
-	wp_delete_user( $uid );
-}
-foreach ( $created_files as $f ) {
-	if ( file_exists( $f ) ) {
-		unlink( $f );
-	}
-}
-@rmdir( $pdir ); // phpcs:ignore
+pcle_smoke_teardown();
 
 /* ------------------------------------------------------------------ */
 /* Summary                                                            */
