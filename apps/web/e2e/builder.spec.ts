@@ -265,7 +265,26 @@ test.describe("Attaching an image by pasting it", () => {
     page: import("@playwright/test").Page,
     clipboard: { image?: boolean; text?: string }
   ) {
-    await page.locator("#node-body").evaluate(
+    /*
+     * A paste cannot be retried the way a dragover can — a second one would
+     * upload twice — so first make sure the page has hydrated, using the drop
+     * overlay as the signal that the field's handlers are attached. On CI the
+     * dev server compiles each route on first visit and hydration is late.
+     */
+    const body = page.locator("#node-body");
+    const probe = await page.evaluateHandle(() => {
+      const data = new DataTransfer();
+      data.items.add(new File(["x"], "probe.png", { type: "image/png" }));
+      return data;
+    });
+    await expect(async () => {
+      await body.dispatchEvent("dragover", { dataTransfer: probe });
+      await expect(page.getByText("Drop to attach here")).toBeVisible({ timeout: 500 });
+    }).toPass();
+    await body.dispatchEvent("dragleave", { dataTransfer: probe });
+    await expect(page.getByText("Drop to attach here")).toHaveCount(0);
+
+    await body.evaluate(
       (textarea, { png, clipboard }) => {
         const data = new DataTransfer();
         if (clipboard.text !== undefined) {
