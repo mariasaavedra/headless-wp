@@ -30,6 +30,10 @@ on:
         description: Show what would change, write nothing
         type: boolean
         default: true
+      verify_only:
+        description: Only check the live plugin answers; copy nothing
+        type: boolean
+        default: false
 
   # Deploying on every merge that touches the plugin. Uncomment once you have
   # watched a few manual runs do the right thing — a dry run costs nothing and
@@ -50,12 +54,16 @@ jobs:
   tests:
     name: Smoke tests
     # The same job CI runs. A deploy that skips it would put code on the live
-    # host that nothing has exercised.
+    # host that nothing has exercised. A verify-only run copies nothing, so
+    # there is nothing for it to vouch for.
+    if: ${{ inputs.verify_only != true }}
     uses: ./.github/workflows/smoke-tests.yml
 
   deploy:
     name: Copy the plugin to the host
     needs: tests
+    # always(), or a skipped tests job would skip this too on verify-only.
+    if: ${{ always() && (inputs.verify_only == true || needs.tests.result == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -88,6 +96,7 @@ jobs:
           chmod 600 ~/.ssh/known_hosts
 
       - name: Check the target is the plugin directory
+        if: ${{ inputs.verify_only != true }}
         # rsync --delete against the wrong path would empty a directory nobody
         # meant to touch. The remote has to already hold the plugin's own main
         # file before anything is written.
@@ -99,6 +108,7 @@ jobs:
           fi
 
       - name: Sync the plugin
+        if: ${{ inputs.verify_only != true }}
         # --checksum, not rsync's default size-and-mtime check: a fresh
         # checkout gives every file a new mtime, so without it a deploy
         # rewrites all 28 files and the dry run prints 29 lines of noise for
@@ -126,7 +136,7 @@ jobs:
       - name: Confirm the host matches the repository
         # A second pass must find nothing left to do. rsync succeeding is not
         # the same claim: this one fails if any file still differs.
-        if: ${{ inputs.dry_run != true }}
+        if: ${{ inputs.dry_run != true && inputs.verify_only != true }}
         run: |
           LEFT=$(rsync -az --checksum --delete --omit-dir-times --no-perms --dry-run --itemize-changes --exclude .DS_Store \
             -e "ssh -i ~/.ssh/id_deploy -p $SSH_PORT" \
@@ -144,7 +154,7 @@ jobs:
         # Best effort. SiteGround serves a cached copy of REST responses, so a
         # change can look like it did not land. If WP-CLI is not on the host,
         # say so rather than failing a deploy that otherwise worked.
-        if: ${{ inputs.dry_run != true }}
+        if: ${{ inputs.dry_run != true && inputs.verify_only != true }}
         continue-on-error: true
         run: |
           WP_ROOT="${REMOTE%/wp-content/plugins/platform-cle}"
@@ -153,7 +163,7 @@ jobs:
             || echo "::notice::Could not purge from here. If a stale response shows up, purge SG Cache in wp-admin."
 
       - name: Verify the plugin answers
-        if: ${{ inputs.dry_run != true }}
+        if: ${{ inputs.dry_run != true || inputs.verify_only == true }}
         # Two minutes, and it says what it got.
         #
         # The first version gave the host 60 seconds and, when that ran out,
@@ -162,18 +172,73 @@ jobs:
         # and left nobody able to tell a slow purge from a broken plugin.
         # A guard rail that cannot say what it saw is a guard rail that gets
         # ignored the second time it fires.
+        #
+        # From the internet first, because that is what people meet. But
+        # SiteGround's bot protection answers GitHub's runners with a CAPTCHA
+        # page -- HTTP 202 and a redirect to /.well-known/sgcaptcha/ -- so from
+        # here every deploy looked broken, working or not. When that page is
+        # what comes back, the check moves onto the host over SSH: the same URL
+        # fetched by the server itself, and failing that, the route dispatched
+        # inside WordPress by WP-CLI. The last proves the plugin loads and
+        # answers but not the web server in front of it, and says so.
         run: |
+          WP_ROOT="${REMOTE%/wp-content/plugins/platform-cle}"
+          HEALTH="$SITE_URL/wp-json/platform-cle/v1/health"
+
+          # One line out: "<how> <status> <body>". Run on the host.
+          from_host() {
+            ssh -i ~/.ssh/id_deploy -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+              bash -s -- "$HEALTH" "$WP_ROOT" <<'REMOTE'
+          body=$(curl -sS --max-time 15 -w '\n%{http_code}' "$1" 2>/dev/null)
+          code=$(printf '%s' "$body" | tail -n 1)
+          body=$(printf '%s' "$body" | sed '$d' | tr -d '\n' | head -c 300)
+          if [ "$code" = "200" ] && printf '%s' "$body" | grep -q '"status":"ok"'; then
+            echo "host-http 200 $body"
+            exit 0
+          fi
+          if command -v wp >/dev/null 2>&1; then
+            body=$(wp --path="$2" eval 'echo wp_json_encode( rest_do_request( "/platform-cle/v1/health" )->get_data() );' 2>&1 | tail -n 1 | head -c 300)
+            echo "wp-cli - $body"
+            exit 0
+          fi
+          echo "none $code $body"
+          REMOTE
+          }
+
+          blocked=false
+
           for attempt in $(seq 1 20); do
-            code=$(curl -sS -o /tmp/health -w '%{http_code}' --max-time 15 \
-              "$SITE_URL/wp-json/platform-cle/v1/health" || echo "000")
+            code=$(curl -sS -o /tmp/health -w '%{http_code}' --max-time 15 "$HEALTH" || echo "000")
 
             if [ "$code" = "200" ] && grep -q '"status":"ok"' /tmp/health; then
-              echo "Health after $attempt attempt(s): $(cat /tmp/health)"
-              echo "Health: \`$(cat /tmp/health)\`" >> "$GITHUB_STEP_SUMMARY"
+              echo "Health from the internet after $attempt attempt(s): $(cat /tmp/health)"
+              echo "Health, from the internet: \`$(cat /tmp/health)\`" >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
 
-            echo "attempt $attempt: HTTP $code $(head -c 200 /tmp/health)"
+            if grep -q 'sgcaptcha' /tmp/health; then
+              blocked=true
+              result=$(from_host || echo "ssh-failed - -")
+              how=${result%% *}
+              body=${result#* * }
+
+              if [ "$how" = "host-http" ]; then
+                echo "SiteGround showed this runner a CAPTCHA; the host itself got: $body"
+                echo "Health, fetched by the host (GitHub's runner was shown SiteGround's CAPTCHA): \`$body\`" >> "$GITHUB_STEP_SUMMARY"
+                exit 0
+              fi
+
+              if [ "$how" = "wp-cli" ] && printf '%s' "$body" | grep -q '"status":"ok"'; then
+                echo "::warning::Verified inside WordPress only. SiteGround showed this runner a CAPTCHA and the host could not fetch its own URL, so the web server in front of WordPress was not checked. Open $HEALTH in a browser to be sure."
+                echo "Health, inside WordPress via WP-CLI (HTTP not checked): \`$body\`" >> "$GITHUB_STEP_SUMMARY"
+                exit 0
+              fi
+
+              echo "attempt $attempt: runner shown SiteGround's CAPTCHA; from the host: $result"
+            else
+              echo "attempt $attempt: HTTP $code $(head -c 200 /tmp/health)"
+            fi
+
             sleep 6
           done
 
@@ -186,5 +251,9 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-          echo "::error::The health endpoint did not report ok within two minutes of the deploy. The files are already on the host -- check the site itself, and the attempts above for what it answered instead."
+          if [ "$blocked" = true ]; then
+            echo "::error::SiteGround showed this runner a CAPTCHA, and neither the host's own request nor WP-CLI reported ok. The files are already on the host -- check the site itself."
+          else
+            echo "::error::The health endpoint did not report ok within two minutes of the deploy. The files are already on the host -- check the site itself, and the attempts above for what it answered instead."
+          fi
           exit 1
