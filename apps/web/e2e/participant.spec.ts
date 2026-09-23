@@ -42,28 +42,59 @@ test.describe("The path a participant walks", () => {
     await expect(page.getByRole("heading", { name: lesson.title })).toBeVisible();
   });
 
-  test("marking a module complete, and undoing it", async ({ page }) => {
+  test("a participant is told who marks a module complete", async ({ page }) => {
     const lesson = await wordpress.completableModule(programme.id);
 
     await signIn(page, people.participant);
     await page.goto(`/modules/${lesson.id}`);
 
     /*
-     * The control says what it will do rather than what the state is, so the
-     * two labels are the assertion: a module that is already complete offers
-     * to undo, and one that is not offers to complete.
+     * The button is gone for participants; its absence has to be explained,
+     * or it reads as something broken.
      */
-    const mark = page.getByRole("button", { name: "Mark as complete" });
-    const undo = page.getByRole("button", { name: /Completed/ });
+    await expect(page.getByRole("heading", { name: lesson.title })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Mark as complete" })).toHaveCount(0);
+    await expect(
+      page.getByText(/instructor marks this module complete/)
+        .or(page.getByText("✓ Completed"))
+    ).toBeVisible();
+  });
+
+  test("an instructor marks a participant's module, and undoes it", async ({
+    page,
+  }) => {
+    const lesson = await wordpress.completableModule(programme.id);
+    const participantId = await wordpress.userId(participantEmail);
+
+    await signIn(page, people.instructor);
+    await page.goto(`/reports/${programme.id}`);
+    await page
+      .locator(`a[href="/reports/${programme.id}/participants/${participantId}"]`)
+      .click();
+
+    await expect(page).toHaveURL(
+      new RegExp(`/reports/${programme.id}/participants/${participantId}$`)
+    );
+
+    /*
+     * Labelled per module, so the test presses the one it means rather than
+     * whichever "Mark complete" comes first. Either label may be showing on
+     * arrival — a previous run may have left it marked.
+     */
+    const mark = page.getByRole("button", { name: `Mark ${lesson.title} complete` });
+    const undo = page.getByRole("button", {
+      name: `Unmark ${lesson.title} as not complete`,
+    });
 
     if (await mark.isVisible()) {
       await mark.click();
     }
 
     await expect(undo).toBeVisible();
+    await expect(page.getByText(/marked by Demo Instructor/).first()).toBeVisible();
 
     await undo.click();
-    await expect(page.getByRole("button", { name: "Mark as complete" })).toBeVisible();
+    await expect(mark).toBeVisible();
   });
 
   test("sitting a quiz and being told how it went", async ({ page }) => {

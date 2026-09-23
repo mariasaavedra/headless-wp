@@ -165,10 +165,12 @@ class WordPress {
     return found[0] ?? null;
   }
 
-  async deleteNode(id: number): Promise<void> {
-    await this.api.delete(`${API}/platform-cle/v1/authoring/nodes/${id}`, {
-      headers: this.headers,
-    });
+  /** `cascade` takes everything under it too — needed for a whole programme. */
+  async deleteNode(id: number, cascade = false): Promise<void> {
+    await this.api.delete(
+      `${API}/platform-cle/v1/authoring/nodes/${id}${cascade ? "?cascade=true" : ""}`,
+      { headers: this.headers }
+    );
   }
 
   async enrol(programmeId: number, email: string): Promise<void> {

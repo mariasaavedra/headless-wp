@@ -99,6 +99,34 @@ function pcle_get_module_completed_at( $module_id, $user_id = null ) {
 }
 
 /**
+ * Who recorded a user's completion of a module.
+ *
+ * @param int      $module_id Module ID.
+ * @param int|null $user_id   User ID (defaults to the current user).
+ * @return int The instructor's ID; 0 when the user recorded it themselves,
+ *             or when the module is not complete at all.
+ */
+function pcle_get_module_marked_by( $module_id, $user_id = null ) {
+	global $wpdb;
+
+	$user_id = pcle_resolve_user_id( $user_id );
+	if ( ! $user_id ) {
+		return 0;
+	}
+
+	$table = pcle_progress_table();
+
+	// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom table.
+	return (int) $wpdb->get_var(
+		$wpdb->prepare(
+			"SELECT marked_by FROM {$table} WHERE user_id = %d AND module_id = %d",
+			$user_id,
+			(int) $module_id
+		)
+	);
+}
+
+/**
  * Did the user complete this module?
  *
  * @param int      $module_id Module ID.
@@ -132,9 +160,11 @@ function pcle_is_module_complete( $module_id, $user_id = null ) {
  *
  * @param int      $module_id Module ID.
  * @param int|null $user_id   User ID (defaults to the current user).
+ * @param int      $marked_by The instructor recording it for somebody else,
+ *                            or 0 when the reader records it themselves.
  * @return bool True if it ended up marked.
  */
-function pcle_mark_module_complete( $module_id, $user_id = null ) {
+function pcle_mark_module_complete( $module_id, $user_id = null, $marked_by = 0 ) {
 	$user_id   = pcle_resolve_user_id( $user_id );
 	$module_id = (int) $module_id;
 
@@ -173,10 +203,11 @@ function pcle_mark_module_complete( $module_id, $user_id = null ) {
 	// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- custom table.
 	$wpdb->query(
 		$wpdb->prepare(
-			"INSERT IGNORE INTO {$table} (user_id, module_id, completed_at) VALUES (%d, %d, %s)",
+			"INSERT IGNORE INTO {$table} (user_id, module_id, completed_at, marked_by) VALUES (%d, %d, %s, %d)",
 			$user_id,
 			$module_id,
-			current_time( 'mysql' )
+			current_time( 'mysql' ),
+			(int) $marked_by
 		)
 	);
 
@@ -299,6 +330,10 @@ function pcle_get_program_module_ids( $program_id ) {
  *
  * POST /wp-json/platform-cle/v1/progress  { module_id, completed }
  * Always operates on the CURRENT USER (never another).
+ *
+ * Staff only. A participant's completion is recorded by their instructor,
+ * from the cohort report — see pcle_rest_set_participant_progress(). What is
+ * left here is an instructor marking their own, which they may do freely.
  */
 function pcle_register_progress_route() {
 	register_rest_route(
@@ -342,6 +377,19 @@ function pcle_rest_toggle_progress( $request ) {
 			'pcle_invalid_module',
 			__( 'Invalid module.', 'platform-cle' ),
 			array( 'status' => 400 )
+		);
+	}
+
+	/*
+	 * Checked here rather than in the permission callback so the refusal can
+	 * carry its own code. A participant who is told only "forbidden" reads it
+	 * as a fault; `pcle_marked_by_instructor` lets the app say who does this.
+	 */
+	if ( ! pcle_user_is_staff() ) {
+		return new WP_Error(
+			'pcle_marked_by_instructor',
+			__( 'Your instructor marks modules complete.', 'platform-cle' ),
+			array( 'status' => 403 )
 		);
 	}
 
@@ -418,7 +466,8 @@ function pcle_rest_toggle_progress( $request ) {
  * @return string
  */
 function pcle_render_complete_button( $module_id ) {
-	if ( ! is_user_logged_in() || ! current_user_can( 'view_cle_content' ) ) {
+	// Only staff mark their own; a participant's is marked for them.
+	if ( ! is_user_logged_in() || ! pcle_user_is_staff() ) {
 		return '';
 	}
 	if ( 'pcle_module' !== get_post_type( $module_id ) ) {

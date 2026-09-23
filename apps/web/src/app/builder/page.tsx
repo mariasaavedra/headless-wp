@@ -9,7 +9,11 @@ import { Input } from "@pcle/ui/components/input";
 
 import { renderAccessError } from "@/components/access-error";
 import ActionForm from "@/components/builder/action-form";
-import { createProgramAction } from "@/app/actions/authoring";
+import {
+  createProgramAction,
+  restoreProgramAction,
+} from "@/app/actions/authoring";
+import AuthorshipLine from "@/components/builder/authorship-line";
 import PageShell from "@/components/page-shell";
 import { isAuthenticated } from "@/lib/auth";
 import { decodeEntities } from "@/lib/html";
@@ -71,6 +75,38 @@ export default async function BuilderPage() {
             New programme
           </Button>
         </ActionForm>
+
+        {/*
+          Tucked away: restoring is rare, and the page is for building. A
+          restore always makes a new draft programme beside the others — it
+          never replaces the one the backup was taken from.
+        */}
+        <details className="mt-3 text-sm">
+          <summary className="cursor-pointer text-zinc-500 hover:text-zinc-900">
+            Restore from a backup
+          </summary>
+
+          <ActionForm
+            action={restoreProgramAction}
+            className="mt-3 flex flex-wrap items-center gap-2"
+          >
+            <Input
+              type="file"
+              name="backup"
+              accept="application/json,.json"
+              aria-label="Backup file"
+              className="w-96 max-w-full"
+            />
+            <Button type="submit" variant="outline">
+              Restore as a new programme
+            </Button>
+            <span className="w-full text-xs text-zinc-500">
+              A backup is downloaded from a programme&rsquo;s page in the
+              builder. It comes back as a new draft, with nobody enrolled;
+              nothing that exists is changed.
+            </span>
+          </ActionForm>
+        </details>
       </Card>
 
       {programs.length === 0 ? (
@@ -114,6 +150,8 @@ export default async function BuilderPage() {
                         )
                         .join(" · ")}
                     </p>
+
+                    <AuthorshipLine item={program} />
                   </CardContent>
                 </Card>
               </Link>

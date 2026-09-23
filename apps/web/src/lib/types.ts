@@ -68,6 +68,11 @@ type ModuleDetail = {
   title: string;
   content: string;
   completed: boolean;
+  /**
+   * Whether this reader marks it themselves: staff, outside preview. A
+   * participant's completions are marked by their instructor instead.
+   */
+  can_mark: boolean;
   unit: Ref | null;
   program: Ref | null;
   scenarios: ModuleResource[];
@@ -205,6 +210,27 @@ type ProgramReport = {
   participants: ReportParticipant[];
 };
 
+/** One module as the instructor marking a participant sees it. */
+type ParticipantModule = {
+  id: number;
+  title: string;
+  completed: boolean;
+  /** Site-time MySQL datetime; null for completions from before dates were kept. */
+  completed_at: string | null;
+  /** The instructor who marked it; null when the participant did, before that moved to staff. */
+  marked_by: Author | null;
+  /** Required quizzes the participant has not passed. Marking is refused while any remain. */
+  blockers: Ref[];
+};
+
+/** One participant's standing in a programme, module by module. */
+type ParticipantProgress = {
+  program: Ref | null;
+  participant: { id: number; name: string; email: string };
+  progress: Progress;
+  units: { id: number; title: string; modules: ParticipantModule[] }[];
+};
+
 /**
  * What became of one pasted address.
  *
@@ -266,6 +292,8 @@ export type {
   Ref,
   ReportParticipant,
   ProgramReport,
+  ParticipantModule,
+  ParticipantProgress,
   ReportCsv,
   QuizChoicePublic,
   QuizQuestionPublic,
@@ -364,7 +392,28 @@ type QuizQuestion = {
 };
 
 /** A programme as it appears in the builder's list. */
-type AuthoringProgram = {
+/**
+ * Somebody the builder names. `name` is null when the account has since been
+ * deleted: the id survives on what they wrote, the person does not.
+ */
+type Author = {
+  id: number;
+  name: string | null;
+};
+
+/**
+ * Who made an item and who last changed it. Dates are ISO 8601 in the site's
+ * own time zone. `edited_by` is null for content last changed before editors
+ * were recorded — the server will not guess.
+ */
+type Authorship = {
+  created_by: Author | null;
+  created_at: string | null;
+  edited_by: Author | null;
+  edited_at: string | null;
+};
+
+type AuthoringProgram = Authorship & {
   id: number;
   title: string;
   status: string;
@@ -387,7 +436,7 @@ type CreditHours = {
  * so the add menu and any future drop rules cannot drift from what the API
  * will actually accept.
  */
-type TreeNode = {
+type TreeNode = Authorship & {
   id: number;
   type: NodeType;
   title: string;
@@ -458,6 +507,8 @@ type NodeDetail = Omit<TreeNode, "questions"> & {
 
 export type {
   Me,
+  Author,
+  Authorship,
   NodeType,
   QuizQuestionType,
   QuizChoice,

@@ -162,7 +162,23 @@ export default async function ModulePage({
       </h1>
 
       <div className="mt-6">
-        <CompleteToggle moduleId={courseModule.id} completed={courseModule.completed} />
+        {courseModule.can_mark ? (
+          <CompleteToggle
+            moduleId={courseModule.id}
+            completed={courseModule.completed}
+          />
+        ) : courseModule.completed ? (
+          <Badge className="bg-emerald-100 text-emerald-800">✓ Completed</Badge>
+        ) : (
+          /*
+           * Said, not left blank: without it a participant looks for the
+           * button they used to have and concludes something is broken.
+           */
+          <p className="text-sm text-zinc-500">
+            Your instructor marks this module complete once you have finished
+            it.
+          </p>
+        )}
       </div>
 
       <WpContent html={courseModule.content} className="mt-8" />

@@ -46,11 +46,12 @@ comes first because everything storage-backed depends on the tables existing).
 | `includes/reports.php` | Cohort reporting + CSV export, built from queries rather than per-user loops. |
 | `includes/authoring-content.php` | Turns authored plain text into Gutenberg block markup server-side. |
 | `includes/rest-authoring.php` | Authoring REST API — the curriculum as the builder sees it. |
+| `includes/backup.php` | Programme backups: versioned export, migration, all-or-nothing restore. |
 | `includes/demo-data.php` | Sample-data seeder internals. |
 | `uninstall.php` | Removes roles and records on uninstall. |
 | `bin/seed-demo.php` | Sample data (idempotent). |
 | `bin/setup-front-door.php` | Creates the "My Training" page + menu link. |
-| `tests/smoke-test.php` | Dependency-free smoke suite — 586 assertions across 36 sections. |
+| `tests/smoke-test.php` | Dependency-free smoke suite — 654 assertions across 39 sections. |
 
 ## 1. Custom Post Types
 
@@ -137,8 +138,9 @@ never drifts if the curriculum changes.
 
 - CRUD: `pcle_mark_module_complete()`, `pcle_unmark_module_complete()`, `pcle_is_module_complete()`.
 - Computation: `pcle_get_unit_progress()`, `pcle_get_program_progress()` → `{completed, total, percent}`.
-- **Gating:** a module carrying a quiz with `_pcle_quiz_gates_completion` cannot be marked complete until that quiz is passed (see §11).
-- **REST:** `POST /wp-json/platform-cle/v1/progress` `{module_id, completed}` — always operates on the current user; protected by `view_cle_content` + `wp_rest` nonce.
+- **Gating:** a module carrying a quiz with `_pcle_quiz_gates_completion` cannot be marked complete until that quiz is passed (see §11). Staff are exempt when marking their own.
+- **Who marks:** staff mark participants' completions; participants cannot mark their own. `marked_by` on each row records the instructor (0 = the user themselves, which is every row from before schema 5).
+- **REST:** `POST /wp-json/platform-cle/v1/progress` `{module_id, completed}` — the current user's own record, staff only (`pcle_marked_by_instructor` 403 otherwise). `GET /reports/programs/<id>/participants/<user_id>` and `POST …/progress` `{module_id, completed}` — an instructor reading and marking one enrolled participant.
 - Frontend: `assets/progress.js` + `assets/progress.css` ("mark as complete" button that updates the bar live).
 
 ## 6. Enrollment
@@ -320,6 +322,25 @@ Routes: `/authoring/programs`, `/authoring/programs/<id>/tree`,
 
 A DELETE that would orphan descendants is **refused** with the list of them unless
 the caller passes `cascade`.
+
+**Authorship.** Every shape carries `created_by`/`created_at` (the post author and
+date) and `edited_by`/`edited_at`. The editor is `_edit_last`, the key wp-admin
+writes, recorded on `save_post` for every authorable type; writes that only touch
+meta go through `wp_update_post()` too so they count. `edited_by` is null for
+content last changed before this was recorded — never a guess.
+
+**Backups** (`backup.php`). `GET /authoring/programs/<id>/export` returns the
+programme as `{format: "platform-cle/programme", version, programme: {type, title,
+status, excerpt, content, children, …}}` with neutral type names (`unit`,
+`session`, …) and children in curriculum order. `POST /authoring/programs/import`
+takes that body back and creates a **new draft programme**; it never overwrites.
+The file is migrated to the current version first (`pcle_backup_migrations()`,
+one step per version), refused if newer than the plugin, validated whole before
+the first write, and rolled back if a write fails. Content is `wp_kses_post`ed
+unless the restorer holds `unfiltered_html`; quiz questions, hours and dates go
+through the builder's own sanitisers. **When the stored shape changes, bump
+`PCLE_BACKUP_VERSION` and add the migration step** — that is what keeps old files
+restorable.
 
 ## Storage keys summary
 

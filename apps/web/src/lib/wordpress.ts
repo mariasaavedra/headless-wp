@@ -6,6 +6,7 @@ import type {
   Person,
   Me,
   ModuleDetail,
+  ParticipantProgress,
   NodeDetail,
   UploadedMedia,
   NodeType,
@@ -263,6 +264,41 @@ async function getProgramReportCsv(id: number): Promise<ReportCsv> {
   }) as Promise<ReportCsv>;
 }
 
+/**
+ * One participant in a programme, module by module, for the instructor who
+ * marks their completions.
+ */
+async function getParticipantProgress(
+  programId: number,
+  userId: number
+): Promise<ParticipantProgress> {
+  return wordpressFetch(
+    `/platform-cle/v1/reports/programs/${programId}/participants/${userId}`,
+    { auth: true }
+  ) as Promise<ParticipantProgress>;
+}
+
+/**
+ * Records — or takes back — a participant's completion of a module. Staff
+ * only; the plugin refuses it while a required quiz is unpassed.
+ */
+async function setParticipantModuleCompletion(
+  programId: number,
+  userId: number,
+  moduleId: number,
+  completed: boolean
+): Promise<ParticipantProgress> {
+  return wordpressFetch(
+    `/platform-cle/v1/reports/programs/${programId}/participants/${userId}/progress`,
+    {
+      auth: true,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ module_id: moduleId, completed }),
+    }
+  ) as Promise<ParticipantProgress>;
+}
+
 /* ------------------------------------------------------------------ */
 /* Participants                                                        */
 /* ------------------------------------------------------------------ */
@@ -413,6 +449,31 @@ async function createNode(input: {
   }) as Promise<TreeNode>;
 }
 
+/**
+ * A whole programme as a backup file's contents.
+ *
+ * Left as `unknown` on purpose: the app never reads inside a backup. It
+ * carries the file from WordPress to the author and back, and the plugin is
+ * the only thing that knows — and versions — what is in it.
+ */
+async function exportProgram(id: number): Promise<unknown> {
+  return wordpressFetch(`/platform-cle/v1/authoring/programs/${id}/export`, {
+    auth: true,
+  });
+}
+
+/** Restores a backup as a new, draft programme. */
+async function importProgram(
+  backup: unknown
+): Promise<{ id: number; title: string; items: number }> {
+  return wordpressFetch("/platform-cle/v1/authoring/programs/import", {
+    auth: true,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(backup),
+  }) as Promise<{ id: number; title: string; items: number }>;
+}
+
 /** Only the fields present are sent, so nothing unsent gets blanked. */
 async function updateNode(
   id: number,
@@ -478,6 +539,8 @@ export {
   getMe,
   getProgramReport,
   getProgramReportCsv,
+  getParticipantProgress,
+  setParticipantModuleCompletion,
   enrollByEmail,
   unenrollParticipant,
   getPeople,
@@ -487,6 +550,8 @@ export {
   getAuthoringPrograms,
   getNode,
   getProgramTree,
+  exportProgram,
+  importProgram,
   uploadNodeMedia,
   createNode,
   updateNode,

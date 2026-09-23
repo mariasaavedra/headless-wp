@@ -126,6 +126,106 @@ function pcle_authorable_post_types() {
 }
 
 /* =========================================================================
+ * Who made it, and who last touched it
+ * ========================================================================= */
+
+/**
+ * Records the current user as the last editor of a node.
+ *
+ * `_edit_last` is the key wp-admin itself writes, so an edit made there and
+ * one made in the builder answer the same question in the same place, and
+ * wp-admin's own "Last edited by" keeps telling the truth.
+ *
+ * Hooked to save_post, which covers every write that goes through
+ * wp_update_post(). Writes that only touch meta — quiz questions, credit
+ * hours, a session's time, an attached file — do not fire it, which is why
+ * pcle_authoring_touch() exists.
+ *
+ * Only a signed-in user is recorded. A cron job or a CLI script has nobody
+ * to name, and writing 0 would erase the person who really did edit it last.
+ *
+ * @param int     $post_id Post ID.
+ * @param WP_Post $post    Post.
+ */
+function pcle_authoring_record_editor( $post_id, $post ) {
+	if ( wp_is_post_revision( $post_id ) || ! in_array( $post->post_type, pcle_authorable_post_types(), true ) ) {
+		return;
+	}
+
+	$user_id = get_current_user_id();
+
+	if ( $user_id ) {
+		update_post_meta( $post_id, '_edit_last', $user_id );
+	}
+}
+add_action( 'save_post', 'pcle_authoring_record_editor', 10, 2 );
+
+/**
+ * Marks a node as edited now, by the current user.
+ *
+ * For writes that change what a node is without changing its post row. An
+ * empty wp_update_post() still moves post_modified forward and fires
+ * save_post, so the time and the person are recorded by the same path as
+ * every other edit rather than by a second one that could drift from it.
+ *
+ * @param int $post_id Post ID.
+ */
+function pcle_authoring_touch( $post_id ) {
+	wp_update_post( array( 'ID' => (int) $post_id ) );
+}
+
+/**
+ * A person as the builder names them.
+ *
+ * An account can be deleted while what it wrote survives, so the id is kept
+ * and the name is null: "a former account" is true, and silently dropping
+ * the line would make the item look as though nobody had made it.
+ *
+ * @param int $user_id User ID.
+ * @return array{id:int, name:string|null}|null Null when nobody is recorded.
+ */
+function pcle_authoring_shape_person( $user_id ) {
+	$user_id = (int) $user_id;
+
+	if ( ! $user_id ) {
+		return null;
+	}
+
+	$user = get_userdata( $user_id );
+
+	return array(
+		'id'   => $user_id,
+		'name' => $user ? $user->display_name : null,
+	);
+}
+
+/**
+ * Who created a node and who last edited it, and when.
+ *
+ * Dates go through get_post_datetime() rather than post_date_gmt, because a
+ * draft's GMT date is all zeros until it is first published, and every item
+ * the builder makes starts as a draft.
+ *
+ * `edited_by` is null for content last changed before this was recorded.
+ * Falling back to the author would name somebody who may never have touched
+ * the current version.
+ *
+ * @param WP_Post $post Post.
+ * @return array
+ */
+function pcle_authoring_shape_authorship( $post ) {
+	$created = get_post_datetime( $post, 'date' );
+	$edited  = get_post_datetime( $post, 'modified' );
+
+	return array(
+		'created_by' => pcle_authoring_shape_person( $post->post_author ),
+		'created_at' => $created ? $created->format( DATE_ATOM ) : null,
+		'edited_by'  => pcle_authoring_shape_person( get_post_meta( $post->ID, '_edit_last', true ) ),
+		'edited_at'  => $edited ? $edited->format( DATE_ATOM ) : null,
+	);
+}
+
+/* =========================================================================
  * Shaping
  * ========================================================================= */
 
@@ -148,7 +248,7 @@ function pcle_authoring_shape_node( $post ) {
 		'menu_order'      => (int) $post->menu_order,
 		'allowed_children' => pcle_allowed_child_types( $post->post_type ),
 		'children'        => array(),
-	);
+	) + pcle_authoring_shape_authorship( $post );
 
 	// Type-specific facts the tree needs to show a row honestly.
 	if ( 'pcle_event' === $post->post_type ) {
@@ -451,7 +551,7 @@ function pcle_authoring_list_programs() {
 			'units'      => count( pcle_authoring_get_children( $program->ID, 'pcle_unit' ) ),
 			'modules'    => count( pcle_get_program_module_ids( $program->ID ) ),
 			'enrollees'  => count( pcle_get_program_enrollee_ids( $program->ID ) ),
-		);
+		) + pcle_authoring_shape_authorship( $program );
 	}
 
 	return rest_ensure_response( array( 'programs' => $out ) );
@@ -657,12 +757,15 @@ function pcle_authoring_update_node( $request ) {
 		$changes['post_status'] = $status;
 	}
 
-	if ( count( $changes ) > 1 ) {
-		$updated = wp_update_post( $changes, true );
+	/*
+	 * Written even when only the ID is in it. A request that changes nothing
+	 * but quiz questions or credit hours is still an edit, and this is what
+	 * moves the modified time and records who made it.
+	 */
+	$updated = wp_update_post( $changes, true );
 
-		if ( is_wp_error( $updated ) ) {
-			return new WP_Error( 'pcle_update_failed', $updated->get_error_message(), array( 'status' => 500 ) );
-		}
+	if ( is_wp_error( $updated ) ) {
+		return new WP_Error( 'pcle_update_failed', $updated->get_error_message(), array( 'status' => 500 ) );
 	}
 
 	// Type-specific fields, each validated by the sanitiser that already owns it.
@@ -1167,6 +1270,8 @@ function pcle_authoring_upload_media( $request ) {
 	// Cleared only once the attachment exists: generating metadata makes
 	// thumbnails, and those go through the same upload_dir filter.
 	pcle_protected_upload_override( 0 );
+
+	pcle_authoring_touch( $node_id );
 
 	return rest_ensure_response( pcle_authoring_shape_attachment( (int) $attachment_id ) );
 }

@@ -10,6 +10,7 @@ import { Input } from "@pcle/ui/components/input";
 import { renderAccessError } from "@/components/access-error";
 import Breadcrumbs from "@/components/breadcrumbs";
 import ActionForm from "@/components/builder/action-form";
+import AuthorshipLine from "@/components/builder/authorship-line";
 import EditableTitle from "@/components/builder/editable-title";
 import { NODE_LABELS } from "@/components/builder/node-labels";
 import TreeView from "@/components/builder/tree-view";
@@ -93,6 +94,18 @@ export default async function BuilderProgramPage({
             Cohort report
           </Button>
 
+          {/*
+            A plain link, not <Link>: the answer is a file to save, and
+            client-side navigation would try to render it as a page.
+          */}
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={<a href={`/builder/programs/${tree.id}/backup`} download />}
+          >
+            Download backup
+          </Button>
+
           <ActionForm action={setStatusAction}>
             <input type="hidden" name="id" value={tree.id} />
             <input
@@ -106,6 +119,8 @@ export default async function BuilderProgramPage({
           </ActionForm>
         </div>
       </div>
+
+      <AuthorshipLine item={tree} />
 
       {/*
         Hours are entered from the accreditation paperwork, not calculated —

@@ -47,6 +47,7 @@ require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/certificates.php';
 require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/reports.php';
 require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/authoring-content.php';
 require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/rest-authoring.php';
+require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/backup.php';
 require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/demo-data.php';
 
 /*

@@ -26,7 +26,7 @@ What remains is of three kinds, and only the first is engineering:
   confirmations, session reminders, password resets — leaves the server with
   nothing vouching for it. This now gates more than it did: the frontend can
   create accounts, and the link to set a password travels by email.
-- ~~**Tests on `apps/web`.**~~ Closed: 41 Playwright tests run in CI against a
+- ~~**Tests on `apps/web`.**~~ Closed: 44 Playwright tests run in CI against a
   real WordPress, covering signing in, what each role is offered, and managing
   a cohort. What they do not cover yet is the builder and the participant's
   path through a programme to a quiz.
@@ -167,7 +167,7 @@ Severity: 🔴 blocker · 🟡 important · 🟢 fine.
 
 **Engineering practices**
 - 🟡→✅ No automated tests. **Fixed** for the plugin (`tests/smoke-test.php`,
-  586 assertions across 36 sections) and now for `apps/web` too: 41 Playwright
+  654 assertions across 39 sections) and now for `apps/web` too: 44 Playwright
   tests in `apps/web/e2e/`, run in CI against a real stack rather than a
   mocked backend — what they check is precisely what depends on WordPress.
   They arrange their own fixtures through the enrolment and people APIs
@@ -210,7 +210,7 @@ Goal: run the first real 4-week cohort safely.
 | 2 | Per-program REST guard (fix the no-op) | ✅ done + verified E2E |
 | 3 | Bulk enrollment by email | ✅ done + verified |
 | 4 | Emails (enrollment confirmation + session reminder) | ✅ done (`includes/emails.php`); verified via wp_mail capture. Needs SMTP on the host for real delivery. |
-| 5 | Smoke tests on access-control, progress, files, REST | ✅ done (`tests/smoke-test.php`, 586 assertions across 36 sections, dependency-free); green in CI on every push |
+| 5 | Smoke tests on access-control, progress, files, REST | ✅ done (`tests/smoke-test.php`, 654 assertions across 39 sections, dependency-free); green in CI on every push |
 | 6 | Deploy prep (health check + runbook) | ✅ done (`includes/health.php` + [DEPLOYMENT.md](DEPLOYMENT.md)), and since 18 Sep 2026 actually deployed: host, DNS and a deploy workflow all live. Backups remain unconfirmed. |
 
 ---

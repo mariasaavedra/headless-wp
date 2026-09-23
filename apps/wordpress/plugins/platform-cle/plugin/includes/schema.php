@@ -29,7 +29,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * deployed by copying files, so waiting for activation would leave sites on
  * the old schema indefinitely.
  */
-const PCLE_DB_VERSION = 4;
+const PCLE_DB_VERSION = 5;
 
 /** Option holding the installed schema version. */
 const PCLE_DB_VERSION_OPTION = 'pcle_db_version';
@@ -110,12 +110,18 @@ function pcle_install_schema() {
 		) {$charset_collate};"
 	);
 
+	/*
+	 * `marked_by` is the instructor who recorded a completion for somebody
+	 * else, as attendance has. 0 means the reader recorded it themselves —
+	 * true of every row from before schema 5, when that was the only way in.
+	 */
 	dbDelta(
 		"CREATE TABLE {$progress} (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 			user_id bigint(20) unsigned NOT NULL,
 			module_id bigint(20) unsigned NOT NULL,
 			completed_at datetime NULL DEFAULT NULL,
+			marked_by bigint(20) unsigned NOT NULL DEFAULT 0,
 			PRIMARY KEY  (id),
 			UNIQUE KEY user_module (user_id,module_id),
 			KEY module_id (module_id)

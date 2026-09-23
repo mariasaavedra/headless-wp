@@ -95,6 +95,41 @@ $created_posts   = array();
 $created_users   = array();
 $created_files   = array();
 
+/**
+ * Deletes everything the run created. Safe to call more than once.
+ *
+ * Registered as a shutdown function as well as called at the end, because
+ * the end is not always reached: a fatal error or an uncaught exception
+ * part-way through used to leave that run's programmes, posts and accounts in
+ * the database. They then sat first in lists the e2e suite reads — "the first
+ * published programme" became a test fixture with no quiz — and failed tests
+ * that had nothing to do with the crash.
+ */
+function pcle_smoke_teardown() {
+	static $done = false;
+
+	if ( $done ) {
+		return;
+	}
+	$done = true;
+
+	foreach ( $GLOBALS['created_posts'] ?? array() as $pid ) {
+		wp_delete_post( $pid, true );
+	}
+	foreach ( $GLOBALS['created_users'] ?? array() as $uid ) {
+		wp_delete_user( $uid );
+	}
+	foreach ( $GLOBALS['created_files'] ?? array() as $f ) {
+		if ( file_exists( $f ) ) {
+			unlink( $f );
+		}
+	}
+	if ( ! empty( $GLOBALS['pdir'] ) ) {
+		@rmdir( $GLOBALS['pdir'] ); // phpcs:ignore
+	}
+}
+register_shutdown_function( 'pcle_smoke_teardown' );
+
 // Program A (student enrolled) → Unit → Module; plus a Case Update.
 $prog_a  = pcle_make_post( 'pcle_program', 'TEST Program A' );
 $prog_b  = pcle_make_post( 'pcle_program', 'TEST Program B' );
@@ -490,13 +525,21 @@ pcle_eq( pcle_rest_post_progress( 0, $module, true )->get_status(), 401, 'anonym
 pcle_eq( pcle_rest_post_progress( $outsider, $module, true )->get_status(), 403, 'a reader with no access cannot record progress against the module' );
 pcle_eq( pcle_is_module_complete( $module, $outsider ), false, 'the refused write left no progress behind' );
 
-$toggle = pcle_rest_post_progress( $student, $module, true );
-pcle_eq( $toggle->get_status(), 200, 'enrolled student can record progress' );
+// A participant's completion is their instructor's to record, not theirs.
+$refused = pcle_rest_post_progress( $student, $module, true );
+pcle_eq( $refused->get_status(), 403, 'an enrolled student cannot mark their own module complete' );
+pcle_eq( $refused->get_data()['code'], 'pcle_marked_by_instructor', 'and is told who does' );
+pcle_eq( pcle_is_module_complete( $module, $student ), false, 'nothing was recorded' );
+
+// Staff mark their own.
+$toggle = pcle_rest_post_progress( $admin, $module, true );
+pcle_eq( $toggle->get_status(), 200, 'staff can mark their own module complete' );
 pcle_eq( $toggle->get_data()['completed'], true, 'response reports the new state' );
 pcle_eq( array_keys( $toggle->get_data()['unit_progress'] ), $expected_progress_keys, 'progress endpoint uses the same progress keys' );
-pcle_eq( pcle_is_module_complete( $module, $student ), true, 'progress was actually stored' );
+pcle_eq( pcle_is_module_complete( $module, $admin ), true, 'progress was actually stored' );
+pcle_eq( pcle_get_module_marked_by( $module, $admin ), 0, 'a completion recorded by its owner has no marker' );
 
-pcle_rest_post_progress( $student, $module, false ); // restore fixture state
+pcle_rest_post_progress( $admin, $module, false ); // restore fixture state
 wp_set_current_user( 0 );
 
 /* ------------------------------------------------------------------ */
@@ -2117,6 +2160,14 @@ pcle_eq( pcle_mark_module_complete( $module, $student ), true, 'the module compl
 // The gate reaches program-level progress, not just the one call.
 pcle_eq( pcle_get_program_progress( $prog_a, $student )['completed'] > 0, true, 'programme progress reflects the completion' );
 
+// Staff marking their own are not held to it: they have not passed it, and need not.
+pcle_eq( pcle_user_passed_quiz( $gate_quiz, $admin ), false, 'staff have not passed the required quiz' );
+pcle_eq( pcle_module_completion_blockers( $module, $admin ), array(), 'and it does not block them' );
+pcle_eq( pcle_rest_post_progress( $admin, $module, true )->get_status(), 200, 'they mark the gated module complete over REST' );
+pcle_ok( pcle_is_module_complete( $module, $admin ), 'and it is recorded' );
+pcle_unmark_module_complete( $module, $admin );
+wp_set_current_user( 0 );
+
 /* ------------------------------------------------------------------ */
 /* Quiz results in the cohort report                                  */
 /* ------------------------------------------------------------------ */
@@ -2643,20 +2694,310 @@ pcle_ok( pcle_is_module_complete( $preview_module, $instructor ), 'preview left 
 wp_set_current_user( 0 );
 
 /* ------------------------------------------------------------------ */
-/* Teardown                                                           */
+/* Who made it, and who last touched it                               */
 /* ------------------------------------------------------------------ */
-foreach ( $created_posts as $pid ) {
-	wp_delete_post( $pid, true );
+pcle_section( '# Authorship' );
+
+$made = pcle_authoring_call(
+	$instructor,
+	'POST',
+	'/platform-cle/v1/authoring/nodes',
+	array( 'type' => 'pcle_module', 'parent_id' => $unit, 'title' => 'TEST Authored By' )
+)->get_data();
+$created_posts[] = (int) $made['id'];
+
+pcle_eq( $made['created_by']['id'], (int) $instructor, 'the builder records who created an item' );
+pcle_ok( is_string( $made['created_by']['name'] ) && '' !== $made['created_by']['name'], 'and names them' );
+pcle_ok( false !== strtotime( (string) $made['created_at'] ), 'a draft still has a creation date' );
+pcle_eq( $made['edited_by']['id'], (int) $instructor, 'the creator is its first editor' );
+
+// A colleague edits it: the creator stays, the editor changes.
+pcle_authoring_call( $admin, 'PATCH', "/platform-cle/v1/authoring/nodes/{$made['id']}", array( 'title' => 'TEST Authored By, edited' ) );
+$node = pcle_authoring_call( $admin, 'GET', "/platform-cle/v1/authoring/nodes/{$made['id']}" )->get_data();
+
+pcle_eq( $node['created_by']['id'], (int) $instructor, 'an edit does not change who created it' );
+pcle_eq( $node['edited_by']['id'], $admin, 'but records who edited it last' );
+
+// A write that only touches meta is still an edit.
+$quiz_made = pcle_authoring_call(
+	$instructor,
+	'POST',
+	'/platform-cle/v1/authoring/nodes',
+	array( 'type' => 'pcle_quiz', 'parent_id' => $made['id'], 'title' => 'TEST Authored Quiz' )
+)->get_data();
+$created_posts[] = (int) $quiz_made['id'];
+
+pcle_authoring_call( $admin, 'PATCH', "/platform-cle/v1/authoring/nodes/{$quiz_made['id']}", array( 'pass_mark' => 80 ) );
+$quiz_node = pcle_authoring_call( $admin, 'GET', "/platform-cle/v1/authoring/nodes/{$quiz_made['id']}" )->get_data();
+pcle_eq( $quiz_node['edited_by']['id'], $admin, 'changing only a pass mark records the editor' );
+
+// The tree and the programme list carry it too.
+$tree_nodes = array();
+$walk       = function ( $n ) use ( &$walk, &$tree_nodes ) {
+	$tree_nodes[ $n['id'] ] = $n;
+	foreach ( $n['children'] as $child ) {
+		$walk( $child );
+	}
+};
+$walk( pcle_authoring_call( $admin, 'GET', "/platform-cle/v1/authoring/programs/{$prog_a}/tree" )->get_data() );
+pcle_eq( $tree_nodes[ $made['id'] ]['created_by']['id'], (int) $instructor, 'the tree says who created each item' );
+
+$listed = wp_list_filter(
+	pcle_authoring_call( $admin, 'GET', '/platform-cle/v1/authoring/programs' )->get_data()['programs'],
+	array( 'id' => $prog_a )
+);
+pcle_ok( array_key_exists( 'edited_at', reset( $listed ) ), 'the programme list says when each was last edited' );
+
+// Content last changed before this was recorded names nobody, rather than guessing.
+delete_post_meta( $made['id'], '_edit_last' );
+pcle_eq(
+	pcle_authoring_shape_authorship( get_post( $made['id'] ) )['edited_by'],
+	null,
+	'an unrecorded editor is null, not the author'
+);
+
+// An account that has gone keeps its id, loses its name.
+pcle_eq( pcle_authoring_shape_person( 99999999 ), array( 'id' => 99999999, 'name' => null ), 'a deleted account is named as nobody' );
+pcle_eq( pcle_authoring_shape_person( 0 ), null, 'and no account at all is null' );
+wp_set_current_user( 0 );
+
+/* ------------------------------------------------------------------ */
+/* An instructor marks a participant's module                         */
+/* ------------------------------------------------------------------ */
+pcle_section( '# Marking a participant complete' );
+
+/**
+ * Reads or writes one participant's progress in a programme's report.
+ *
+ * @param int       $uid        User to run as.
+ * @param int       $program_id Programme.
+ * @param int       $user_id    Participant.
+ * @param int|null  $module_id  Module to set, or null to read.
+ * @param bool|null $completed  Desired state when setting.
+ * @return WP_REST_Response
+ */
+function pcle_rest_participant_as( $uid, $program_id, $user_id, $module_id = null, $completed = null ) {
+	wp_set_current_user( $uid );
+	$route = "/platform-cle/v1/reports/programs/{$program_id}/participants/{$user_id}";
+
+	if ( null === $module_id ) {
+		return rest_do_request( new WP_REST_Request( 'GET', $route ) );
+	}
+
+	$request = new WP_REST_Request( 'POST', "{$route}/progress" );
+	$request->set_body_params(
+		array(
+			'module_id' => $module_id,
+			'completed' => $completed,
+		)
+	);
+
+	return rest_do_request( $request );
 }
-foreach ( $created_users as $uid ) {
-	wp_delete_user( $uid );
-}
-foreach ( $created_files as $f ) {
-	if ( file_exists( $f ) ) {
-		unlink( $f );
+
+$marking_module  = pcle_make_post( 'pcle_module', 'TEST Marking Module', array( '_pcle_unit_id' => $unit ) );
+$created_posts[] = $marking_module;
+pcle_unmark_module_complete( $marking_module, $student );
+
+// Who may.
+pcle_eq( pcle_rest_participant_as( 0, $prog_a, $student )->get_status(), 401, 'anonymous cannot read a participant' );
+pcle_eq( pcle_rest_participant_as( $student, $prog_a, $student )->get_status(), 403, 'nor can the participant, through the report' );
+pcle_eq( pcle_rest_participant_as( $student, $prog_a, $student, $marking_module, true )->get_status(), 403, 'or mark themselves through it' );
+pcle_eq( pcle_rest_participant_as( $instructor, $prog_a, $outsider )->get_status(), 404, 'somebody not enrolled has no page here' );
+pcle_eq( pcle_rest_participant_as( $instructor, $prog_a, $outsider, $marking_module, true )->get_status(), 404, 'and nothing can be recorded for them' );
+pcle_eq( pcle_is_module_complete( $marking_module, $outsider ), false, 'nothing was' );
+
+// The page.
+$page = pcle_rest_participant_as( $instructor, $prog_a, $student );
+pcle_eq( $page->get_status(), 200, 'an instructor reads a participant module by module' );
+$page_modules = array();
+foreach ( $page->get_data()['units'] as $page_unit ) {
+	foreach ( $page_unit['modules'] as $page_module ) {
+		$page_modules[ $page_module['id'] ] = $page_module;
 	}
 }
-@rmdir( $pdir ); // phpcs:ignore
+pcle_eq( $page_modules[ $marking_module ]['completed'], false, 'the module starts not complete' );
+
+// Marking it.
+$marked = pcle_rest_participant_as( $instructor, $prog_a, $student, $marking_module, true );
+pcle_eq( $marked->get_status(), 200, 'the instructor marks it complete' );
+pcle_ok( pcle_is_module_complete( $marking_module, $student ), 'the completion is the participant\'s' );
+pcle_ok( ! pcle_is_module_complete( $marking_module, $instructor ), 'not the instructor\'s' );
+pcle_eq( pcle_get_module_marked_by( $marking_module, $student ), (int) $instructor, 'and it records who marked it' );
+pcle_ok( null !== pcle_get_module_completed_at( $marking_module, $student ), 'and when' );
+
+$marked_modules = array();
+foreach ( $marked->get_data()['units'] as $page_unit ) {
+	foreach ( $page_unit['modules'] as $page_module ) {
+		$marked_modules[ $page_module['id'] ] = $page_module;
+	}
+}
+pcle_eq( $marked_modules[ $marking_module ]['marked_by']['id'], (int) $instructor, 'the page names who marked it' );
+
+// And taking it back.
+pcle_eq( pcle_rest_participant_as( $instructor, $prog_a, $student, $marking_module, false )->get_status(), 200, 'the instructor can undo it' );
+pcle_ok( ! pcle_is_module_complete( $marking_module, $student ), 'and it is gone' );
+
+// A module from another programme cannot be written through this one.
+$other_unit      = pcle_make_post( 'pcle_unit', 'TEST Other Unit', array( '_pcle_program_id' => $prog_b ) );
+$other_module    = pcle_make_post( 'pcle_module', 'TEST Other Module', array( '_pcle_unit_id' => $other_unit ) );
+$created_posts[] = $other_unit;
+$created_posts[] = $other_module;
+pcle_eq( pcle_rest_participant_as( $instructor, $prog_a, $student, $other_module, true )->get_status(), 400, 'a module from another programme is refused' );
+pcle_ok( ! pcle_is_module_complete( $other_module, $student ), 'and nothing was recorded against it' );
+
+// The participant's quiz gate holds for the instructor's tick.
+$marking_quiz    = pcle_make_post( 'pcle_quiz', 'TEST Marking Gate', array( '_pcle_module_id' => $marking_module ) );
+$created_posts[] = $marking_quiz;
+pcle_set_quiz_questions( $marking_quiz, array(
+	array( 'key' => 'q', 'prompt' => 'Gate', 'type' => 'single',
+		'choices' => array( array( 'key' => 'a', 'text' => 'A', 'correct' => true ), array( 'key' => 'b', 'text' => 'B' ) ) ),
+) );
+update_post_meta( $marking_quiz, PCLE_QUIZ_GATES_META, 1 );
+
+$gated = pcle_rest_participant_as( $instructor, $prog_a, $student, $marking_module, true );
+pcle_eq( $gated->get_status(), 409, 'a participant who has not passed the required quiz cannot be marked complete' );
+pcle_eq( $gated->get_data()['data']['quizzes'][0]['id'], (int) $marking_quiz, 'and the refusal names the quiz' );
+pcle_ok( ! pcle_is_module_complete( $marking_module, $student ), 'nothing was recorded' );
+
+// Who the module screen offers the control to.
+pcle_eq( pcle_rest_curriculum_as( $student, "/platform-cle/v1/modules/{$marking_module}" )['can_mark'], false, 'a participant is not offered the button' );
+pcle_eq( pcle_rest_curriculum_as( $instructor, "/platform-cle/v1/modules/{$marking_module}" )['can_mark'], true, 'an instructor is' );
+pcle_eq( pcle_rest_curriculum_as( $instructor, "/platform-cle/v1/modules/{$marking_module}", true )['can_mark'], false, 'but not in preview, where it would write to their own record' );
+wp_set_current_user( 0 );
+
+/* ------------------------------------------------------------------ */
+/* Programme backups                                                  */
+/* ------------------------------------------------------------------ */
+pcle_section( '# Programme backups' );
+
+// A programme with one of everything the file has to carry.
+$bk_prog     = pcle_make_post( 'pcle_program', 'TEST Backup Programme' );
+$bk_unit     = pcle_make_post( 'pcle_unit', 'TEST Backup Unit', array( '_pcle_program_id' => $bk_prog ) );
+$bk_unit2    = pcle_make_post( 'pcle_unit', 'TEST Backup Unit Two', array( '_pcle_program_id' => $bk_prog ) );
+$bk_module   = pcle_make_post( 'pcle_module', 'TEST Backup Module', array( '_pcle_unit_id' => $bk_unit ), '<!-- wp:paragraph --><p>Backed-up body.</p><!-- /wp:paragraph -->' );
+$bk_event    = pcle_make_post( 'pcle_event', 'TEST Backup Session', array( '_pcle_unit_id' => $bk_unit, PCLE_EVENT_DATETIME_META => '2026-10-01 18:00:00' ) );
+$bk_quiz     = pcle_make_post( 'pcle_quiz', 'TEST Backup Quiz', array( '_pcle_module_id' => $bk_module ) );
+$bk_scenario = pcle_make_post( 'pcle_scenario', 'TEST Backup Scenario', array( '_pcle_module_id' => $bk_module ) );
+wp_update_post( array( 'ID' => $bk_scenario, 'post_status' => 'draft' ) );
+wp_update_post( array( 'ID' => $bk_unit, 'menu_order' => 1 ) );
+wp_update_post( array( 'ID' => $bk_unit2, 'menu_order' => 2 ) );
+update_post_meta( $bk_prog, pcle_credit_hours_meta_key( array_key_first( pcle_jurisdictions() ) ), 2.5 );
+pcle_set_quiz_questions( $bk_quiz, array(
+	array( 'key' => 'q1', 'prompt' => 'Backed-up question', 'type' => 'single',
+		'choices' => array( array( 'key' => 'a', 'text' => 'Right', 'correct' => true ), array( 'key' => 'b', 'text' => 'Wrong' ) ) ),
+) );
+update_post_meta( $bk_quiz, PCLE_QUIZ_PASS_MARK_META, 80 );
+update_post_meta( $bk_quiz, PCLE_QUIZ_GATES_META, 1 );
+pcle_enroll_user( $bk_prog, $student );
+array_push( $created_posts, $bk_prog, $bk_unit, $bk_unit2, $bk_module, $bk_event, $bk_quiz, $bk_scenario );
+
+$export_route = "/platform-cle/v1/authoring/programs/{$bk_prog}/export";
+pcle_eq( pcle_rest_status( 0, $export_route ), 401, 'anonymous cannot take a backup' );
+pcle_eq( pcle_rest_status( $student, $export_route ), 403, 'nor can a participant' );
+
+$export = pcle_authoring_call( $instructor, 'GET', $export_route );
+pcle_eq( $export->get_status(), 200, 'an instructor takes a backup' );
+
+// Through JSON and back, exactly as a downloaded file would travel.
+$file = json_decode( wp_json_encode( $export->get_data() ), true );
+pcle_eq( $file['format'], PCLE_BACKUP_FORMAT, 'the file says what it is' );
+pcle_eq( $file['version'], PCLE_BACKUP_VERSION, 'and which version' );
+pcle_eq( $file['programme']['type'], 'programme', 'types have neutral names, not post types' );
+pcle_eq( wp_list_pluck( $file['programme']['children'], 'title' ), array( 'TEST Backup Unit', 'TEST Backup Unit Two' ), 'children are in curriculum order' );
+pcle_eq( array_keys( $file ), array( 'format', 'version', 'exported_at', 'exported_by', 'site', 'programme' ), 'the file carries the programme and nothing about its people' );
+
+// Restoring.
+$import_route = '/platform-cle/v1/authoring/programs/import';
+
+/**
+ * Posts a backup file's contents to the import route.
+ *
+ * @param int   $uid  User to run as.
+ * @param mixed $data File contents.
+ * @return WP_REST_Response
+ */
+function pcle_rest_import_as( $uid, $data ) {
+	wp_set_current_user( $uid );
+	$request = new WP_REST_Request( 'POST', '/platform-cle/v1/authoring/programs/import' );
+	$request->set_header( 'Content-Type', 'application/json' );
+	$request->set_body( wp_json_encode( $data ) );
+
+	return rest_do_request( $request );
+}
+
+pcle_eq( pcle_rest_import_as( $student, $file )->get_status(), 403, 'a participant cannot restore a backup' );
+
+$restored = pcle_rest_import_as( $instructor, $file );
+pcle_eq( $restored->get_status(), 201, 'an instructor restores it' );
+$new_prog = (int) $restored->get_data()['id'];
+$created_posts[] = $new_prog;
+foreach ( pcle_authoring_descendants( $new_prog ) as $restored_child ) {
+	$created_posts[] = (int) $restored_child->ID;
+}
+
+pcle_ok( $new_prog && $new_prog !== $bk_prog, 'as a new programme, not over the old one' );
+pcle_eq( get_post_status( $new_prog ), 'draft', 'which comes back as a draft' );
+pcle_eq( $restored->get_data()['items'], 7, 'with every item' );
+pcle_eq( pcle_get_program_enrollee_ids( $new_prog ), array(), 'and nobody enrolled in it' );
+pcle_eq( pcle_get_credit_hours( $new_prog ), pcle_get_credit_hours( $bk_prog ), 'credit hours survive' );
+
+// The restored programme exports to the same file, bar ids and the programme's status.
+$strip = function ( $node ) use ( &$strip ) {
+	unset( $node['source_id'], $node['attachments'] );
+	$node['children'] = array_map( $strip, $node['children'] );
+	return $node;
+};
+$again         = json_decode( wp_json_encode( pcle_authoring_call( $instructor, 'GET', "/platform-cle/v1/authoring/programs/{$new_prog}/export" )->get_data() ), true );
+$first_tree    = $strip( $file['programme'] );
+$restored_tree = $strip( $again['programme'] );
+unset( $first_tree['status'], $restored_tree['status'] );
+pcle_eq( $restored_tree, $first_tree, 'everything else round-trips exactly: titles, order, bodies, quiz, session, drafts' );
+
+// Refusals, and that a refused restore leaves nothing behind.
+$programme_count = function () {
+	return count( get_posts( array( 'post_type' => 'pcle_program', 'post_status' => 'any', 'posts_per_page' => -1, 'fields' => 'ids' ) ) );
+};
+$before = $programme_count();
+
+pcle_eq( pcle_rest_import_as( $instructor, array( 'format' => 'something-else' ) )->get_status(), 400, 'a file that is not a backup is refused' );
+
+$too_new            = $file;
+$too_new['version'] = PCLE_BACKUP_VERSION + 1;
+$too_new_response   = pcle_rest_import_as( $instructor, $too_new );
+pcle_eq( $too_new_response->get_status(), 400, 'a backup from a newer platform is refused' );
+pcle_eq( $too_new_response->get_data()['code'], 'pcle_backup_too_new', 'and says so' );
+
+$misplaced                                = $file;
+$misplaced['programme']['children'][0]['children'][0]['type'] = 'unit'; // A unit inside a unit.
+pcle_eq( pcle_rest_import_as( $instructor, $misplaced )->get_status(), 400, 'an item in a place it cannot be is refused' );
+
+$unknown                                     = $file;
+$unknown['programme']['children'][1]['type'] = 'podcast';
+pcle_eq( pcle_rest_import_as( $instructor, $unknown )->get_status(), 400, 'a kind of item the platform does not know is refused' );
+
+pcle_eq( $programme_count(), $before, 'no refused restore created anything' );
+
+// A file is anyone's to edit, so it is filtered like the builder is.
+$hostile                                   = $file;
+$hostile['programme']['children'][0]['children'][0]['content'] = '<p>Fine.</p><script>alert(1)</script>';
+$hostile_prog                              = (int) pcle_rest_import_as( $instructor, $hostile )->get_data()['id'];
+$created_posts[]                           = $hostile_prog;
+$hostile_descendants                       = pcle_authoring_descendants( $hostile_prog );
+foreach ( $hostile_descendants as $restored_child ) {
+	$created_posts[] = (int) $restored_child->ID;
+}
+$hostile_module = wp_list_filter( $hostile_descendants, array( 'post_type' => 'pcle_module' ) );
+pcle_ok( false === strpos( reset( $hostile_module )->post_content, '<script' ), 'a script in a backup does not survive an instructor restoring it' );
+
+// Older files are brought forward before anything reads them.
+pcle_eq( pcle_backup_migrate( $file )['version'], PCLE_BACKUP_VERSION, 'a current file passes through migration unchanged' );
+wp_set_current_user( 0 );
+
+/* ------------------------------------------------------------------ */
+/* Teardown                                                           */
+/* ------------------------------------------------------------------ */
+pcle_smoke_teardown();
 
 /* ------------------------------------------------------------------ */
 /* Summary                                                            */

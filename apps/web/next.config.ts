@@ -49,6 +49,18 @@ const nextConfig: NextConfig = {
     BUILD_COMMIT: commit(),
     BUILD_TIME: new Date().toISOString(),
   },
+
+  experimental: {
+    serverActions: {
+      /*
+       * A programme backup arrives through a server action, and the 1 MB
+       * default is less than a long course's text. 4 MB stays under the
+       * 4.5 MB Vercel accepts for any request, so a file this lets through is
+       * one the host will too.
+       */
+      bodySizeLimit: "4mb",
+    },
+  },
 };
 
 export default nextConfig;

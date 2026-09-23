@@ -8,7 +8,7 @@ How to operate the platform from the WordPress dashboard.
 
 | Role | Can |
 |---|---|
-| **CLE Student** | View the content of programs they are **enrolled** in, mark modules as complete, reveal model answers. |
+| **CLE Student** | View the content of programs they are **enrolled** in, reveal model answers. Their modules are marked complete by an instructor. |
 | **CLE Instructor** | Everything a student can + create/edit the curriculum (in the builder or wp-admin), publish Case Updates, enroll students, mark attendance, and view progress and cohort reports. |
 | **Administrator** | Full access. |
 
@@ -37,6 +37,21 @@ re-saves cleanly in wp-admin.
    or unpublish; and set credit hours on the programme.
 4. Clicking any node opens its editor — the body, and for a quiz its questions
    and pass mark.
+5. Every programme, and every item in it, says who created it and who last
+   edited it (hover over a row in the tree; it is written out on the item's page).
+
+### Backups
+
+On a programme's page in the builder, **Download backup** saves the whole
+programme — units, modules, sessions, scenarios, templates, quizzes with their
+questions, bodies and credit hours — as one `.json` file. Drafts are included.
+Enrolments, progress and quiz attempts are not: those are records about people.
+Attached files are listed by address, not copied into the file.
+
+To restore, open **/builder → Restore from a backup** and choose the file. It
+always comes back as a **new draft programme** with nobody enrolled; nothing that
+exists is changed. Backups carry a version number, so files taken today still
+restore after the builder changes.
 
 You never type WordPress markup. The builder sends plain text and the server
 constructs the markup, which is also why an instructor cannot accidentally paste
@@ -105,8 +120,11 @@ be sat.
 1. Log in.
 2. **My Training** shows a card for each program they're enrolled in, with its progress bar.
 3. Entering a program: units (each with its progress) → modules → content.
-4. On each module they can click **Mark as complete**; the bar updates instantly.
-   If the module carries a quiz that gates completion, they must pass it first.
+4. Participants do **not** mark modules themselves. An instructor opens the
+   programme's report, clicks the participant's name and marks each module they
+   have finished; the record keeps who marked it and when. If the module carries a
+   quiz that gates completion, the participant must pass it first. Instructors mark
+   their own modules from the module page, with no quiz gate.
 5. Quizzes are sat in the app. They see their score immediately and can review
    every past attempt.
 6. **Breadcrumbs** let them jump back to any previous level.

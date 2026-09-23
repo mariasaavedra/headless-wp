@@ -608,6 +608,168 @@ function pcle_rest_get_report_csv( $request ) {
 	);
 }
 
+/* =========================================================================
+ * One participant, module by module
+ * ========================================================================= */
+
+/**
+ * Permission callback for a participant's own page in the report.
+ *
+ * The report's gate first, then the person: somebody who is not enrolled in
+ * this programme has no progress in it to read or record, and answering for
+ * them would let an instructor write completions against any account on the
+ * site through any programme they can edit.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return true|WP_Error
+ */
+function pcle_rest_guard_participant( $request ) {
+	$guard = pcle_rest_guard_report( $request );
+
+	if ( is_wp_error( $guard ) ) {
+		return $guard;
+	}
+
+	if ( ! pcle_is_enrolled( (int) $request['id'], (int) $request['user_id'] ) ) {
+		return new WP_Error( 'pcle_not_enrolled', __( 'That person is not enrolled in this programme.', 'platform-cle' ), array( 'status' => 404 ) );
+	}
+
+	return true;
+}
+
+/**
+ * Quizzes as the report names them: enough to say which, and link to it.
+ *
+ * @param int[] $quiz_ids Quiz IDs.
+ * @return array<int, array{id:int, title:string}>
+ */
+function pcle_rest_shape_quiz_refs( $quiz_ids ) {
+	return array_map(
+		function ( $quiz_id ) {
+			return array(
+				'id'    => (int) $quiz_id,
+				'title' => get_the_title( $quiz_id ),
+			);
+		},
+		array_values( $quiz_ids )
+	);
+}
+
+/**
+ * One participant's standing in a programme, module by module.
+ *
+ * `marked_by` says who recorded each completion: null when the participant
+ * did it themselves, which every completion from before instructors marked
+ * them was. `blockers` are the required quizzes still standing between them
+ * and a completion — the reason the instructor's tick would be refused.
+ *
+ * @param int $program_id Programme ID.
+ * @param int $user_id    Participant.
+ * @return array
+ */
+function pcle_rest_shape_participant_progress( $program_id, $user_id ) {
+	$user  = get_userdata( $user_id );
+	$units = array();
+
+	foreach ( pcle_get_units( $program_id ) as $unit ) {
+		$modules = array();
+
+		foreach ( pcle_get_modules( $unit->ID ) as $module ) {
+			$marked_by = pcle_get_module_marked_by( $module->ID, $user_id );
+
+			$modules[] = array(
+				'id'           => (int) $module->ID,
+				'title'        => get_the_title( $module ),
+				'completed'    => pcle_is_module_complete( $module->ID, $user_id ),
+				'completed_at' => pcle_get_module_completed_at( $module->ID, $user_id ),
+				'marked_by'    => $marked_by ? pcle_authoring_shape_person( $marked_by ) : null,
+				'blockers'     => pcle_rest_shape_quiz_refs( pcle_module_completion_blockers( $module->ID, $user_id ) ),
+			);
+		}
+
+		$units[] = array(
+			'id'      => (int) $unit->ID,
+			'title'   => get_the_title( $unit ),
+			'modules' => $modules,
+		);
+	}
+
+	$progress = pcle_get_program_progress( $program_id, $user_id );
+
+	return array(
+		'program'     => pcle_rest_shape_ref( get_post( $program_id ) ),
+		'participant' => array(
+			'id'    => (int) $user_id,
+			'name'  => $user ? $user->display_name : '',
+			'email' => $user ? $user->user_email : '',
+		),
+		'progress'    => array(
+			'completed'  => (int) $progress['completed'],
+			'total'      => (int) $progress['total'],
+			'percentage' => (int) $progress['percent'],
+		),
+		'units'       => $units,
+	);
+}
+
+/**
+ * GET /reports/programs/<id>/participants/<user_id>
+ *
+ * @param WP_REST_Request $request Request.
+ * @return WP_REST_Response
+ */
+function pcle_rest_get_participant_progress( $request ) {
+	return rest_ensure_response(
+		pcle_rest_shape_participant_progress( (int) $request['id'], (int) $request['user_id'] )
+	);
+}
+
+/**
+ * POST /reports/programs/<id>/participants/<user_id>/progress { module_id, completed }
+ *
+ * An instructor recording that a participant has finished a module — or
+ * taking that back. The only way a participant's completion is recorded now:
+ * the participant's own button is gone (see pcle_rest_toggle_progress()).
+ *
+ * The participant's quiz gate still holds. It exempts staff marking their
+ * own, not staff marking somebody else's: "passed the required quiz" is part
+ * of what a completion claims, and an instructor's tick should not be able to
+ * claim it for someone who has not.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return WP_REST_Response|WP_Error
+ */
+function pcle_rest_set_participant_progress( $request ) {
+	$program_id = (int) $request['id'];
+	$user_id    = (int) $request['user_id'];
+	$module_id  = (int) $request['module_id'];
+
+	if ( ! in_array( $module_id, array_map( 'intval', pcle_get_program_module_ids( $program_id ) ), true ) ) {
+		return new WP_Error( 'pcle_invalid_module', __( 'That module is not part of this programme.', 'platform-cle' ), array( 'status' => 400 ) );
+	}
+
+	if ( rest_sanitize_boolean( $request['completed'] ) ) {
+		$blockers = pcle_module_completion_blockers( $module_id, $user_id );
+
+		if ( $blockers ) {
+			return new WP_Error(
+				'pcle_quiz_required',
+				__( 'This participant has not passed the quiz this module requires.', 'platform-cle' ),
+				array(
+					'status'  => 409,
+					'quizzes' => pcle_rest_shape_quiz_refs( $blockers ),
+				)
+			);
+		}
+
+		pcle_mark_module_complete( $module_id, $user_id, get_current_user_id() );
+	} else {
+		pcle_unmark_module_complete( $module_id, $user_id );
+	}
+
+	return rest_ensure_response( pcle_rest_shape_participant_progress( $program_id, $user_id ) );
+}
+
 /**
  * Registers the report routes.
  */
@@ -628,6 +790,46 @@ function pcle_register_report_routes() {
 			'callback'            => 'pcle_rest_get_report',
 			'permission_callback' => 'pcle_rest_guard_report',
 			'args'                => $args,
+		)
+	);
+
+	$participant_args = $args + array(
+		'user_id' => array(
+			'required'          => true,
+			'type'              => 'integer',
+			'sanitize_callback' => 'absint',
+		),
+	);
+
+	register_rest_route(
+		'platform-cle/v1',
+		'/reports/programs/(?P<id>\d+)/participants/(?P<user_id>\d+)',
+		array(
+			'methods'             => 'GET',
+			'callback'            => 'pcle_rest_get_participant_progress',
+			'permission_callback' => 'pcle_rest_guard_participant',
+			'args'                => $participant_args,
+		)
+	);
+
+	register_rest_route(
+		'platform-cle/v1',
+		'/reports/programs/(?P<id>\d+)/participants/(?P<user_id>\d+)/progress',
+		array(
+			'methods'             => 'POST',
+			'callback'            => 'pcle_rest_set_participant_progress',
+			'permission_callback' => 'pcle_rest_guard_participant',
+			'args'                => $participant_args + array(
+				'module_id' => array(
+					'required'          => true,
+					'type'              => 'integer',
+					'sanitize_callback' => 'absint',
+				),
+				'completed' => array(
+					'required' => true,
+					'type'     => 'boolean',
+				),
+			),
 		)
 	);
 
