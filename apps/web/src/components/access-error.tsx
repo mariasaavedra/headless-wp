@@ -38,7 +38,12 @@ export function renderAccessError(
   }
 
   if (error.status === 401) {
-    redirect("/login");
+    /*
+     * Marked, because the cookie is still there: /login sends anyone holding
+     * one back to the menu, and a token WordPress has stopped honouring — a
+     * password changed on another device — would bounce between the two.
+     */
+    redirect("/login?session=ended");
   }
 
   if (error.status === 404) {

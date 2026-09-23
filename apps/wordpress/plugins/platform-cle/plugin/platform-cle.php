@@ -33,6 +33,7 @@ require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/access-control.php';
 require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/relationships.php';
 require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/enrollment.php';
 require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/people.php';
+require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/account.php';
 require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/progress.php';
 require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/blocks.php';
 require_once PLATFORM_CLE_PLUGIN_DIR . 'includes/rest.php';
