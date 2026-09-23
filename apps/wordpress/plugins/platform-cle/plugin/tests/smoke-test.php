@@ -2643,6 +2643,74 @@ pcle_ok( pcle_is_module_complete( $preview_module, $instructor ), 'preview left 
 wp_set_current_user( 0 );
 
 /* ------------------------------------------------------------------ */
+/* Who made it, and who last touched it                               */
+/* ------------------------------------------------------------------ */
+pcle_section( '# Authorship' );
+
+$made = pcle_authoring_call(
+	$instructor,
+	'POST',
+	'/platform-cle/v1/authoring/nodes',
+	array( 'type' => 'pcle_module', 'parent_id' => $unit, 'title' => 'TEST Authored By' )
+)->get_data();
+$created_posts[] = (int) $made['id'];
+
+pcle_eq( $made['created_by']['id'], (int) $instructor, 'the builder records who created an item' );
+pcle_ok( is_string( $made['created_by']['name'] ) && '' !== $made['created_by']['name'], 'and names them' );
+pcle_ok( false !== strtotime( (string) $made['created_at'] ), 'a draft still has a creation date' );
+pcle_eq( $made['edited_by']['id'], (int) $instructor, 'the creator is its first editor' );
+
+// A colleague edits it: the creator stays, the editor changes.
+pcle_authoring_call( $admin, 'PATCH', "/platform-cle/v1/authoring/nodes/{$made['id']}", array( 'title' => 'TEST Authored By, edited' ) );
+$node = pcle_authoring_call( $admin, 'GET', "/platform-cle/v1/authoring/nodes/{$made['id']}" )->get_data();
+
+pcle_eq( $node['created_by']['id'], (int) $instructor, 'an edit does not change who created it' );
+pcle_eq( $node['edited_by']['id'], $admin, 'but records who edited it last' );
+
+// A write that only touches meta is still an edit.
+$quiz_made = pcle_authoring_call(
+	$instructor,
+	'POST',
+	'/platform-cle/v1/authoring/nodes',
+	array( 'type' => 'pcle_quiz', 'parent_id' => $made['id'], 'title' => 'TEST Authored Quiz' )
+)->get_data();
+$created_posts[] = (int) $quiz_made['id'];
+
+pcle_authoring_call( $admin, 'PATCH', "/platform-cle/v1/authoring/nodes/{$quiz_made['id']}", array( 'pass_mark' => 80 ) );
+$quiz_node = pcle_authoring_call( $admin, 'GET', "/platform-cle/v1/authoring/nodes/{$quiz_made['id']}" )->get_data();
+pcle_eq( $quiz_node['edited_by']['id'], $admin, 'changing only a pass mark records the editor' );
+
+// The tree and the programme list carry it too.
+$tree_nodes = array();
+$walk       = function ( $n ) use ( &$walk, &$tree_nodes ) {
+	$tree_nodes[ $n['id'] ] = $n;
+	foreach ( $n['children'] as $child ) {
+		$walk( $child );
+	}
+};
+$walk( pcle_authoring_call( $admin, 'GET', "/platform-cle/v1/authoring/programs/{$prog_a}/tree" )->get_data() );
+pcle_eq( $tree_nodes[ $made['id'] ]['created_by']['id'], (int) $instructor, 'the tree says who created each item' );
+
+$listed = wp_list_filter(
+	pcle_authoring_call( $admin, 'GET', '/platform-cle/v1/authoring/programs' )->get_data()['programs'],
+	array( 'id' => $prog_a )
+);
+pcle_ok( array_key_exists( 'edited_at', reset( $listed ) ), 'the programme list says when each was last edited' );
+
+// Content last changed before this was recorded names nobody, rather than guessing.
+delete_post_meta( $made['id'], '_edit_last' );
+pcle_eq(
+	pcle_authoring_shape_authorship( get_post( $made['id'] ) )['edited_by'],
+	null,
+	'an unrecorded editor is null, not the author'
+);
+
+// An account that has gone keeps its id, loses its name.
+pcle_eq( pcle_authoring_shape_person( 99999999 ), array( 'id' => 99999999, 'name' => null ), 'a deleted account is named as nobody' );
+pcle_eq( pcle_authoring_shape_person( 0 ), null, 'and no account at all is null' );
+wp_set_current_user( 0 );
+
+/* ------------------------------------------------------------------ */
 /* Teardown                                                           */
 /* ------------------------------------------------------------------ */
 foreach ( $created_posts as $pid ) {

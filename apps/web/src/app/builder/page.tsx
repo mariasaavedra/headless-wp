@@ -10,6 +10,7 @@ import { Input } from "@pcle/ui/components/input";
 import { renderAccessError } from "@/components/access-error";
 import ActionForm from "@/components/builder/action-form";
 import { createProgramAction } from "@/app/actions/authoring";
+import AuthorshipLine from "@/components/builder/authorship-line";
 import PageShell from "@/components/page-shell";
 import { isAuthenticated } from "@/lib/auth";
 import { decodeEntities } from "@/lib/html";
@@ -114,6 +115,8 @@ export default async function BuilderPage() {
                         )
                         .join(" · ")}
                     </p>
+
+                    <AuthorshipLine item={program} />
                   </CardContent>
                 </Card>
               </Link>

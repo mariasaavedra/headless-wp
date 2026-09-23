@@ -7,6 +7,7 @@ import { cn } from "@pcle/ui/lib/utils";
 import { Button } from "@pcle/ui/components/button";
 
 import ActionForm from "@/components/builder/action-form";
+import { authorshipText } from "@/components/builder/authorship-line";
 import CollapsibleNode from "@/components/builder/collapsible-node";
 import { AddChildMenu, NodeMenu } from "@/components/builder/row-actions";
 import { reorderAction } from "@/app/actions/authoring";
@@ -127,8 +128,14 @@ export default function NodeRow({
 
   const row = (
     <div className="flex flex-wrap items-center gap-2 py-2">
+      {/*
+        On hover only. A line under every row would double the height of the
+        tree to answer a question asked of one item at a time; the item's own
+        page says it in full.
+      */}
       <Link
         href={`/builder/nodes/${node.id}`}
+        title={authorshipText(node) || undefined}
         className={cn("hover:underline", TITLE_STYLES[node.type])}
       >
         {title}

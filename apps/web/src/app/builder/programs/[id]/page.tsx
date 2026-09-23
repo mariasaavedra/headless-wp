@@ -10,6 +10,7 @@ import { Input } from "@pcle/ui/components/input";
 import { renderAccessError } from "@/components/access-error";
 import Breadcrumbs from "@/components/breadcrumbs";
 import ActionForm from "@/components/builder/action-form";
+import AuthorshipLine from "@/components/builder/authorship-line";
 import EditableTitle from "@/components/builder/editable-title";
 import { NODE_LABELS } from "@/components/builder/node-labels";
 import TreeView from "@/components/builder/tree-view";
@@ -106,6 +107,8 @@ export default async function BuilderProgramPage({
           </ActionForm>
         </div>
       </div>
+
+      <AuthorshipLine item={tree} />
 
       {/*
         Hours are entered from the accreditation paperwork, not calculated —

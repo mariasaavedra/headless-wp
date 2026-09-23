@@ -364,7 +364,28 @@ type QuizQuestion = {
 };
 
 /** A programme as it appears in the builder's list. */
-type AuthoringProgram = {
+/**
+ * Somebody the builder names. `name` is null when the account has since been
+ * deleted: the id survives on what they wrote, the person does not.
+ */
+type Author = {
+  id: number;
+  name: string | null;
+};
+
+/**
+ * Who made an item and who last changed it. Dates are ISO 8601 in the site's
+ * own time zone. `edited_by` is null for content last changed before editors
+ * were recorded — the server will not guess.
+ */
+type Authorship = {
+  created_by: Author | null;
+  created_at: string | null;
+  edited_by: Author | null;
+  edited_at: string | null;
+};
+
+type AuthoringProgram = Authorship & {
   id: number;
   title: string;
   status: string;
@@ -387,7 +408,7 @@ type CreditHours = {
  * so the add menu and any future drop rules cannot drift from what the API
  * will actually accept.
  */
-type TreeNode = {
+type TreeNode = Authorship & {
   id: number;
   type: NodeType;
   title: string;
@@ -458,6 +479,8 @@ type NodeDetail = Omit<TreeNode, "questions"> & {
 
 export type {
   Me,
+  Author,
+  Authorship,
   NodeType,
   QuizQuestionType,
   QuizChoice,

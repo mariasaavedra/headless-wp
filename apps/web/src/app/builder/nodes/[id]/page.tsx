@@ -9,6 +9,7 @@ import { Input } from "@pcle/ui/components/input";
 import { renderAccessError } from "@/components/access-error";
 import Breadcrumbs from "@/components/breadcrumbs";
 import ActionForm from "@/components/builder/action-form";
+import AuthorshipLine from "@/components/builder/authorship-line";
 import BodyEditor from "@/components/builder/body-editor";
 import QuizEditor from "@/components/builder/quiz-editor";
 import { NODE_BADGES } from "@/components/builder/node-labels";
@@ -73,6 +74,8 @@ export default async function BuilderNodePage({
           <Badge className="bg-amber-100 text-amber-800">Draft</Badge>
         )}
       </div>
+
+      <AuthorshipLine item={node} />
 
       {/*
         A quiz is authored as questions, not prose, so it gets its own editor
