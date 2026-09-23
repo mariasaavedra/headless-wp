@@ -216,7 +216,7 @@ jobs:
               exit 0
             fi
 
-            if grep -q 'sgcaptcha' /tmp/health; then
+            if true; then  # TEMPORARY: exercise the host path
               blocked=true
               result=$(from_host || echo "ssh-failed - -")
               how=${result%% *}
