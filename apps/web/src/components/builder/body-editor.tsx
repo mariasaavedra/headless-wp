@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import {
   BoldIcon,
   Heading2Icon,
@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@pcle/ui/components/button";
+import { cn } from "@pcle/ui/lib/utils";
 import {
   ButtonGroup,
   ButtonGroupSeparator,
@@ -54,6 +55,60 @@ import type { PreservedRegion } from "@/lib/types";
  * not a line prefix anything toggles into.
  */
 const BLOCK_MARKERS = /^(#{2,3} |- |> |! )/;
+
+/**
+ * What the server accepts, mirrored so a wrong file is refused before it is
+ * sent rather than after a round trip. The server still decides: this list is
+ * pcle_authoring_upload_types() in rest-authoring.php, which sniffs the real
+ * type rather than trusting the name.
+ */
+const ACCEPTED_EXTENSIONS = ["pdf", "doc", "docx", "jpg", "jpeg", "png", "gif", "webp"];
+
+/**
+ * The most one upload may be: bodySizeLimit in next.config.ts, less room for
+ * the rest of the request. Larger files are refused by the framework with an
+ * error that names neither the file nor the limit.
+ */
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024 - 64 * 1024;
+
+/** Why this file will not be sent, or null if it may be. */
+function refusal(file: File): string | null {
+  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+
+  if (!ACCEPTED_EXTENSIONS.includes(extension)) {
+    return `${file.name} is not a file the builder takes — PDF, Word or an image (JPG, PNG, GIF, WebP).`;
+  }
+
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return `${file.name} is over 4 MB, the most one file may be.`;
+  }
+
+  return null;
+}
+
+/** Whether a drag is carrying files, as opposed to text being moved about. */
+function carriesFiles(event: React.DragEvent) {
+  return Array.from(event.dataTransfer.types).includes("Files");
+}
+
+/**
+ * Where in the text a drop at this point lands.
+ *
+ * Chrome and Firefox can answer this for a textarea; Safari cannot yet, and
+ * gets the caret where it already was. Either way the marker lands somewhere
+ * sensible and the author can move it.
+ */
+function offsetAtPoint(textarea: HTMLTextAreaElement, x: number, y: number) {
+  const caretAt = (
+    document as Document & {
+      caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+    }
+  ).caretPositionFromPoint;
+
+  const position = caretAt?.call(document, x, y);
+
+  return position && position.offsetNode === textarea ? position.offset : null;
+}
 
 /**
  * Is this text already wrapped in the marker?
@@ -134,6 +189,30 @@ export default function BodyEditor({
   const [attached, setAttached] = useState<{ token: string; name: string }[]>(
     []
   );
+  const [dropping, setDropping] = useState(false);
+
+  /*
+   * A file dropped just beside the field would otherwise be opened by the
+   * browser in place of this page, taking an unsaved draft with it. Now that
+   * dropping is how files get attached, a near miss has to be harmless.
+   */
+  useEffect(() => {
+    if (nodeId === undefined) return;
+
+    function swallow(event: DragEvent) {
+      if (event.dataTransfer && Array.from(event.dataTransfer.types).includes("Files")) {
+        event.preventDefault();
+      }
+    }
+
+    window.addEventListener("dragover", swallow);
+    window.addEventListener("drop", swallow);
+
+    return () => {
+      window.removeEventListener("dragover", swallow);
+      window.removeEventListener("drop", swallow);
+    };
+  }, [nodeId]);
 
   /** Uncontrolled on purpose: the form posts the textarea, not React state. */
   function notify(textarea: HTMLTextAreaElement) {
@@ -291,37 +370,97 @@ export default function BodyEditor({
   }
 
   /**
-   * Uploads the chosen file and puts its token where the caret was.
+   * Uploads files one after another, each marker going in after the last.
+   *
+   * One at a time rather than all at once: the markers then land in the order
+   * the files were given, and one refused file does not take the others with
+   * it. What went wrong is listed per file, since "2 of 3 attached" is only
+   * useful if it says which one did not.
+   */
+  function uploadFiles(files: File[]) {
+    if (!nodeId || files.length === 0) return;
+
+    const problems = files.map(refusal).filter((problem) => problem !== null);
+    const sendable = files.filter((file) => refusal(file) === null);
+
+    setUploadError(problems.length > 0 ? problems.join(" ") : null);
+
+    if (sendable.length === 0) return;
+
+    startUpload(async () => {
+      const failed: string[] = [];
+
+      for (const file of sendable) {
+        const body = new FormData();
+        body.set("file", file);
+
+        const result = await uploadMediaAction(nodeId, body);
+
+        if (result.error || !result.media) {
+          failed.push(`${file.name}: ${result.error ?? "it could not be attached."}`);
+          continue;
+        }
+
+        const media = result.media;
+        insertLine(media.token);
+        setAttached((current) => [
+          ...current,
+          { token: media.token, name: media.filename },
+        ]);
+      }
+
+      if (failed.length > 0) {
+        setUploadError([...problems, ...failed].join(" "));
+      }
+    });
+  }
+
+  /**
+   * The paperclip's file picker.
    *
    * The input is cleared afterwards so that picking the same file twice still
    * fires a change event — otherwise a failed upload could not be retried
    * without choosing a different file first.
    */
   function onFileChosen(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+    const files = Array.from(event.target.files ?? []);
     event.target.value = "";
+    uploadFiles(files);
+  }
 
-    if (!file || !nodeId) return;
+  /*
+   * Dropping files on the body attaches them, exactly as the paperclip does.
+   * Only a drag carrying files is taken over: dragging a selection of text
+   * from one place in the body to another keeps working as it always has.
+   */
+  function onDragOver(event: React.DragEvent<HTMLTextAreaElement>) {
+    if (!carriesFiles(event)) return;
 
-    setUploadError(null);
+    event.preventDefault();
+    event.dataTransfer.dropEffect = uploading ? "none" : "copy";
+    setDropping(true);
+  }
 
-    startUpload(async () => {
-      const body = new FormData();
-      body.set("file", file);
+  function onDragLeave() {
+    setDropping(false);
+  }
 
-      const result = await uploadMediaAction(nodeId, body);
+  function onDrop(event: React.DragEvent<HTMLTextAreaElement>) {
+    if (!carriesFiles(event)) return;
 
-      if (result.error || !result.media) {
-        setUploadError(result.error ?? "The file could not be attached.");
-        return;
-      }
+    event.preventDefault();
+    setDropping(false);
 
-      insertLine(result.media.token);
-      setAttached((current) => [
-        ...current,
-        { token: result.media!.token, name: result.media!.filename },
-      ]);
-    });
+    if (uploading) return;
+
+    const textarea = event.currentTarget;
+    const offset = offsetAtPoint(textarea, event.clientX, event.clientY);
+
+    if (offset !== null) {
+      textarea.setSelectionRange(offset, offset);
+    }
+
+    uploadFiles(Array.from(event.dataTransfer.files));
   }
 
   return (
@@ -398,22 +537,52 @@ export default function BodyEditor({
         </ToolButton>
       </ButtonGroup>
 
-      <textarea
-        ref={ref}
-        id={id}
-        name={name}
-        rows={rows}
-        defaultValue={defaultValue}
-        spellCheck
-        className="w-full rounded-lg border border-input bg-transparent px-3 py-2 font-mono text-sm leading-relaxed outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-      />
+      <div className="relative">
+        <textarea
+          ref={ref}
+          id={id}
+          name={name}
+          rows={rows}
+          defaultValue={defaultValue}
+          spellCheck
+          aria-describedby={nodeId !== undefined ? `${id}-drop-hint` : undefined}
+          onDragOver={nodeId !== undefined ? onDragOver : undefined}
+          onDragLeave={nodeId !== undefined ? onDragLeave : undefined}
+          onDrop={nodeId !== undefined ? onDrop : undefined}
+          className={cn(
+            "w-full rounded-lg border border-input bg-transparent px-3 py-2 font-mono text-sm leading-relaxed outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+            dropping && "border-zinc-900 bg-zinc-50 ring-3 ring-zinc-900/10"
+          )}
+        />
+
+        {dropping && (
+          // Says what a drop will do before the author lets go.
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center"
+          >
+            <span className="rounded-md bg-zinc-900 px-2.5 py-1 text-xs font-medium text-white shadow">
+              Drop to attach here
+            </span>
+          </div>
+        )}
+      </div>
+
+      {nodeId !== undefined && (
+        <p id={`${id}-drop-hint`} className="mt-1 text-xs text-zinc-500">
+          {uploading
+            ? "Attaching…"
+            : "Drop a PDF, Word document or image on the text to attach it where you let go."}
+        </p>
+      )}
 
       {nodeId !== undefined && (
         <input
           ref={fileRef}
           type="file"
           className="hidden"
-          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.webp"
+          accept={ACCEPTED_EXTENSIONS.map((extension) => `.${extension}`).join(",")}
+          multiple
           onChange={onFileChosen}
           disabled={uploading}
         />

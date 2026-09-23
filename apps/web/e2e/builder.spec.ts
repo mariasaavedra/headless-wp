@@ -263,6 +263,101 @@ test.describe("Reordering by dragging", () => {
   });
 });
 
+test.describe("Attaching a file by dropping it on the body", () => {
+  let wordpress: WordPress;
+  let programme: { id: number; title: string };
+  let lesson: { id: number; title: string };
+
+  test.beforeEach(async () => {
+    wordpress = await WordPress.asAdministrator();
+    programme = await wordpress.createNode("pcle_program", "E2E Drop Programme");
+    const unit = await wordpress.createNode("pcle_unit", "E2E Drop Unit", programme.id);
+    lesson = await wordpress.createNode("pcle_module", "E2E Drop Module", unit.id);
+  });
+
+  test.afterEach(async () => {
+    await wordpress.deleteNode(programme.id, true);
+  });
+
+  /** A 1×1 PNG, small enough to write out here. */
+  const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+  /**
+   * Drops files on the body as a browser would: dragover first, which is what
+   * tells the page a drop is welcome, then the drop itself.
+   */
+  async function dropOnBody(
+    page: import("@playwright/test").Page,
+    files: { name: string; type: string; base64: string }[]
+  ) {
+    const body = page.locator("#node-body");
+    const transfer = await page.evaluateHandle((given) => {
+      const data = new DataTransfer();
+      for (const file of given) {
+        const bytes = Uint8Array.from(atob(file.base64), (c) => c.charCodeAt(0));
+        data.items.add(new File([bytes], file.name, { type: file.type }));
+      }
+      return data;
+    }, files);
+
+    /*
+     * Until the page has hydrated, the field is plain HTML and a dragover goes
+     * unanswered — on CI's production build that window is long enough to
+     * lose. A browser sends dragover continuously while a file hovers, so
+     * sending it again until the field answers is what a real drag does.
+     */
+    await expect(async () => {
+      await body.dispatchEvent("dragover", { dataTransfer: transfer });
+      await expect(page.getByText("Drop to attach here")).toBeVisible({ timeout: 500 });
+    }).toPass();
+    await body.dispatchEvent("drop", { dataTransfer: transfer });
+  }
+
+  test("a dropped image is attached and its marker put in the body", async ({
+    page,
+  }) => {
+    await signIn(page, people.instructor);
+    await page.goto(`/builder/nodes/${lesson.id}`);
+
+    await dropOnBody(page, [{ name: "diagram.png", type: "image/png", base64: PNG }]);
+
+    await expect(page.locator("#node-body")).toHaveValue(/\[\[media:\d+\]\]/);
+    await expect(page.getByText("Attached to this page.")).toBeVisible();
+    await expect(page.getByText(/— diagram(-\d+)?\.png/)).toBeVisible();
+  });
+
+  test("several files go in one after another", async ({ page }) => {
+    await signIn(page, people.instructor);
+    await page.goto(`/builder/nodes/${lesson.id}`);
+
+    await dropOnBody(page, [
+      { name: "first.png", type: "image/png", base64: PNG },
+      { name: "second.png", type: "image/png", base64: PNG },
+    ]);
+
+    await expect(page.locator("#node-body")).toHaveValue(
+      /\[\[media:\d+\]\][\s\S]*\[\[media:\d+\]\]/
+    );
+  });
+
+  test("a file the builder does not take is refused before it is sent", async ({
+    page,
+  }) => {
+    await signIn(page, people.instructor);
+    await page.goto(`/builder/nodes/${lesson.id}`);
+    const before = await page.locator("#node-body").inputValue();
+
+    await dropOnBody(page, [
+      { name: "notes.txt", type: "text/plain", base64: btoa("hello") },
+    ]);
+
+    await expect(
+      page.getByRole("alert").filter({ hasText: "notes.txt" })
+    ).toContainText("notes.txt is not a file the builder takes");
+    await expect(page.locator("#node-body")).toHaveValue(before);
+  });
+});
+
 test.describe("Backing up a programme", () => {
   let wordpress: WordPress;
   let programme: { id: number; title: string };
