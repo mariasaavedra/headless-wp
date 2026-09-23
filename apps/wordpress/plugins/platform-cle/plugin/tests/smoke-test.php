@@ -1617,6 +1617,32 @@ pcle_ok( false !== strpos( $rich_stored, '<!-- wp:image -->' ), 'the image is st
 pcle_ok( false !== strpos( $rich_stored, '<!-- wp:embed' ), 'the embed as a native embed block' );
 pcle_ok( false !== strpos( $rich_stored, '[pcle_model_answer]' ), 'and the model answer as its shortcode' );
 
+// Google Drive has no oEmbed endpoint, so its links get our own player.
+pcle_authoring_call(
+	$admin,
+	'PATCH',
+	"/platform-cle/v1/authoring/nodes/{$editable_module}",
+	array( 'body' => '@ https://drive.google.com/file/d/1AbC-d_E2/view?usp=sharing' )
+);
+pcle_ok(
+	false !== strpos( pcle_render_as( $admin, $editable_module ), 'src="https://drive.google.com/file/d/1AbC-d_E2/preview"' ),
+	'a Drive link renders as the Drive preview player'
+);
+pcle_eq(
+	trim( pcle_rest_get( $admin, "/platform-cle/v1/authoring/nodes/{$editable_module}" )->get_data()['body'] ),
+	'@ https://drive.google.com/file/d/1AbC-d_E2/view?usp=sharing',
+	'a Drive embed still reads back as authored text'
+);
+
+pcle_authoring_call(
+	$admin,
+	'PATCH',
+	"/platform-cle/v1/authoring/nodes/{$editable_module}",
+	array( 'body' => '@ https://drive.google.com/file/d/1AbC-d_E2/view"onload="alert(1)' )
+);
+pcle_ok( false === strpos( pcle_render_as( $admin, $editable_module ), 'onload' ), 'nothing after the Drive file ID reaches the markup' );
+wp_set_current_user( 0 );
+
 // The client still cannot smuggle markup in through the new syntax.
 pcle_authoring_call(
 	$admin,
