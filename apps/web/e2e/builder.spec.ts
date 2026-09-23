@@ -146,3 +146,66 @@ test.describe("Previewing as a participant", () => {
     await expect(page).toHaveURL(new RegExp(`/builder/programs/${programme.id}$`));
   });
 });
+
+test.describe("Backing up a programme", () => {
+  let wordpress: WordPress;
+  let programme: { id: number; title: string };
+  let restoredId: number | null = null;
+
+  test.beforeAll(async () => {
+    wordpress = await WordPress.asAdministrator();
+    programme = await wordpress.firstProgramme();
+  });
+
+  test.afterAll(async () => {
+    if (restoredId) {
+      await wordpress.deleteNode(restoredId, true);
+    }
+  });
+
+  test("a backup downloads, and restores as a new draft", async ({ page }) => {
+    await signIn(page, people.instructor);
+    await page.goto(`/builder/programs/${programme.id}`);
+
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      // Role "button": the Button component keeps it, even rendered as a link.
+      page.getByRole("button", { name: "Download backup" }).click(),
+    ]);
+
+    expect(download.suggestedFilename()).toMatch(/-backup-\d{4}-\d{2}-\d{2}\.json$/);
+    const file = await download.path();
+
+    await page.goto("/builder");
+    await page.getByText("Restore from a backup").click();
+    await page.getByLabel("Backup file").setInputFiles(file);
+    await page.getByRole("button", { name: "Restore as a new programme" }).click();
+
+    /*
+     * A new programme, not the one the backup came from: the restore opens
+     * it, and its id is not the original's.
+     */
+    await expect(page).toHaveURL(/\/builder\/programs\/\d+$/);
+    restoredId = Number(page.url().split("/").pop());
+    expect(restoredId).not.toBe(programme.id);
+
+    await expect(page.getByRole("heading", { name: programme.title })).toBeVisible();
+    await expect(page.getByText("Draft", { exact: true }).first()).toBeVisible();
+  });
+
+  test("a file that is not a backup is refused, and says so", async ({ page }) => {
+    await signIn(page, people.instructor);
+    await page.goto("/builder");
+    await page.getByText("Restore from a backup").click();
+    await page.getByLabel("Backup file").setInputFiles({
+      name: "notes.json",
+      mimeType: "application/json",
+      buffer: Buffer.from('{"hello":"world"}'),
+    });
+    await page.getByRole("button", { name: "Restore as a new programme" }).click();
+
+    // By text: Next's route announcer is an alert too.
+    await expect(page.getByText(/not a programme backup/)).toBeVisible();
+    await expect(page).toHaveURL(/\/builder$/);
+  });
+});

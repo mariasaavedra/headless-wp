@@ -37,6 +37,21 @@ re-saves cleanly in wp-admin.
    or unpublish; and set credit hours on the programme.
 4. Clicking any node opens its editor — the body, and for a quiz its questions
    and pass mark.
+5. Every programme, and every item in it, says who created it and who last
+   edited it (hover over a row in the tree; it is written out on the item's page).
+
+### Backups
+
+On a programme's page in the builder, **Download backup** saves the whole
+programme — units, modules, sessions, scenarios, templates, quizzes with their
+questions, bodies and credit hours — as one `.json` file. Drafts are included.
+Enrolments, progress and quiz attempts are not: those are records about people.
+Attached files are listed by address, not copied into the file.
+
+To restore, open **/builder → Restore from a backup** and choose the file. It
+always comes back as a **new draft programme** with nobody enrolled; nothing that
+exists is changed. Backups carry a version number, so files taken today still
+restore after the builder changes.
 
 You never type WordPress markup. The builder sends plain text and the server
 constructs the markup, which is also why an instructor cannot accidentally paste

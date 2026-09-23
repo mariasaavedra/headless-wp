@@ -449,6 +449,31 @@ async function createNode(input: {
   }) as Promise<TreeNode>;
 }
 
+/**
+ * A whole programme as a backup file's contents.
+ *
+ * Left as `unknown` on purpose: the app never reads inside a backup. It
+ * carries the file from WordPress to the author and back, and the plugin is
+ * the only thing that knows — and versions — what is in it.
+ */
+async function exportProgram(id: number): Promise<unknown> {
+  return wordpressFetch(`/platform-cle/v1/authoring/programs/${id}/export`, {
+    auth: true,
+  });
+}
+
+/** Restores a backup as a new, draft programme. */
+async function importProgram(
+  backup: unknown
+): Promise<{ id: number; title: string; items: number }> {
+  return wordpressFetch("/platform-cle/v1/authoring/programs/import", {
+    auth: true,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(backup),
+  }) as Promise<{ id: number; title: string; items: number }>;
+}
+
 /** Only the fields present are sent, so nothing unsent gets blanked. */
 async function updateNode(
   id: number,
@@ -525,6 +550,8 @@ export {
   getAuthoringPrograms,
   getNode,
   getProgramTree,
+  exportProgram,
+  importProgram,
   uploadNodeMedia,
   createNode,
   updateNode,

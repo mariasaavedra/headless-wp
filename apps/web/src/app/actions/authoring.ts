@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import type {
   NodeType,
@@ -11,6 +12,7 @@ import type {
 import {
   createNode,
   deleteNode,
+  importProgram,
   reorderChildren,
   updateNode,
   uploadNodeMedia,
@@ -490,8 +492,72 @@ async function uploadMediaAction(
   }
 }
 
+/** The most a backup file may be; see bodySizeLimit in next.config.ts. */
+const MAX_BACKUP_BYTES = 4 * 1024 * 1024;
+
+/**
+ * Restores a programme backup as a new, draft programme, and opens it.
+ *
+ * The app does not look inside the file beyond parsing it: the plugin
+ * decides whether it is a backup, whether it is a version it can read, and
+ * whether everything in it may sit where it says. This turns its refusals
+ * into sentences an author can act on.
+ */
+async function restoreProgramAction(
+  _prev: BuilderActionState,
+  formData: FormData
+): Promise<BuilderActionState> {
+  const file = formData.get("backup");
+
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "Choose a backup file to restore." };
+  }
+
+  if (file.size > MAX_BACKUP_BYTES) {
+    return { error: "That file is larger than a programme backup can be." };
+  }
+
+  let backup: unknown;
+
+  try {
+    backup = JSON.parse(await file.text());
+  } catch {
+    return { error: "That file is not a programme backup." };
+  }
+
+  let restored: { id: number };
+
+  try {
+    restored = await importProgram(backup);
+  } catch (error) {
+    if (error instanceof WordPressApiError) {
+      if (error.code === "pcle_backup_too_new") {
+        return {
+          error:
+            "That backup was made by a newer version of the platform. It can be restored once this one is updated.",
+        };
+      }
+
+      if (error.code === "pcle_backup_invalid") {
+        return {
+          error:
+            "That file is not a programme backup this platform can read. Nothing was restored.",
+        };
+      }
+    }
+
+    return { error: describe(error) };
+  }
+
+  refresh();
+
+  // Outside the try: redirect() works by throwing, and must not be caught.
+  redirect(`/builder/programs/${restored.id}`);
+}
+
 export {
   createNodeAction,
+  restoreProgramAction,
   uploadMediaAction,
   saveQuizAction,
   createProgramAction,

@@ -94,6 +94,18 @@ export default async function BuilderProgramPage({
             Cohort report
           </Button>
 
+          {/*
+            A plain link, not <Link>: the answer is a file to save, and
+            client-side navigation would try to render it as a page.
+          */}
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={<a href={`/builder/programs/${tree.id}/backup`} download />}
+          >
+            Download backup
+          </Button>
+
           <ActionForm action={setStatusAction}>
             <input type="hidden" name="id" value={tree.id} />
             <input

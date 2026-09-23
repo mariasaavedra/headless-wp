@@ -195,7 +195,7 @@ Dependency-free, exits non-zero on failure, and runs in CI on every push
 npm run test:e2e --workspace=apps/web
 ```
 
-41 Playwright tests covering signing in, what each role is offered,
+44 Playwright tests covering signing in, what each role is offered,
 managing a cohort, the builder, and the participant's path from My Training
 through a module to a quiz — against the same running WordPress, because what they
 check is precisely what depends on it. They sign in as the demo accounts

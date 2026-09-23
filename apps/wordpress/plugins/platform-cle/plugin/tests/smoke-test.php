@@ -2832,6 +2832,134 @@ pcle_eq( pcle_rest_curriculum_as( $instructor, "/platform-cle/v1/modules/{$marki
 wp_set_current_user( 0 );
 
 /* ------------------------------------------------------------------ */
+/* Programme backups                                                  */
+/* ------------------------------------------------------------------ */
+pcle_section( '# Programme backups' );
+
+// A programme with one of everything the file has to carry.
+$bk_prog     = pcle_make_post( 'pcle_program', 'TEST Backup Programme' );
+$bk_unit     = pcle_make_post( 'pcle_unit', 'TEST Backup Unit', array( '_pcle_program_id' => $bk_prog ) );
+$bk_unit2    = pcle_make_post( 'pcle_unit', 'TEST Backup Unit Two', array( '_pcle_program_id' => $bk_prog ) );
+$bk_module   = pcle_make_post( 'pcle_module', 'TEST Backup Module', array( '_pcle_unit_id' => $bk_unit ), '<!-- wp:paragraph --><p>Backed-up body.</p><!-- /wp:paragraph -->' );
+$bk_event    = pcle_make_post( 'pcle_event', 'TEST Backup Session', array( '_pcle_unit_id' => $bk_unit, PCLE_EVENT_DATETIME_META => '2026-10-01 18:00:00' ) );
+$bk_quiz     = pcle_make_post( 'pcle_quiz', 'TEST Backup Quiz', array( '_pcle_module_id' => $bk_module ) );
+$bk_scenario = pcle_make_post( 'pcle_scenario', 'TEST Backup Scenario', array( '_pcle_module_id' => $bk_module ) );
+wp_update_post( array( 'ID' => $bk_scenario, 'post_status' => 'draft' ) );
+wp_update_post( array( 'ID' => $bk_unit, 'menu_order' => 1 ) );
+wp_update_post( array( 'ID' => $bk_unit2, 'menu_order' => 2 ) );
+update_post_meta( $bk_prog, pcle_credit_hours_meta_key( array_key_first( pcle_jurisdictions() ) ), 2.5 );
+pcle_set_quiz_questions( $bk_quiz, array(
+	array( 'key' => 'q1', 'prompt' => 'Backed-up question', 'type' => 'single',
+		'choices' => array( array( 'key' => 'a', 'text' => 'Right', 'correct' => true ), array( 'key' => 'b', 'text' => 'Wrong' ) ) ),
+) );
+update_post_meta( $bk_quiz, PCLE_QUIZ_PASS_MARK_META, 80 );
+update_post_meta( $bk_quiz, PCLE_QUIZ_GATES_META, 1 );
+pcle_enroll_user( $bk_prog, $student );
+array_push( $created_posts, $bk_prog, $bk_unit, $bk_unit2, $bk_module, $bk_event, $bk_quiz, $bk_scenario );
+
+$export_route = "/platform-cle/v1/authoring/programs/{$bk_prog}/export";
+pcle_eq( pcle_rest_status( 0, $export_route ), 401, 'anonymous cannot take a backup' );
+pcle_eq( pcle_rest_status( $student, $export_route ), 403, 'nor can a participant' );
+
+$export = pcle_authoring_call( $instructor, 'GET', $export_route );
+pcle_eq( $export->get_status(), 200, 'an instructor takes a backup' );
+
+// Through JSON and back, exactly as a downloaded file would travel.
+$file = json_decode( wp_json_encode( $export->get_data() ), true );
+pcle_eq( $file['format'], PCLE_BACKUP_FORMAT, 'the file says what it is' );
+pcle_eq( $file['version'], PCLE_BACKUP_VERSION, 'and which version' );
+pcle_eq( $file['programme']['type'], 'programme', 'types have neutral names, not post types' );
+pcle_eq( wp_list_pluck( $file['programme']['children'], 'title' ), array( 'TEST Backup Unit', 'TEST Backup Unit Two' ), 'children are in curriculum order' );
+pcle_eq( array_keys( $file ), array( 'format', 'version', 'exported_at', 'exported_by', 'site', 'programme' ), 'the file carries the programme and nothing about its people' );
+
+// Restoring.
+$import_route = '/platform-cle/v1/authoring/programs/import';
+
+/**
+ * Posts a backup file's contents to the import route.
+ *
+ * @param int   $uid  User to run as.
+ * @param mixed $data File contents.
+ * @return WP_REST_Response
+ */
+function pcle_rest_import_as( $uid, $data ) {
+	wp_set_current_user( $uid );
+	$request = new WP_REST_Request( 'POST', '/platform-cle/v1/authoring/programs/import' );
+	$request->set_header( 'Content-Type', 'application/json' );
+	$request->set_body( wp_json_encode( $data ) );
+
+	return rest_do_request( $request );
+}
+
+pcle_eq( pcle_rest_import_as( $student, $file )->get_status(), 403, 'a participant cannot restore a backup' );
+
+$restored = pcle_rest_import_as( $instructor, $file );
+pcle_eq( $restored->get_status(), 201, 'an instructor restores it' );
+$new_prog = (int) $restored->get_data()['id'];
+$created_posts[] = $new_prog;
+foreach ( pcle_authoring_descendants( $new_prog ) as $restored_child ) {
+	$created_posts[] = (int) $restored_child->ID;
+}
+
+pcle_ok( $new_prog && $new_prog !== $bk_prog, 'as a new programme, not over the old one' );
+pcle_eq( get_post_status( $new_prog ), 'draft', 'which comes back as a draft' );
+pcle_eq( $restored->get_data()['items'], 7, 'with every item' );
+pcle_eq( pcle_get_program_enrollee_ids( $new_prog ), array(), 'and nobody enrolled in it' );
+pcle_eq( pcle_get_credit_hours( $new_prog ), pcle_get_credit_hours( $bk_prog ), 'credit hours survive' );
+
+// The restored programme exports to the same file, bar ids and the programme's status.
+$strip = function ( $node ) use ( &$strip ) {
+	unset( $node['source_id'], $node['attachments'] );
+	$node['children'] = array_map( $strip, $node['children'] );
+	return $node;
+};
+$again         = json_decode( wp_json_encode( pcle_authoring_call( $instructor, 'GET', "/platform-cle/v1/authoring/programs/{$new_prog}/export" )->get_data() ), true );
+$first_tree    = $strip( $file['programme'] );
+$restored_tree = $strip( $again['programme'] );
+unset( $first_tree['status'], $restored_tree['status'] );
+pcle_eq( $restored_tree, $first_tree, 'everything else round-trips exactly: titles, order, bodies, quiz, session, drafts' );
+
+// Refusals, and that a refused restore leaves nothing behind.
+$programme_count = function () {
+	return count( get_posts( array( 'post_type' => 'pcle_program', 'post_status' => 'any', 'posts_per_page' => -1, 'fields' => 'ids' ) ) );
+};
+$before = $programme_count();
+
+pcle_eq( pcle_rest_import_as( $instructor, array( 'format' => 'something-else' ) )->get_status(), 400, 'a file that is not a backup is refused' );
+
+$too_new            = $file;
+$too_new['version'] = PCLE_BACKUP_VERSION + 1;
+$too_new_response   = pcle_rest_import_as( $instructor, $too_new );
+pcle_eq( $too_new_response->get_status(), 400, 'a backup from a newer platform is refused' );
+pcle_eq( $too_new_response->get_data()['code'], 'pcle_backup_too_new', 'and says so' );
+
+$misplaced                                = $file;
+$misplaced['programme']['children'][0]['children'][0]['type'] = 'unit'; // A unit inside a unit.
+pcle_eq( pcle_rest_import_as( $instructor, $misplaced )->get_status(), 400, 'an item in a place it cannot be is refused' );
+
+$unknown                                     = $file;
+$unknown['programme']['children'][1]['type'] = 'podcast';
+pcle_eq( pcle_rest_import_as( $instructor, $unknown )->get_status(), 400, 'a kind of item the platform does not know is refused' );
+
+pcle_eq( $programme_count(), $before, 'no refused restore created anything' );
+
+// A file is anyone's to edit, so it is filtered like the builder is.
+$hostile                                   = $file;
+$hostile['programme']['children'][0]['children'][0]['content'] = '<p>Fine.</p><script>alert(1)</script>';
+$hostile_prog                              = (int) pcle_rest_import_as( $instructor, $hostile )->get_data()['id'];
+$created_posts[]                           = $hostile_prog;
+$hostile_descendants                       = pcle_authoring_descendants( $hostile_prog );
+foreach ( $hostile_descendants as $restored_child ) {
+	$created_posts[] = (int) $restored_child->ID;
+}
+$hostile_module = wp_list_filter( $hostile_descendants, array( 'post_type' => 'pcle_module' ) );
+pcle_ok( false === strpos( reset( $hostile_module )->post_content, '<script' ), 'a script in a backup does not survive an instructor restoring it' );
+
+// Older files are brought forward before anything reads them.
+pcle_eq( pcle_backup_migrate( $file )['version'], PCLE_BACKUP_VERSION, 'a current file passes through migration unchanged' );
+wp_set_current_user( 0 );
+
+/* ------------------------------------------------------------------ */
 /* Teardown                                                           */
 /* ------------------------------------------------------------------ */
 foreach ( $created_posts as $pid ) {

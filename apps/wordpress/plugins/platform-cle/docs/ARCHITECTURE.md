@@ -46,11 +46,12 @@ comes first because everything storage-backed depends on the tables existing).
 | `includes/reports.php` | Cohort reporting + CSV export, built from queries rather than per-user loops. |
 | `includes/authoring-content.php` | Turns authored plain text into Gutenberg block markup server-side. |
 | `includes/rest-authoring.php` | Authoring REST API — the curriculum as the builder sees it. |
+| `includes/backup.php` | Programme backups: versioned export, migration, all-or-nothing restore. |
 | `includes/demo-data.php` | Sample-data seeder internals. |
 | `uninstall.php` | Removes roles and records on uninstall. |
 | `bin/seed-demo.php` | Sample data (idempotent). |
 | `bin/setup-front-door.php` | Creates the "My Training" page + menu link. |
-| `tests/smoke-test.php` | Dependency-free smoke suite — 586 assertions across 36 sections. |
+| `tests/smoke-test.php` | Dependency-free smoke suite — 654 assertions across 39 sections. |
 
 ## 1. Custom Post Types
 
@@ -321,6 +322,25 @@ Routes: `/authoring/programs`, `/authoring/programs/<id>/tree`,
 
 A DELETE that would orphan descendants is **refused** with the list of them unless
 the caller passes `cascade`.
+
+**Authorship.** Every shape carries `created_by`/`created_at` (the post author and
+date) and `edited_by`/`edited_at`. The editor is `_edit_last`, the key wp-admin
+writes, recorded on `save_post` for every authorable type; writes that only touch
+meta go through `wp_update_post()` too so they count. `edited_by` is null for
+content last changed before this was recorded — never a guess.
+
+**Backups** (`backup.php`). `GET /authoring/programs/<id>/export` returns the
+programme as `{format: "platform-cle/programme", version, programme: {type, title,
+status, excerpt, content, children, …}}` with neutral type names (`unit`,
+`session`, …) and children in curriculum order. `POST /authoring/programs/import`
+takes that body back and creates a **new draft programme**; it never overwrites.
+The file is migrated to the current version first (`pcle_backup_migrations()`,
+one step per version), refused if newer than the plugin, validated whole before
+the first write, and rolled back if a write fails. Content is `wp_kses_post`ed
+unless the restorer holds `unfiltered_html`; quiz questions, hours and dates go
+through the builder's own sanitisers. **When the stored shape changes, bump
+`PCLE_BACKUP_VERSION` and add the migration step** — that is what keeps old files
+restorable.
 
 ## Storage keys summary
 
