@@ -166,6 +166,51 @@ async function logout(): Promise<void> {
   await clearAuthCookie();
 }
 
+/** The signed-in person's own account. */
+type Account = {
+  id: number;
+  username: string;
+  display_name: string;
+  email: string;
+};
+
+async function getAccount(): Promise<Account> {
+  return wordpressFetch("/platform-cle/v1/account", {
+    auth: true,
+  }) as Promise<Account>;
+}
+
+async function changeUsername(
+  username: string,
+  currentPassword: string
+): Promise<Account> {
+  return wordpressFetch("/platform-cle/v1/account/username", {
+    auth: true,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, current_password: currentPassword }),
+  }) as Promise<Account>;
+}
+
+/**
+ * Changes the password. Every token issued so far stops working, this
+ * session's included — the caller signs in again with the new one.
+ */
+async function changePassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<void> {
+  await wordpressFetch("/platform-cle/v1/account/password", {
+    auth: true,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+  });
+}
+
 async function getMyTraining(): Promise<{ programs: TrainingProgram[] }> {
   return wordpressFetch("/platform-cle/v1/my-training", {
     auth: true,
@@ -557,6 +602,11 @@ export {
   updateNode,
   deleteNode,
   reorderChildren,
+  getAccount,
+  changeUsername,
+  changePassword,
   WordPressAuthError,
   WordPressApiError,
 };
+
+export type { Account };

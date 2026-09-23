@@ -183,6 +183,38 @@ class WordPress {
     return (await response.json()) as { id: number; title: string };
   }
 
+  /**
+   * A throwaway account with a known password, for tests that change one.
+   * The demo accounts are shared by every other test and must not move.
+   */
+  async createUser(
+    username: string,
+    password: string
+  ): Promise<{ id: number; username: string; password: string }> {
+    const response = await this.api.post(`${API}/wp/v2/users`, {
+      headers: this.headers,
+      data: {
+        username,
+        password,
+        email: `${username}@example.test`,
+        roles: ["pcle_student"],
+      },
+    });
+
+    if (!response.ok()) {
+      throw new Error(`Could not create ${username}: ${await response.text()}`);
+    }
+
+    const { id } = (await response.json()) as { id: number };
+    return { id, username, password };
+  }
+
+  async deleteUser(id: number): Promise<void> {
+    await this.api.delete(`${API}/wp/v2/users/${id}?force=true&reassign=1`, {
+      headers: this.headers,
+    });
+  }
+
   /** `cascade` takes everything under it too — needed for a whole programme. */
   async deleteNode(id: number, cascade = false): Promise<void> {
     await this.api.delete(

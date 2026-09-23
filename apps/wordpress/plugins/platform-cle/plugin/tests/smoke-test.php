@@ -3066,6 +3066,112 @@ pcle_eq( pcle_backup_migrate( $file )['version'], PCLE_BACKUP_VERSION, 'a curren
 wp_set_current_user( 0 );
 
 /* ------------------------------------------------------------------ */
+/* One's own account                                                  */
+/* ------------------------------------------------------------------ */
+/*
+ * Changing your own username and password. Both ask for the current
+ * password, and a new password signs every other session out.
+ */
+pcle_section( '# Account' );
+
+$account_login   = 'pcle_test_account_' . strtolower( wp_generate_password( 5, false ) );
+$account_pass    = 'first-password-' . wp_generate_password( 8, false );
+$account_user    = wp_insert_user(
+	array(
+		'user_login' => $account_login,
+		'user_email' => 'test+' . wp_generate_password( 6, false ) . '@example.test',
+		'user_pass'  => $account_pass,
+		'role'       => 'pcle_student',
+	)
+);
+$created_users[] = $account_user;
+
+/**
+ * Posts to an account route as a given user.
+ *
+ * @param int    $uid   User.
+ * @param string $route Route under /platform-cle/v1/account.
+ * @param array  $body  Parameters.
+ * @return WP_REST_Response
+ */
+function pcle_account_call( $uid, $route, $body ) {
+	// A fresh user object each call, as each real request would have.
+	wp_set_current_user( 0 );
+	wp_set_current_user( $uid );
+	$request = new WP_REST_Request( 'POST', '/platform-cle/v1/account' . $route );
+	foreach ( $body as $key => $value ) {
+		$request->set_param( $key, $value );
+	}
+	return rest_do_request( $request );
+}
+
+wp_set_current_user( 0 );
+pcle_eq( rest_do_request( new WP_REST_Request( 'GET', '/platform-cle/v1/account' ) )->get_status(), 401, 'nobody signed in has no account to read' );
+wp_set_current_user( $account_user );
+pcle_eq( rest_do_request( new WP_REST_Request( 'GET', '/platform-cle/v1/account' ) )->get_data()['username'], $account_login, 'a person reads their own username' );
+
+// Username.
+$renamed = $account_login . '.renamed';
+pcle_eq( pcle_account_call( $account_user, '/username', array( 'username' => $renamed, 'current_password' => 'wrong' ) )->get_status(), 403, 'a username change without the current password is refused' );
+pcle_eq( pcle_account_call( $account_user, '/username', array( 'username' => get_userdata( $student )->user_login, 'current_password' => $account_pass ) )->get_status(), 409, "someone else's username is refused" );
+pcle_eq( pcle_account_call( $account_user, '/username', array( 'username' => 'has space', 'current_password' => $account_pass ) )->get_status(), 400, 'a username with a space is refused' );
+pcle_eq( pcle_account_call( $account_user, '/username', array( 'username' => 'me@example.test', 'current_password' => $account_pass ) )->get_status(), 400, 'a username shaped like an email is refused' );
+
+$rename = pcle_account_call( $account_user, '/username', array( 'username' => $renamed, 'current_password' => $account_pass ) );
+pcle_eq( $rename->get_status(), 200, 'a username can be changed' );
+pcle_eq( $rename->get_data()['username'], $renamed, 'and the response says what it is now' );
+pcle_eq( (int) username_exists( $renamed ), (int) $account_user, 'the new username finds the account' );
+pcle_ok( ! username_exists( $account_login ), 'the old one finds nothing' );
+pcle_ok( ! is_wp_error( wp_authenticate( $renamed, $account_pass ) ), 'and signing in with the new username works' );
+pcle_ok( is_wp_error( wp_authenticate( $account_login, $account_pass ) ), 'while the old username no longer signs in' );
+
+// Password.
+$new_pass = 'second-password-' . wp_generate_password( 8, false );
+pcle_eq( pcle_account_call( $account_user, '/password', array( 'current_password' => 'wrong', 'new_password' => $new_pass ) )->get_status(), 403, 'a password change without the current password is refused' );
+pcle_eq( pcle_account_call( $account_user, '/password', array( 'current_password' => $account_pass, 'new_password' => 'short' ) )->get_status(), 400, 'a short password is refused' );
+pcle_eq( pcle_account_call( $account_user, '/password', array( 'current_password' => $account_pass, 'new_password' => $account_pass ) )->get_status(), 400, 'the same password is refused' );
+pcle_eq( pcle_account_call( $account_user, '/password', array( 'current_password' => $account_pass, 'new_password' => $renamed ) )->get_status(), 400, 'the username as a password is refused' );
+
+/**
+ * A bearer token for this user and generation, as the JWT plugin would issue.
+ * The signature is not checked by the code under test, so it is left empty.
+ *
+ * @param int $uid        User.
+ * @param int $generation Generation claim.
+ * @return string Authorization header value.
+ */
+function pcle_bearer_for( $uid, $generation ) {
+	$encode = static function ( $data ) {
+		return rtrim( strtr( base64_encode( wp_json_encode( $data ) ), '+/', '-_' ), '=' ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode
+	};
+
+	return 'Bearer ' . $encode( array( 'alg' => 'HS256' ) ) . '.' . $encode( array( 'data' => array( 'user' => array( 'id' => $uid, 'gen' => $generation ) ) ) ) . '.sig';
+}
+
+$generation_before = pcle_token_generation( $account_user );
+$_SERVER['HTTP_AUTHORIZATION'] = pcle_bearer_for( $account_user, $generation_before );
+pcle_eq( pcle_refuse_stale_tokens( $account_user ), $account_user, 'a current token is honoured' );
+
+$changed = pcle_account_call( $account_user, '/password', array( 'current_password' => $account_pass, 'new_password' => $new_pass ) );
+pcle_eq( $changed->get_status(), 200, 'a password can be changed' );
+pcle_ok( ! is_wp_error( wp_authenticate( $renamed, $new_pass ) ), 'the new password signs in' );
+pcle_ok( is_wp_error( wp_authenticate( $renamed, $account_pass ) ), 'the old one does not' );
+pcle_eq( pcle_token_generation( $account_user ), $generation_before + 1, 'the token generation moved on' );
+pcle_eq( pcle_refuse_stale_tokens( $account_user ), false, 'so a token issued before the change no longer signs anyone in' );
+
+$_SERVER['HTTP_AUTHORIZATION'] = pcle_bearer_for( $account_user, $generation_before + 1 );
+pcle_eq( pcle_refuse_stale_tokens( $account_user ), $account_user, 'while one issued after it does' );
+
+$_SERVER['HTTP_AUTHORIZATION'] = pcle_bearer_for( $student, 0 );
+pcle_eq( pcle_refuse_stale_tokens( $account_user ), $account_user, "another user's token is not this check's business" );
+
+$stamped = pcle_stamp_token_generation( array( 'data' => array( 'user' => array( 'id' => $account_user ) ) ), get_userdata( $account_user ) );
+pcle_eq( $stamped['data']['user']['gen'], $generation_before + 1, 'new tokens carry the current generation' );
+
+unset( $_SERVER['HTTP_AUTHORIZATION'] );
+wp_set_current_user( 0 );
+
+/* ------------------------------------------------------------------ */
 /* Teardown                                                           */
 /* ------------------------------------------------------------------ */
 pcle_smoke_teardown();

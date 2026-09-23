@@ -69,7 +69,18 @@ export default async function PageShell({
             </Button>
           ))}
 
-          <form action={logoutAction} className="ml-auto">
+          {/* Everyone's, whatever their role, so it sits with Log out rather than in pathsFor(). */}
+          <Button
+            variant="link"
+            size="sm"
+            className="ml-auto px-0 text-zinc-500"
+            nativeButton={false}
+            render={<Link href="/account" />}
+          >
+            Account
+          </Button>
+
+          <form action={logoutAction}>
             <Button
               type="submit"
               variant="link"
