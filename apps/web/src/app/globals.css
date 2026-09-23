@@ -110,6 +110,16 @@ body {
   height: auto;
 }
 
+/*
+ * Embedded players (YouTube, Vimeo, Google Drive) arrive with a fixed 640px
+ * width, which overflows a phone. Fill the column and keep the video's shape.
+ */
+.wp-content iframe {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+}
+
 .wp-content table {
   display: block;
   overflow-x: auto;

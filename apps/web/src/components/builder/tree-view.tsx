@@ -1,5 +1,7 @@
+import { decodeEntities } from "@/lib/html";
 import { NODE_LABELS } from "@/components/builder/node-labels";
 import NodeRow from "@/components/builder/node-row";
+import SortableGroup from "@/components/builder/sortable-group";
 import type { NodeType, TreeNode } from "@/lib/types";
 
 /**
@@ -31,18 +33,23 @@ export default function TreeView({ node }: { node: TreeNode }) {
             {NODE_LABELS[group.type].plural}
           </h3>
 
-          <ul>
-            {group.items.map((child) => (
-              <NodeRow
-                key={child.id}
-                node={child}
-                parentId={node.id}
-                siblingIds={group.items.map((item) => item.id)}
-              >
-                <TreeView node={child} />
-              </NodeRow>
-            ))}
-          </ul>
+          <SortableGroup
+            parentId={node.id}
+            childType={group.type}
+            rows={group.items.map((child) => ({
+              id: child.id,
+              label: decodeEntities(child.title),
+              content: (
+                <NodeRow
+                  node={child}
+                  parentId={node.id}
+                  siblingIds={group.items.map((item) => item.id)}
+                >
+                  <TreeView node={child} />
+                </NodeRow>
+              ),
+            }))}
+          />
         </section>
       ))}
     </div>

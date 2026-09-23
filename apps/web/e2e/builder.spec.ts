@@ -145,6 +145,122 @@ test.describe("Previewing as a participant", () => {
 
     await expect(page).toHaveURL(new RegExp(`/builder/programs/${programme.id}$`));
   });
+
+  test("a programme still in draft can be previewed", async ({ page }) => {
+    // Everything the builder creates starts as a draft; preview used to 404 on it.
+    const draft = await wordpress.createNode("pcle_program", "E2E Draft Programme");
+    const unit = await wordpress.createNode("pcle_unit", "E2E Draft Unit", draft.id);
+
+    try {
+      await signIn(page, people.instructor);
+      await page.goto(`/builder/programs/${draft.id}`);
+      await page.getByRole("button", { name: "Preview as participant" }).click();
+
+      await expect(page).toHaveURL(new RegExp(`/programs/${draft.id}\\?preview=1$`));
+      await expect(page.getByRole("heading", { name: draft.title })).toBeVisible();
+      await expect(page.getByText(unit.title)).toBeVisible();
+    } finally {
+      await wordpress.deleteNode(draft.id, true);
+    }
+  });
+});
+
+test.describe("Reordering by dragging", () => {
+  let wordpress: WordPress;
+  let programme: { id: number; title: string };
+  let units: { id: number; title: string }[];
+
+  test.beforeEach(async () => {
+    wordpress = await WordPress.asAdministrator();
+    programme = await wordpress.createNode("pcle_program", "E2E Drag Programme");
+    units = [];
+    for (const name of ["E2E Unit A", "E2E Unit B", "E2E Unit C"]) {
+      units.push(await wordpress.createNode("pcle_unit", name, programme.id));
+    }
+  });
+
+  test.afterEach(async () => {
+    await wordpress.deleteNode(programme.id, true);
+  });
+
+  async function unitOrder(): Promise<string[]> {
+    const tree = await wordpress.tree(programme.id);
+    return (tree.children ?? [])
+      .filter((child) => child.type === "pcle_unit")
+      .map((child) => child.title);
+  }
+
+  test("a unit dragged down by its grip stays where it was put", async ({
+    page,
+  }) => {
+    await signIn(page, people.instructor);
+    await page.goto(`/builder/programs/${programme.id}`);
+
+    const grip = page.getByRole("button", { name: "Drag to reorder E2E Unit A" });
+    const c = page.getByRole("button", { name: "Drag to reorder E2E Unit C" });
+
+    const from = await grip.boundingBox();
+    const to = await c.boundingBox();
+    if (!from || !to) {
+      throw new Error("The grips are not on screen.");
+    }
+
+    // In steps: the drag only starts after a few pixels of travel.
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(from.x + from.width / 2, to.y + to.height / 2 + 4, { steps: 12 });
+    await page.mouse.up();
+
+    await expect
+      .poll(unitOrder)
+      .toEqual(["E2E Unit B", "E2E Unit C", "E2E Unit A"]);
+
+    // And the page agrees after a reload, not just the optimistic render.
+    await page.reload();
+    const grips = page.getByRole("button", { name: /^Drag to reorder E2E Unit/ });
+    await expect(grips.first()).toHaveAccessibleName("Drag to reorder E2E Unit B");
+    await expect(grips.last()).toHaveAccessibleName("Drag to reorder E2E Unit A");
+  });
+
+  test("the keyboard can do it too", async ({ page }) => {
+    await signIn(page, people.instructor);
+    await page.goto(`/builder/programs/${programme.id}`);
+
+    const grip = page.getByRole("button", { name: "Drag to reorder E2E Unit C" });
+    await grip.focus();
+    // Each key waits for what a screen reader would hear before the next.
+    const heard = page.getByRole("status").filter({ hasText: "E2E Unit C" });
+    await page.keyboard.press("Space");
+    await expect(heard).toHaveText("Picked up E2E Unit C, position 3 of 3.");
+    await expect(grip).toHaveAttribute("aria-pressed", "true");
+    /*
+     * dnd-kit measures the list just after pickup, and an arrow pressed before
+     * that finds nowhere to go. No person is that quick; a test is, and there
+     * is no DOM signal for "measured" to wait on instead.
+     */
+    await page.waitForTimeout(250);
+    await page.keyboard.press("ArrowUp");
+    await expect(heard).toHaveText("E2E Unit C moved to position 2 of 3.");
+    await page.keyboard.press("Space");
+    await expect(heard).toHaveText("E2E Unit C dropped at position 2 of 3.");
+
+    await expect
+      .poll(unitOrder)
+      .toEqual(["E2E Unit A", "E2E Unit C", "E2E Unit B"]);
+  });
+
+  test("a row alone in its list has no grip", async ({ page }) => {
+    const only = await wordpress.createNode("pcle_module", "E2E Only Module", units[0].id);
+
+    await signIn(page, people.instructor);
+    await page.goto(`/builder/programs/${programme.id}`);
+    await page.getByRole("button", { name: "Expand E2E Unit A" }).click();
+
+    await expect(page.getByText(only.title)).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: `Drag to reorder ${only.title}` })
+    ).toHaveCount(0);
+  });
 });
 
 test.describe("Attaching a file by dropping it on the body", () => {
