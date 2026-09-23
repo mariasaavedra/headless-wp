@@ -8,7 +8,7 @@ How to operate the platform from the WordPress dashboard.
 
 | Role | Can |
 |---|---|
-| **CLE Student** | View the content of programs they are **enrolled** in, mark modules as complete, reveal model answers. |
+| **CLE Student** | View the content of programs they are **enrolled** in, reveal model answers. Their modules are marked complete by an instructor. |
 | **CLE Instructor** | Everything a student can + create/edit the curriculum (in the builder or wp-admin), publish Case Updates, enroll students, mark attendance, and view progress and cohort reports. |
 | **Administrator** | Full access. |
 
@@ -105,8 +105,11 @@ be sat.
 1. Log in.
 2. **My Training** shows a card for each program they're enrolled in, with its progress bar.
 3. Entering a program: units (each with its progress) → modules → content.
-4. On each module they can click **Mark as complete**; the bar updates instantly.
-   If the module carries a quiz that gates completion, they must pass it first.
+4. Participants do **not** mark modules themselves. An instructor opens the
+   programme's report, clicks the participant's name and marks each module they
+   have finished; the record keeps who marked it and when. If the module carries a
+   quiz that gates completion, the participant must pass it first. Instructors mark
+   their own modules from the module page, with no quiz gate.
 5. Quizzes are sat in the app. They see their score immediately and can review
    every past attempt.
 6. **Breadcrumbs** let them jump back to any previous level.

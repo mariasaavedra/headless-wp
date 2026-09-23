@@ -137,8 +137,9 @@ never drifts if the curriculum changes.
 
 - CRUD: `pcle_mark_module_complete()`, `pcle_unmark_module_complete()`, `pcle_is_module_complete()`.
 - Computation: `pcle_get_unit_progress()`, `pcle_get_program_progress()` → `{completed, total, percent}`.
-- **Gating:** a module carrying a quiz with `_pcle_quiz_gates_completion` cannot be marked complete until that quiz is passed (see §11).
-- **REST:** `POST /wp-json/platform-cle/v1/progress` `{module_id, completed}` — always operates on the current user; protected by `view_cle_content` + `wp_rest` nonce.
+- **Gating:** a module carrying a quiz with `_pcle_quiz_gates_completion` cannot be marked complete until that quiz is passed (see §11). Staff are exempt when marking their own.
+- **Who marks:** staff mark participants' completions; participants cannot mark their own. `marked_by` on each row records the instructor (0 = the user themselves, which is every row from before schema 5).
+- **REST:** `POST /wp-json/platform-cle/v1/progress` `{module_id, completed}` — the current user's own record, staff only (`pcle_marked_by_instructor` 403 otherwise). `GET /reports/programs/<id>/participants/<user_id>` and `POST …/progress` `{module_id, completed}` — an instructor reading and marking one enrolled participant.
 - Frontend: `assets/progress.js` + `assets/progress.css` ("mark as complete" button that updates the bar live).
 
 ## 6. Enrollment

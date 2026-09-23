@@ -455,6 +455,13 @@ function pcle_rest_get_module( $request ) {
 			'title'     => get_the_title( $module ),
 			'content'   => pcle_rest_rendered_content( $module ),
 			'completed' => ( ! pcle_previewing_as_participant() && pcle_is_module_complete( $module->ID ) ),
+			/*
+			 * Whether this reader may mark it themselves: staff, and not while
+			 * previewing — a participant would not see the control, and the
+			 * write would land on the author's own record, which preview
+			 * promises to leave alone.
+			 */
+			'can_mark'  => ( pcle_user_is_staff() && ! pcle_previewing_as_participant() ),
 			'unit'      => pcle_rest_shape_ref( $unit ),
 			'program'   => pcle_rest_shape_ref( $program ),
 			'scenarios' => array_map( $shape_child, pcle_get_scenarios( $module->ID ) ),

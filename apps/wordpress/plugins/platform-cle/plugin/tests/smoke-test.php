@@ -490,13 +490,21 @@ pcle_eq( pcle_rest_post_progress( 0, $module, true )->get_status(), 401, 'anonym
 pcle_eq( pcle_rest_post_progress( $outsider, $module, true )->get_status(), 403, 'a reader with no access cannot record progress against the module' );
 pcle_eq( pcle_is_module_complete( $module, $outsider ), false, 'the refused write left no progress behind' );
 
-$toggle = pcle_rest_post_progress( $student, $module, true );
-pcle_eq( $toggle->get_status(), 200, 'enrolled student can record progress' );
+// A participant's completion is their instructor's to record, not theirs.
+$refused = pcle_rest_post_progress( $student, $module, true );
+pcle_eq( $refused->get_status(), 403, 'an enrolled student cannot mark their own module complete' );
+pcle_eq( $refused->get_data()['code'], 'pcle_marked_by_instructor', 'and is told who does' );
+pcle_eq( pcle_is_module_complete( $module, $student ), false, 'nothing was recorded' );
+
+// Staff mark their own.
+$toggle = pcle_rest_post_progress( $admin, $module, true );
+pcle_eq( $toggle->get_status(), 200, 'staff can mark their own module complete' );
 pcle_eq( $toggle->get_data()['completed'], true, 'response reports the new state' );
 pcle_eq( array_keys( $toggle->get_data()['unit_progress'] ), $expected_progress_keys, 'progress endpoint uses the same progress keys' );
-pcle_eq( pcle_is_module_complete( $module, $student ), true, 'progress was actually stored' );
+pcle_eq( pcle_is_module_complete( $module, $admin ), true, 'progress was actually stored' );
+pcle_eq( pcle_get_module_marked_by( $module, $admin ), 0, 'a completion recorded by its owner has no marker' );
 
-pcle_rest_post_progress( $student, $module, false ); // restore fixture state
+pcle_rest_post_progress( $admin, $module, false ); // restore fixture state
 wp_set_current_user( 0 );
 
 /* ------------------------------------------------------------------ */
@@ -2117,6 +2125,14 @@ pcle_eq( pcle_mark_module_complete( $module, $student ), true, 'the module compl
 // The gate reaches program-level progress, not just the one call.
 pcle_eq( pcle_get_program_progress( $prog_a, $student )['completed'] > 0, true, 'programme progress reflects the completion' );
 
+// Staff marking their own are not held to it: they have not passed it, and need not.
+pcle_eq( pcle_user_passed_quiz( $gate_quiz, $admin ), false, 'staff have not passed the required quiz' );
+pcle_eq( pcle_module_completion_blockers( $module, $admin ), array(), 'and it does not block them' );
+pcle_eq( pcle_rest_post_progress( $admin, $module, true )->get_status(), 200, 'they mark the gated module complete over REST' );
+pcle_ok( pcle_is_module_complete( $module, $admin ), 'and it is recorded' );
+pcle_unmark_module_complete( $module, $admin );
+wp_set_current_user( 0 );
+
 /* ------------------------------------------------------------------ */
 /* Quiz results in the cohort report                                  */
 /* ------------------------------------------------------------------ */
@@ -2708,6 +2724,111 @@ pcle_eq(
 // An account that has gone keeps its id, loses its name.
 pcle_eq( pcle_authoring_shape_person( 99999999 ), array( 'id' => 99999999, 'name' => null ), 'a deleted account is named as nobody' );
 pcle_eq( pcle_authoring_shape_person( 0 ), null, 'and no account at all is null' );
+wp_set_current_user( 0 );
+
+/* ------------------------------------------------------------------ */
+/* An instructor marks a participant's module                         */
+/* ------------------------------------------------------------------ */
+pcle_section( '# Marking a participant complete' );
+
+/**
+ * Reads or writes one participant's progress in a programme's report.
+ *
+ * @param int       $uid        User to run as.
+ * @param int       $program_id Programme.
+ * @param int       $user_id    Participant.
+ * @param int|null  $module_id  Module to set, or null to read.
+ * @param bool|null $completed  Desired state when setting.
+ * @return WP_REST_Response
+ */
+function pcle_rest_participant_as( $uid, $program_id, $user_id, $module_id = null, $completed = null ) {
+	wp_set_current_user( $uid );
+	$route = "/platform-cle/v1/reports/programs/{$program_id}/participants/{$user_id}";
+
+	if ( null === $module_id ) {
+		return rest_do_request( new WP_REST_Request( 'GET', $route ) );
+	}
+
+	$request = new WP_REST_Request( 'POST', "{$route}/progress" );
+	$request->set_body_params(
+		array(
+			'module_id' => $module_id,
+			'completed' => $completed,
+		)
+	);
+
+	return rest_do_request( $request );
+}
+
+$marking_module  = pcle_make_post( 'pcle_module', 'TEST Marking Module', array( '_pcle_unit_id' => $unit ) );
+$created_posts[] = $marking_module;
+pcle_unmark_module_complete( $marking_module, $student );
+
+// Who may.
+pcle_eq( pcle_rest_participant_as( 0, $prog_a, $student )->get_status(), 401, 'anonymous cannot read a participant' );
+pcle_eq( pcle_rest_participant_as( $student, $prog_a, $student )->get_status(), 403, 'nor can the participant, through the report' );
+pcle_eq( pcle_rest_participant_as( $student, $prog_a, $student, $marking_module, true )->get_status(), 403, 'or mark themselves through it' );
+pcle_eq( pcle_rest_participant_as( $instructor, $prog_a, $outsider )->get_status(), 404, 'somebody not enrolled has no page here' );
+pcle_eq( pcle_rest_participant_as( $instructor, $prog_a, $outsider, $marking_module, true )->get_status(), 404, 'and nothing can be recorded for them' );
+pcle_eq( pcle_is_module_complete( $marking_module, $outsider ), false, 'nothing was' );
+
+// The page.
+$page = pcle_rest_participant_as( $instructor, $prog_a, $student );
+pcle_eq( $page->get_status(), 200, 'an instructor reads a participant module by module' );
+$page_modules = array();
+foreach ( $page->get_data()['units'] as $page_unit ) {
+	foreach ( $page_unit['modules'] as $page_module ) {
+		$page_modules[ $page_module['id'] ] = $page_module;
+	}
+}
+pcle_eq( $page_modules[ $marking_module ]['completed'], false, 'the module starts not complete' );
+
+// Marking it.
+$marked = pcle_rest_participant_as( $instructor, $prog_a, $student, $marking_module, true );
+pcle_eq( $marked->get_status(), 200, 'the instructor marks it complete' );
+pcle_ok( pcle_is_module_complete( $marking_module, $student ), 'the completion is the participant\'s' );
+pcle_ok( ! pcle_is_module_complete( $marking_module, $instructor ), 'not the instructor\'s' );
+pcle_eq( pcle_get_module_marked_by( $marking_module, $student ), (int) $instructor, 'and it records who marked it' );
+pcle_ok( null !== pcle_get_module_completed_at( $marking_module, $student ), 'and when' );
+
+$marked_modules = array();
+foreach ( $marked->get_data()['units'] as $page_unit ) {
+	foreach ( $page_unit['modules'] as $page_module ) {
+		$marked_modules[ $page_module['id'] ] = $page_module;
+	}
+}
+pcle_eq( $marked_modules[ $marking_module ]['marked_by']['id'], (int) $instructor, 'the page names who marked it' );
+
+// And taking it back.
+pcle_eq( pcle_rest_participant_as( $instructor, $prog_a, $student, $marking_module, false )->get_status(), 200, 'the instructor can undo it' );
+pcle_ok( ! pcle_is_module_complete( $marking_module, $student ), 'and it is gone' );
+
+// A module from another programme cannot be written through this one.
+$other_unit      = pcle_make_post( 'pcle_unit', 'TEST Other Unit', array( '_pcle_program_id' => $prog_b ) );
+$other_module    = pcle_make_post( 'pcle_module', 'TEST Other Module', array( '_pcle_unit_id' => $other_unit ) );
+$created_posts[] = $other_unit;
+$created_posts[] = $other_module;
+pcle_eq( pcle_rest_participant_as( $instructor, $prog_a, $student, $other_module, true )->get_status(), 400, 'a module from another programme is refused' );
+pcle_ok( ! pcle_is_module_complete( $other_module, $student ), 'and nothing was recorded against it' );
+
+// The participant's quiz gate holds for the instructor's tick.
+$marking_quiz    = pcle_make_post( 'pcle_quiz', 'TEST Marking Gate', array( '_pcle_module_id' => $marking_module ) );
+$created_posts[] = $marking_quiz;
+pcle_set_quiz_questions( $marking_quiz, array(
+	array( 'key' => 'q', 'prompt' => 'Gate', 'type' => 'single',
+		'choices' => array( array( 'key' => 'a', 'text' => 'A', 'correct' => true ), array( 'key' => 'b', 'text' => 'B' ) ) ),
+) );
+update_post_meta( $marking_quiz, PCLE_QUIZ_GATES_META, 1 );
+
+$gated = pcle_rest_participant_as( $instructor, $prog_a, $student, $marking_module, true );
+pcle_eq( $gated->get_status(), 409, 'a participant who has not passed the required quiz cannot be marked complete' );
+pcle_eq( $gated->get_data()['data']['quizzes'][0]['id'], (int) $marking_quiz, 'and the refusal names the quiz' );
+pcle_ok( ! pcle_is_module_complete( $marking_module, $student ), 'nothing was recorded' );
+
+// Who the module screen offers the control to.
+pcle_eq( pcle_rest_curriculum_as( $student, "/platform-cle/v1/modules/{$marking_module}" )['can_mark'], false, 'a participant is not offered the button' );
+pcle_eq( pcle_rest_curriculum_as( $instructor, "/platform-cle/v1/modules/{$marking_module}" )['can_mark'], true, 'an instructor is' );
+pcle_eq( pcle_rest_curriculum_as( $instructor, "/platform-cle/v1/modules/{$marking_module}", true )['can_mark'], false, 'but not in preview, where it would write to their own record' );
 wp_set_current_user( 0 );
 
 /* ------------------------------------------------------------------ */

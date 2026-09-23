@@ -68,6 +68,11 @@ type ModuleDetail = {
   title: string;
   content: string;
   completed: boolean;
+  /**
+   * Whether this reader marks it themselves: staff, outside preview. A
+   * participant's completions are marked by their instructor instead.
+   */
+  can_mark: boolean;
   unit: Ref | null;
   program: Ref | null;
   scenarios: ModuleResource[];
@@ -205,6 +210,27 @@ type ProgramReport = {
   participants: ReportParticipant[];
 };
 
+/** One module as the instructor marking a participant sees it. */
+type ParticipantModule = {
+  id: number;
+  title: string;
+  completed: boolean;
+  /** Site-time MySQL datetime; null for completions from before dates were kept. */
+  completed_at: string | null;
+  /** The instructor who marked it; null when the participant did, before that moved to staff. */
+  marked_by: Author | null;
+  /** Required quizzes the participant has not passed. Marking is refused while any remain. */
+  blockers: Ref[];
+};
+
+/** One participant's standing in a programme, module by module. */
+type ParticipantProgress = {
+  program: Ref | null;
+  participant: { id: number; name: string; email: string };
+  progress: Progress;
+  units: { id: number; title: string; modules: ParticipantModule[] }[];
+};
+
 /**
  * What became of one pasted address.
  *
@@ -266,6 +292,8 @@ export type {
   Ref,
   ReportParticipant,
   ProgramReport,
+  ParticipantModule,
+  ParticipantProgress,
   ReportCsv,
   QuizChoicePublic,
   QuizQuestionPublic,

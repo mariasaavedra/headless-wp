@@ -171,7 +171,7 @@ Run these on production before announcing:
       `"status":"ok"`. Logged in as admin, `checks` are all `true`.
 - [ ] Anonymous visit to a program URL → redirected to `wp-login.php`.
 - [ ] A non-enrolled student → redirected to "My Training" with the notice.
-- [ ] An enrolled student → sees the program, can mark a module complete.
+- [ ] An enrolled student → sees the program, has no "mark complete" button; an instructor marks it from the report.
 - [ ] Upload a file to a Template → its link goes through `?pcle_download=…`;
       the raw `/wp-content/uploads/pcle-protected/…` URL returns 403/404.
 - [ ] REST: `curl https://platform.thepen-and-swordkc.org/wp-json/wp/v2/pcle_program` (anonymous) → 401.

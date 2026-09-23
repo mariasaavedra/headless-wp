@@ -6,6 +6,7 @@ import type {
   Person,
   Me,
   ModuleDetail,
+  ParticipantProgress,
   NodeDetail,
   UploadedMedia,
   NodeType,
@@ -263,6 +264,41 @@ async function getProgramReportCsv(id: number): Promise<ReportCsv> {
   }) as Promise<ReportCsv>;
 }
 
+/**
+ * One participant in a programme, module by module, for the instructor who
+ * marks their completions.
+ */
+async function getParticipantProgress(
+  programId: number,
+  userId: number
+): Promise<ParticipantProgress> {
+  return wordpressFetch(
+    `/platform-cle/v1/reports/programs/${programId}/participants/${userId}`,
+    { auth: true }
+  ) as Promise<ParticipantProgress>;
+}
+
+/**
+ * Records — or takes back — a participant's completion of a module. Staff
+ * only; the plugin refuses it while a required quiz is unpassed.
+ */
+async function setParticipantModuleCompletion(
+  programId: number,
+  userId: number,
+  moduleId: number,
+  completed: boolean
+): Promise<ParticipantProgress> {
+  return wordpressFetch(
+    `/platform-cle/v1/reports/programs/${programId}/participants/${userId}/progress`,
+    {
+      auth: true,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ module_id: moduleId, completed }),
+    }
+  ) as Promise<ParticipantProgress>;
+}
+
 /* ------------------------------------------------------------------ */
 /* Participants                                                        */
 /* ------------------------------------------------------------------ */
@@ -478,6 +514,8 @@ export {
   getMe,
   getProgramReport,
   getProgramReportCsv,
+  getParticipantProgress,
+  setParticipantModuleCompletion,
   enrollByEmail,
   unenrollParticipant,
   getPeople,

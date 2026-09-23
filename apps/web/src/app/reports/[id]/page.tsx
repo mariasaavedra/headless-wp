@@ -34,7 +34,16 @@ function ParticipantRow({
   return (
     <tr className="border-t border-zinc-100 align-top">
       <td className="py-3 pr-4">
-        <div className="font-medium text-zinc-900">{row.name}</div>
+        {/*
+          The way into marking this person's modules. Participants no longer
+          mark their own, so this is where a completion gets recorded.
+        */}
+        <Link
+          href={`/reports/${programId}/participants/${row.id}`}
+          className="font-medium text-zinc-900 underline-offset-2 hover:underline"
+        >
+          {row.name}
+        </Link>
         <div className="text-xs text-zinc-500">{row.email}</div>
       </td>
 

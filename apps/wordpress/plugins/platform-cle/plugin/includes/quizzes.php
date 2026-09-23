@@ -721,11 +721,20 @@ function pcle_module_required_quizzes( $module_id ) {
 /**
  * Required quizzes of a module this user has not passed yet.
  *
+ * Staff are never blocked. An instructor marks their own modules freely —
+ * working through a programme to check it is not sitting it for credit, and
+ * a gate that makes them pass their own quiz first only gets in the way.
+ * What a participant would meet is what preview is for.
+ *
  * @param int      $module_id Module ID.
  * @param int|null $user_id   User (defaults to the current one).
  * @return int[] Quiz post IDs.
  */
 function pcle_module_completion_blockers( $module_id, $user_id = null ) {
+	if ( pcle_user_is_staff( pcle_resolve_user_id( $user_id ) ) ) {
+		return array();
+	}
+
 	$blockers = array();
 
 	foreach ( pcle_module_required_quizzes( $module_id ) as $quiz_id ) {
