@@ -62,5 +62,13 @@ else
 	echo "bootstrap: existing install, skipping demo data seed."
 fi
 
+# Everything above ran as root, and anything it created under uploads —
+# the plugin's protected directory on activation, the seeder's month
+# folders — is root's. Apache runs as www-data and then cannot write there,
+# so every upload on a fresh stack failed with a 500. Hand the tree back.
+echo "bootstrap: giving uploads to the web server..."
+mkdir -p /var/www/html/wp-content/uploads
+chown -R www-data:www-data /var/www/html/wp-content/uploads
+
 echo "bootstrap: done. Starting Apache."
 exec apache2-foreground
