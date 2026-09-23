@@ -336,7 +336,10 @@ add_action( 'save_post', 'pcle_save_relationship', 10, 2 );
 /**
  * Returns a post's children for a specific child CPT.
  *
- * Ordered by menu_order then title. Published only by default.
+ * Ordered by menu_order then title. Published only by default — except while
+ * staff preview a programme (pcle_previewing_as_participant()), when drafts
+ * are included too. Everything the builder creates starts as a draft, so a
+ * published-only preview of a programme still being written shows nothing.
  *
  * @param int    $parent_id  Parent ID.
  * @param string $child_type Child CPT (must exist in the relationship map).
@@ -352,7 +355,7 @@ function pcle_get_children( $parent_id, $child_type, $args = array() ) {
 	$rel      = $map[ $child_type ];
 	$defaults = array(
 		'post_type'   => $child_type,
-		'post_status' => 'publish',
+		'post_status' => pcle_previewing_as_participant() ? pcle_rest_preview_statuses() : 'publish',
 		'numberposts' => -1,
 		'orderby'     => array(
 			'menu_order' => 'ASC',

@@ -155,6 +155,20 @@ function pcle_previewing_as_participant( $set = null ) {
 }
 
 /**
+ * The statuses a staff preview shows.
+ *
+ * Preview exists so an author can see a programme before the cohort does,
+ * and the builder creates everything as a draft. Showing published items
+ * only would make the programme being written the one thing preview cannot
+ * show — a new programme answered 404, and draft units simply vanished.
+ *
+ * @return string[]
+ */
+function pcle_rest_preview_statuses() {
+	return array( 'publish', 'draft', 'pending', 'private', 'future' );
+}
+
+/**
  * Turns preview on when the request asked for it and the reader may.
  *
  * Only staff, and only on request. A participant asking for preview is
@@ -287,7 +301,16 @@ function pcle_rest_guard_item( $request, $post_type ) {
 
 	$id = (int) $request['id'];
 
-	if ( $post_type !== get_post_type( $id ) || 'publish' !== get_post_status( $id ) ) {
+	/*
+	 * Unpublished items are staff's to preview and nobody's to read otherwise.
+	 * Decided from the request rather than pcle_previewing_as_participant():
+	 * the permission callback runs before the route turns preview on.
+	 */
+	$statuses = ! empty( $request['preview'] ) && pcle_user_is_staff()
+		? pcle_rest_preview_statuses()
+		: array( 'publish' );
+
+	if ( $post_type !== get_post_type( $id ) || ! in_array( get_post_status( $id ), $statuses, true ) ) {
 		return new WP_Error(
 			'pcle_not_found',
 			__( 'Not found.', 'platform-cle' ),

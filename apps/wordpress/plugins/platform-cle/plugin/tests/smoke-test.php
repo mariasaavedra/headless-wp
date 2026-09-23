@@ -2690,10 +2690,17 @@ $preview_view = pcle_rest_curriculum_as( $instructor, "/platform-cle/v1/programs
 pcle_eq( $teacher_view['progress']['completed'], 1, "an author's own progress counts for them" );
 pcle_eq( $preview_view['progress']['completed'], 0, 'and counts for nobody in preview' );
 pcle_eq( $preview_view['progress']['percentage'], 0, 'the percentage goes with it' );
+/*
+ * The same programme, drafts included: preview shows what is being written,
+ * and the sections above leave a draft module or two in it.
+ */
+pcle_previewing_as_participant( true );
+$modules_in_preview = count( pcle_get_program_module_ids( $prog_a ) );
+pcle_previewing_as_participant( false );
 pcle_eq(
 	$preview_view['progress']['total'],
-	$teacher_view['progress']['total'],
-	'while the programme is still the same size'
+	$modules_in_preview,
+	'while the programme is still the same size, drafts and all'
 );
 
 $teacher_module = pcle_rest_curriculum_as( $instructor, "/platform-cle/v1/modules/{$preview_module}" );
@@ -2717,6 +2724,44 @@ pcle_eq(
 
 // Nothing was written, cleared or moved by looking.
 pcle_ok( pcle_is_module_complete( $preview_module, $instructor ), 'preview left the record it hid alone' );
+
+/*
+ * The builder creates everything as a draft, so the programme being written
+ * is the one preview most needs to show. It used to answer 404.
+ */
+$draft_programme = pcle_make_post( 'pcle_program', 'TEST Draft Programme' );
+$draft_unit      = pcle_make_post( 'pcle_unit', 'TEST Draft Unit', array( '_pcle_program_id' => $draft_programme ) );
+$draft_in_prog_a = pcle_make_post( 'pcle_unit', 'TEST Draft Unit In A', array( '_pcle_program_id' => $prog_a ) );
+array_push( $created_posts, $draft_programme, $draft_unit, $draft_in_prog_a );
+foreach ( array( $draft_programme, $draft_unit, $draft_in_prog_a ) as $draft_id ) {
+	wp_update_post( array( 'ID' => $draft_id, 'post_status' => 'draft' ) );
+}
+
+wp_set_current_user( $instructor );
+$draft_request = new WP_REST_Request( 'GET', "/platform-cle/v1/programs/{$draft_programme}" );
+pcle_eq( rest_do_request( $draft_request )->get_status(), 404, 'a draft programme is not readable outside preview' );
+$draft_request->set_param( 'preview', true );
+$draft_response = rest_do_request( $draft_request );
+pcle_eq( $draft_response->get_status(), 200, 'but an author can preview it' );
+pcle_eq(
+	wp_list_pluck( $draft_response->get_data()['units'] ?? array(), 'id' ),
+	array( $draft_unit ),
+	'with its draft units in it'
+);
+
+pcle_ok(
+	in_array( $draft_in_prog_a, wp_list_pluck( pcle_rest_curriculum_as( $instructor, "/platform-cle/v1/programs/{$prog_a}", true )['units'], 'id' ), true ),
+	'a draft unit shows in the preview of a published programme'
+);
+pcle_ok(
+	! in_array( $draft_in_prog_a, wp_list_pluck( pcle_rest_curriculum_as( $student, "/platform-cle/v1/programs/{$prog_a}", true )['units'], 'id' ), true ),
+	'and never to a participant, preview or not'
+);
+
+wp_set_current_user( $student );
+$student_draft = new WP_REST_Request( 'GET', "/platform-cle/v1/units/{$draft_in_prog_a}" );
+$student_draft->set_param( 'preview', true );
+pcle_eq( rest_do_request( $student_draft )->get_status(), 404, 'a participant cannot open a draft by asking for preview' );
 wp_set_current_user( 0 );
 
 /* ------------------------------------------------------------------ */
