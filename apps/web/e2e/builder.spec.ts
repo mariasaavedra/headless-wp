@@ -184,8 +184,16 @@ test.describe("Attaching a file by dropping it on the body", () => {
       return data;
     }, files);
 
-    await body.dispatchEvent("dragover", { dataTransfer: transfer });
-    await expect(page.getByText("Drop to attach here")).toBeVisible();
+    /*
+     * Until the page has hydrated, the field is plain HTML and a dragover goes
+     * unanswered — on CI's production build that window is long enough to
+     * lose. A browser sends dragover continuously while a file hovers, so
+     * sending it again until the field answers is what a real drag does.
+     */
+    await expect(async () => {
+      await body.dispatchEvent("dragover", { dataTransfer: transfer });
+      await expect(page.getByText("Drop to attach here")).toBeVisible({ timeout: 500 });
+    }).toPass();
     await body.dispatchEvent("drop", { dataTransfer: transfer });
   }
 
