@@ -10,6 +10,7 @@ import ActionForm from "@/components/builder/action-form";
 import { authorshipText } from "@/components/builder/authorship-line";
 import CollapsibleNode from "@/components/builder/collapsible-node";
 import { AddChildMenu, NodeMenu } from "@/components/builder/row-actions";
+import { DragHandle } from "@/components/builder/sortable-group";
 import { reorderAction } from "@/app/actions/authoring";
 import { decodeEntities } from "@/lib/html";
 import type { NodeType, TreeNode } from "@/lib/types";
@@ -128,6 +129,8 @@ export default function NodeRow({
 
   const row = (
     <div className="flex flex-wrap items-center gap-2 py-2">
+      <DragHandle />
+
       {/*
         On hover only. A line under every row would double the height of the
         tree to answer a question asked of one item at a time; the item's own
@@ -190,8 +193,9 @@ export default function NodeRow({
     </div>
   );
 
+  // The <li> is SortableGroup's: it is the element that moves while dragging.
   return (
-    <li className="border-t border-zinc-100 first:border-t-0">
+    <>
       {hasChildren ? (
         /*
          * Units arrive folded. Anything deeper arrives open: having opened a
@@ -212,6 +216,6 @@ export default function NodeRow({
           <div className="min-w-0 flex-1">{row}</div>
         </div>
       )}
-    </li>
+    </>
   );
 }
