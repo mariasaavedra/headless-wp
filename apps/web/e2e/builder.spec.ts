@@ -85,3 +85,64 @@ test.describe("Adding to a programme", () => {
     expect(created?.type).toBe("pcle_unit");
   });
 });
+
+test.describe("Previewing as a participant", () => {
+  let wordpress: WordPress;
+  let programme: { id: number; title: string };
+
+  test.beforeAll(async () => {
+    wordpress = await WordPress.asAdministrator();
+    programme = await wordpress.firstProgramme();
+  });
+
+  test("the editor offers it, and it says what it is", async ({ page }) => {
+    await signIn(page, people.instructor);
+    await page.goto(`/builder/programs/${programme.id}`);
+
+    await page.getByRole("button", { name: "Preview as participant" }).click();
+
+    await expect(page).toHaveURL(new RegExp(`/programs/${programme.id}\\?preview=1$`));
+    await expect(page.getByText("Previewing as a participant")).toBeVisible();
+  });
+
+  test("it reports nothing done, whatever the author has done", async ({
+    page,
+  }) => {
+    await signIn(page, people.instructor);
+    await page.goto(`/programs/${programme.id}?preview=1`);
+
+    /*
+     * The point of the feature: an author's own records shape these screens
+     * for them, and none of it is what the cohort meets on day one.
+     */
+    await expect(page.getByText(/0 of \d+ modules · 0%/).first()).toBeVisible();
+  });
+
+  test("the preview survives a click", async ({ page }) => {
+    await signIn(page, people.instructor);
+    await page.goto(`/programs/${programme.id}?preview=1`);
+
+    const tree = await wordpress.tree(programme.id);
+    const unit = (tree.children ?? []).find((c) => c.type === "pcle_unit");
+    const lesson = (unit?.children ?? []).find((c) => c.type === "pcle_module");
+
+    if (!lesson) {
+      throw new Error("No module to click into.");
+    }
+
+    await page.getByText(lesson.title).first().click();
+
+    // A preview that ends silently one click in is worse than none.
+    await expect(page).toHaveURL(/preview=1/);
+    await expect(page.getByText("Previewing as a participant")).toBeVisible();
+  });
+
+  test("leaving it goes back to the editor", async ({ page }) => {
+    await signIn(page, people.instructor);
+    await page.goto(`/programs/${programme.id}?preview=1`);
+
+    await page.getByRole("button", { name: "Leave preview" }).click();
+
+    await expect(page).toHaveURL(new RegExp(`/builder/programs/${programme.id}$`));
+  });
+});

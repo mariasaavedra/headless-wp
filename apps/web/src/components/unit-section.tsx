@@ -5,6 +5,7 @@ import { Card, CardContent } from "@pcle/ui/components/card";
 
 import ProgressBar from "@/components/progress-bar";
 import { decodeEntities } from "@/lib/html";
+import { keepPreview } from "@/lib/preview";
 import type { Unit } from "@/lib/types";
 
 /**
@@ -18,10 +19,17 @@ export default function UnitSection({
   unit,
   headingLevel = "h2",
   linkHeading = true,
+  preview = false,
 }: {
   unit: Unit;
   headingLevel?: "h1" | "h2";
   linkHeading?: boolean;
+  /**
+   * Carries the participant preview into every link out of this card. A
+   * preview that ends silently one click in is worse than none: the reader
+   * is back to their own progress without being told.
+   */
+  preview?: boolean;
 }) {
   const Heading = headingLevel;
   const title = decodeEntities(unit.title);
@@ -31,7 +39,10 @@ export default function UnitSection({
       <CardContent className="p-0">
         <Heading className="text-xl font-medium text-zinc-950">
           {linkHeading ? (
-            <Link href={`/units/${unit.id}`} className="hover:underline">
+            <Link
+              href={keepPreview(`/units/${unit.id}`, preview)}
+              className="hover:underline"
+            >
               {title}
             </Link>
           ) : (
@@ -54,7 +65,7 @@ export default function UnitSection({
             {unit.modules.map((module) => (
               <li key={module.id}>
                 <Link
-                  href={`/modules/${module.id}`}
+                  href={keepPreview(`/modules/${module.id}`, preview)}
                   className="flex items-start gap-3 py-3 hover:bg-zinc-50"
                 >
                   <Badge

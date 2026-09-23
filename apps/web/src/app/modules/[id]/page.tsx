@@ -7,8 +7,10 @@ import { renderAccessError } from "@/components/access-error";
 import Breadcrumbs from "@/components/breadcrumbs";
 import CompleteToggle from "@/components/complete-toggle";
 import PageShell from "@/components/page-shell";
+import PreviewBanner from "@/components/preview-banner";
 import WpContent from "@/components/wp-content";
 import { isAuthenticated } from "@/lib/auth";
+import { isPreview, keepPreview } from "@/lib/preview";
 import { decodeEntities } from "@/lib/html";
 import type { ModuleDetail, ModuleResource, QuizSummary } from "@/lib/types";
 import { getModule } from "@/lib/wordpress";
@@ -55,7 +57,13 @@ function ResourceList({
  * A link and a state, never the questions — a listing has no business
  * carrying anything answerable.
  */
-function QuizList({ quizzes }: { quizzes: QuizSummary[] }) {
+function QuizList({
+  quizzes,
+  preview = false,
+}: {
+  quizzes: QuizSummary[];
+  preview?: boolean;
+}) {
   if (quizzes.length === 0) {
     return null;
   }
@@ -71,7 +79,7 @@ function QuizList({ quizzes }: { quizzes: QuizSummary[] }) {
         {quizzes.map((quiz) => (
           <li key={quiz.id}>
             <Link
-              href={`/quizzes/${quiz.id}`}
+              href={keepPreview(`/quizzes/${quiz.id}`, preview)}
               className="flex flex-wrap items-center gap-3 rounded-lg border border-zinc-200 bg-white p-4 transition hover:border-zinc-300"
             >
               <span className="font-medium text-zinc-900">
@@ -102,23 +110,27 @@ function QuizList({ quizzes }: { quizzes: QuizSummary[] }) {
 
 export default async function ModulePage({
   params,
+  searchParams,
 }: PageProps<"/modules/[id]">) {
   if (!(await isAuthenticated())) {
     redirect("/login");
   }
 
   const { id } = await params;
+  const preview = isPreview(await searchParams);
 
   let courseModule: ModuleDetail;
 
   try {
-    courseModule = await getModule(Number(id));
+    courseModule = await getModule(Number(id), preview);
   } catch (error) {
     return renderAccessError(error);
   }
 
   return (
     <PageShell>
+      {preview && <PreviewBanner programmeId={courseModule.program?.id} />}
+
       <Breadcrumbs
         trail={[
           { label: "My Training", href: "/my-training" },
@@ -126,12 +138,20 @@ export default async function ModulePage({
             ? [
                 {
                   label: courseModule.program.title,
-                  href: `/programs/${courseModule.program.id}`,
+                  href: keepPreview(
+                    `/programs/${courseModule.program.id}`,
+                    preview
+                  ),
                 },
               ]
             : []),
           ...(courseModule.unit
-            ? [{ label: courseModule.unit.title, href: `/units/${courseModule.unit.id}` }]
+            ? [
+                {
+                  label: courseModule.unit.title,
+                  href: keepPreview(`/units/${courseModule.unit.id}`, preview),
+                },
+              ]
             : []),
           { label: courseModule.title },
         ]}
@@ -153,7 +173,7 @@ export default async function ModulePage({
         resources={courseModule.scenarios}
       />
 
-      <QuizList quizzes={courseModule.quizzes} />
+      <QuizList quizzes={courseModule.quizzes} preview={preview} />
 
       <ResourceList
         title="Templates"

@@ -2567,6 +2567,82 @@ foreach ( $admin_view['people'] as $person ) {
 wp_set_current_user( 0 );
 
 /* ------------------------------------------------------------------ */
+/* Preview as a participant                                           */
+/* ------------------------------------------------------------------ */
+/*
+ * Staff open a programme shaped by their own records. Preview answers as a
+ * reader with none, so an author sees the first morning rather than their
+ * own. It reports differently and writes nothing.
+ */
+pcle_section( '# Preview as a participant' );
+
+/**
+ * Reads a curriculum route, optionally asking for the participant's view.
+ *
+ * @param int    $uid     User to run as.
+ * @param string $route   Route to read.
+ * @param bool   $preview Ask for preview.
+ * @return array
+ */
+function pcle_rest_curriculum_as( $uid, $route, $preview = false ) {
+	wp_set_current_user( $uid );
+	$request = new WP_REST_Request( 'GET', $route );
+
+	if ( $preview ) {
+		$request->set_param( 'preview', true );
+	}
+
+	return rest_do_request( $request )->get_data();
+}
+
+/*
+ * A module of this section's own, so the history being hidden is one this
+ * section put there. The shared fixtures carry gating quizzes from the
+ * sections above, and a module nobody can complete is no use for showing
+ * that a completion is hidden.
+ */
+$preview_module  = pcle_make_post( 'pcle_module', 'TEST Preview Module', array( '_pcle_unit_id' => $unit ) );
+$created_posts[] = $preview_module;
+
+pcle_mark_module_complete( $preview_module, $instructor );
+pcle_ok( pcle_is_module_complete( $preview_module, $instructor ), 'the author finished a module' );
+
+$teacher_view = pcle_rest_curriculum_as( $instructor, "/platform-cle/v1/programs/{$prog_a}" );
+$preview_view = pcle_rest_curriculum_as( $instructor, "/platform-cle/v1/programs/{$prog_a}", true );
+
+pcle_eq( $teacher_view['progress']['completed'], 1, "an author's own progress counts for them" );
+pcle_eq( $preview_view['progress']['completed'], 0, 'and counts for nobody in preview' );
+pcle_eq( $preview_view['progress']['percentage'], 0, 'the percentage goes with it' );
+pcle_eq(
+	$preview_view['progress']['total'],
+	$teacher_view['progress']['total'],
+	'while the programme is still the same size'
+);
+
+$teacher_module = pcle_rest_curriculum_as( $instructor, "/platform-cle/v1/modules/{$preview_module}" );
+$preview_modul3 = pcle_rest_curriculum_as( $instructor, "/platform-cle/v1/modules/{$preview_module}", true );
+
+pcle_eq( $teacher_module['completed'], true, 'the module they finished reads as finished' );
+pcle_eq( $preview_modul3['completed'], false, 'and as untouched in preview' );
+
+/*
+ * A participant asking for preview is already seeing what it would show, so
+ * honouring it would only hide their own progress from them.
+ */
+$student_plain   = pcle_rest_curriculum_as( $student, "/platform-cle/v1/programs/{$prog_a}" );
+$student_preview = pcle_rest_curriculum_as( $student, "/platform-cle/v1/programs/{$prog_a}", true );
+
+pcle_eq(
+	$student_preview['progress']['completed'],
+	$student_plain['progress']['completed'],
+	'a participant asking for preview still sees their own progress'
+);
+
+// Nothing was written, cleared or moved by looking.
+pcle_ok( pcle_is_module_complete( $preview_module, $instructor ), 'preview left the record it hid alone' );
+wp_set_current_user( 0 );
+
+/* ------------------------------------------------------------------ */
 /* Teardown                                                           */
 /* ------------------------------------------------------------------ */
 foreach ( $created_posts as $pid ) {

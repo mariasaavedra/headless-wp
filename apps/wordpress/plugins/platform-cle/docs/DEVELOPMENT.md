@@ -96,7 +96,7 @@ docker compose exec wordpress php /var/www/html/wp-content/plugins/platform-cle/
 
 ## Tests
 
-Dependency-free smoke tests (no PHPUnit, no composer) — **577 assertions across 35
+Dependency-free smoke tests (no PHPUnit, no composer) — **586 assertions across 36
 sections** covering access control, enrollment, progress, relationships,
 protected files, the REST guards, credit hours, attendance, certificates,
 quizzes and marking, the quiz completion gate, reporting and the authoring API.
@@ -114,7 +114,7 @@ suite. Two more jobs lint and build `apps/web`, and run its end-to-end suite.
 
 ## Testing the app
 
-37 Playwright tests in `apps/web/e2e/`, against the same running stack:
+41 Playwright tests in `apps/web/e2e/`, against the same running stack:
 
 ```bash
 docker compose up -d wordpress        # if it is not already up
