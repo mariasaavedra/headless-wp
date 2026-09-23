@@ -92,6 +92,38 @@ function carriesFiles(event: React.DragEvent) {
 }
 
 /**
+ * The files a paste should attach, or none if it is text.
+ *
+ * Only a paste with no plain text in it. A screenshot, or "Copy image" in a
+ * browser, carries the image alone. Copying from Word or a web page often
+ * carries an image *as well as* the text — a picture of the selection — and
+ * that author meant to paste words, not to upload a snapshot of them.
+ *
+ * Screenshots arrive named "image.png" every time; a name with the time in it
+ * tells the author which marker is which in the list below the field.
+ */
+function pastedFiles(clipboard: DataTransfer): File[] {
+  if (clipboard.files.length === 0 || clipboard.types.includes("text/plain")) {
+    return [];
+  }
+
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[-:]/g, "").replace("T", "-");
+
+  return Array.from(clipboard.files).map((file, index) => {
+    if (!/^image\.\w+$/i.test(file.name)) {
+      return file;
+    }
+
+    const extension = file.name.split(".").pop();
+    const suffix = clipboard.files.length > 1 ? `-${index + 1}` : "";
+
+    return new File([file], `pasted-image-${stamp}${suffix}.${extension}`, {
+      type: file.type,
+    });
+  });
+}
+
+/**
  * Where in the text a drop at this point lands.
  *
  * Chrome and Firefox can answer this for a textarea; Safari cannot yet, and
@@ -445,6 +477,25 @@ export default function BodyEditor({
     setDropping(false);
   }
 
+  /**
+   * Pasting an image attaches it at the caret, as dropping does at the pointer.
+   * Text pastes as it always has.
+   */
+  function onPaste(event: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const files = pastedFiles(event.clipboardData);
+
+    if (files.length === 0) return;
+
+    event.preventDefault();
+
+    if (uploading) {
+      setUploadError("Still attaching the last file — paste again in a moment.");
+      return;
+    }
+
+    uploadFiles(files);
+  }
+
   function onDrop(event: React.DragEvent<HTMLTextAreaElement>) {
     if (!carriesFiles(event)) return;
 
@@ -549,6 +600,7 @@ export default function BodyEditor({
           onDragOver={nodeId !== undefined ? onDragOver : undefined}
           onDragLeave={nodeId !== undefined ? onDragLeave : undefined}
           onDrop={nodeId !== undefined ? onDrop : undefined}
+          onPaste={nodeId !== undefined ? onPaste : undefined}
           className={cn(
             "w-full rounded-lg border border-input bg-transparent px-3 py-2 font-mono text-sm leading-relaxed outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
             dropping && "border-zinc-900 bg-zinc-50 ring-3 ring-zinc-900/10"
@@ -572,7 +624,7 @@ export default function BodyEditor({
         <p id={`${id}-drop-hint`} className="mt-1 text-xs text-zinc-500">
           {uploading
             ? "Attaching…"
-            : "Drop a PDF, Word document or image on the text to attach it where you let go."}
+            : "Drop a PDF, Word document or image on the text to attach it where you let go, or paste an image to attach it at the cursor."}
         </p>
       )}
 

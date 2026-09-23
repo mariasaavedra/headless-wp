@@ -358,6 +358,99 @@ test.describe("Attaching a file by dropping it on the body", () => {
   });
 });
 
+test.describe("Attaching an image by pasting it", () => {
+  let wordpress: WordPress;
+  let programme: { id: number; title: string };
+  let lesson: { id: number; title: string };
+
+  test.beforeEach(async () => {
+    wordpress = await WordPress.asAdministrator();
+    programme = await wordpress.createNode("pcle_program", "E2E Paste Programme");
+    const unit = await wordpress.createNode("pcle_unit", "E2E Paste Unit", programme.id);
+    lesson = await wordpress.createNode("pcle_module", "E2E Paste Module", unit.id);
+  });
+
+  test.afterEach(async () => {
+    await wordpress.deleteNode(programme.id, true);
+  });
+
+  const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+  /** Pastes into the body as the browser would, with whatever the clipboard holds. */
+  async function pasteIntoBody(
+    page: import("@playwright/test").Page,
+    clipboard: { image?: boolean; text?: string }
+  ) {
+    /*
+     * A paste cannot be retried the way a dragover can — a second one would
+     * upload twice — so first make sure the page has hydrated, using the drop
+     * overlay as the signal that the field's handlers are attached. On CI the
+     * dev server compiles each route on first visit and hydration is late.
+     */
+    const body = page.locator("#node-body");
+    const probe = await page.evaluateHandle(() => {
+      const data = new DataTransfer();
+      data.items.add(new File(["x"], "probe.png", { type: "image/png" }));
+      return data;
+    });
+    await expect(async () => {
+      await body.dispatchEvent("dragover", { dataTransfer: probe });
+      await expect(page.getByText("Drop to attach here")).toBeVisible({ timeout: 500 });
+    }).toPass();
+    await body.dispatchEvent("dragleave", { dataTransfer: probe });
+    await expect(page.getByText("Drop to attach here")).toHaveCount(0);
+
+    await body.evaluate(
+      (textarea, { png, clipboard }) => {
+        const data = new DataTransfer();
+        if (clipboard.text !== undefined) {
+          data.setData("text/plain", clipboard.text);
+        }
+        if (clipboard.image) {
+          const bytes = Uint8Array.from(atob(png), (c) => c.charCodeAt(0));
+          data.items.add(new File([bytes], "image.png", { type: "image/png" }));
+        }
+        textarea.focus();
+        textarea.dispatchEvent(
+          new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true })
+        );
+      },
+      { png: PNG, clipboard }
+    );
+  }
+
+  test("a pasted screenshot is attached at the caret, with a name of its own", async ({
+    page,
+  }) => {
+    await signIn(page, people.instructor);
+    await page.goto(`/builder/nodes/${lesson.id}`);
+    await page.locator("#node-body").fill("Before.\n\nAfter.");
+    await page.locator("#node-body").evaluate((textarea: HTMLTextAreaElement) => {
+      textarea.setSelectionRange(9, 9);
+    });
+
+    await pasteIntoBody(page, { image: true });
+
+    await expect(page.locator("#node-body")).toHaveValue(
+      /^Before\.\n\n\[\[media:\d+\]\]\n\nAfter\.$/
+    );
+    await expect(page.getByText(/— pasted-image-\d{8}-\d{6}(-\d+)?\.png/)).toBeVisible();
+  });
+
+  test("text that comes with a picture of itself is left to paste as text", async ({
+    page,
+  }) => {
+    await signIn(page, people.instructor);
+    await page.goto(`/builder/nodes/${lesson.id}`);
+
+    // What copying from Word looks like: the words, and an image of them.
+    await pasteIntoBody(page, { image: true, text: "From Word" });
+
+    await expect(page.getByText("Attached to this page.")).toHaveCount(0);
+    await expect(page.locator("#node-body")).not.toHaveValue(/\[\[media:/);
+  });
+});
+
 test.describe("Backing up a programme", () => {
   let wordpress: WordPress;
   let programme: { id: number; title: string };
