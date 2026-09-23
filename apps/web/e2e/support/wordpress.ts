@@ -165,6 +165,24 @@ class WordPress {
     return found[0] ?? null;
   }
 
+  /** Creates an item the way the builder does: as a draft. */
+  async createNode(
+    type: string,
+    title: string,
+    parentId = 0
+  ): Promise<{ id: number; title: string }> {
+    const response = await this.api.post(`${API}/platform-cle/v1/authoring/nodes`, {
+      headers: this.headers,
+      data: { type, title, parent_id: parentId },
+    });
+
+    if (!response.ok()) {
+      throw new Error(`Could not create ${type}: ${await response.text()}`);
+    }
+
+    return (await response.json()) as { id: number; title: string };
+  }
+
   /** `cascade` takes everything under it too — needed for a whole programme. */
   async deleteNode(id: number, cascade = false): Promise<void> {
     await this.api.delete(

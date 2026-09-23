@@ -145,6 +145,24 @@ test.describe("Previewing as a participant", () => {
 
     await expect(page).toHaveURL(new RegExp(`/builder/programs/${programme.id}$`));
   });
+
+  test("a programme still in draft can be previewed", async ({ page }) => {
+    // Everything the builder creates starts as a draft; preview used to 404 on it.
+    const draft = await wordpress.createNode("pcle_program", "E2E Draft Programme");
+    const unit = await wordpress.createNode("pcle_unit", "E2E Draft Unit", draft.id);
+
+    try {
+      await signIn(page, people.instructor);
+      await page.goto(`/builder/programs/${draft.id}`);
+      await page.getByRole("button", { name: "Preview as participant" }).click();
+
+      await expect(page).toHaveURL(new RegExp(`/programs/${draft.id}\\?preview=1$`));
+      await expect(page.getByRole("heading", { name: draft.title })).toBeVisible();
+      await expect(page.getByText(unit.title)).toBeVisible();
+    } finally {
+      await wordpress.deleteNode(draft.id, true);
+    }
+  });
 });
 
 test.describe("Backing up a programme", () => {
