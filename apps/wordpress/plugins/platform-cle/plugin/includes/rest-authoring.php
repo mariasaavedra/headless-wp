@@ -269,6 +269,7 @@ function pcle_authoring_shape_node( $post ) {
 
 	if ( 'pcle_program' === $post->post_type ) {
 		$node['credits'] = pcle_rest_shape_credit_hours( $post->ID );
+		$node['format']  = pcle_get_program_format( $post->ID );
 	}
 
 	return $node;
@@ -548,6 +549,7 @@ function pcle_authoring_list_programs() {
 			'title'      => $program->post_title,
 			'status'     => $program->post_status,
 			'credits'    => pcle_rest_shape_credit_hours( $program->ID ),
+			'format'     => pcle_get_program_format( $program->ID ),
 			'units'      => count( pcle_authoring_get_children( $program->ID, 'pcle_unit' ) ),
 			'modules'    => count( pcle_get_program_module_ids( $program->ID ) ),
 			'enrollees'  => count( pcle_get_program_enrollee_ids( $program->ID ) ),
@@ -618,6 +620,20 @@ function pcle_authoring_guard_create( $request ) {
 
 	if ( ! $program_id || ! pcle_user_can_edit_program( $program_id ) ) {
 		return new WP_Error( 'pcle_cannot_edit', __( 'You may not edit this programme.', 'platform-cle' ), array( 'status' => 403 ) );
+	}
+
+	/*
+	 * A webinar is one unit holding one module. A second of either would be
+	 * content its participants are never shown, because the app sends them
+	 * straight to the first module. Scenarios, quizzes and templates inside
+	 * that module are fine: they appear on the same page as the video.
+	 */
+	if ( pcle_is_webinar( $program_id ) && in_array( $type, array( 'pcle_unit', 'pcle_module', 'pcle_event' ), true ) ) {
+		return new WP_Error(
+			'pcle_webinar_shape',
+			__( 'A webinar has a single unit and module. Change the programme to a series to add more.', 'platform-cle' ),
+			array( 'status' => 409 )
+		);
 	}
 
 	return true;
@@ -758,6 +774,19 @@ function pcle_authoring_update_node( $request ) {
 	}
 
 	/*
+	 * Before anything else is written, because it is the one change here
+	 * that can be refused for a reason the author has to act on — a second
+	 * unit in the way — and a half-applied edit would hide that.
+	 */
+	if ( null !== $request['format'] && 'pcle_program' === get_post_type( $id ) ) {
+		$reshaped = pcle_set_program_format( $id, (string) $request['format'] );
+
+		if ( is_wp_error( $reshaped ) ) {
+			return $reshaped;
+		}
+	}
+
+	/*
 	 * Written even when only the ID is in it. A request that changes nothing
 	 * but quiz questions or credit hours is still an edit, and this is what
 	 * moves the modified time and records who made it.
@@ -785,6 +814,10 @@ function pcle_authoring_update_node( $request ) {
 		if ( null !== $request['gates_completion'] ) {
 			update_post_meta( $id, PCLE_QUIZ_GATES_META, rest_sanitize_boolean( $request['gates_completion'] ) ? 1 : 0 );
 		}
+	}
+
+	if ( null !== $request['status'] && 'pcle_program' === get_post_type( $id ) ) {
+		pcle_sync_webinar_status( $id );
 	}
 
 	if ( null !== $request['credits'] && 'pcle_program' === get_post_type( $id ) ) {
@@ -1054,6 +1087,21 @@ function pcle_authoring_guard_move( $request ) {
 
 	if ( ! $destination_program || ! pcle_user_can_edit_program( $destination_program ) ) {
 		return new WP_Error( 'pcle_cannot_edit', __( 'You may not edit the destination programme.', 'platform-cle' ), array( 'status' => 403 ) );
+	}
+
+	// The same rule as creating one: a webinar takes no second unit or module.
+	$moving = get_post_type( (int) $request['id'] );
+
+	if (
+		pcle_is_webinar( $destination_program )
+		&& in_array( $moving, array( 'pcle_unit', 'pcle_module', 'pcle_event' ), true )
+		&& pcle_get_parent_id( (int) $request['id'] ) !== (int) $request['parent_id']
+	) {
+		return new WP_Error(
+			'pcle_webinar_shape',
+			__( 'A webinar has a single unit and module. Change the programme to a series to add more.', 'platform-cle' ),
+			array( 'status' => 409 )
+		);
 	}
 
 	return true;

@@ -3172,6 +3172,111 @@ unset( $_SERVER['HTTP_AUTHORIZATION'] );
 wp_set_current_user( 0 );
 
 /* ------------------------------------------------------------------ */
+pcle_section( '# Webinars' );
+/* ------------------------------------------------------------------ */
+
+$patch_format = function ( $id, $format ) use ( $admin ) {
+	return pcle_authoring_call( $admin, 'PATCH', "/platform-cle/v1/authoring/nodes/{$id}", array( 'format' => $format ) );
+};
+
+// The shape production had before the format existed: a unit carrying the
+// video in its own body, and no module at all.
+$web_prog = pcle_make_post( 'pcle_program', 'TEST Webinar' );
+$web_unit = pcle_make_post( 'pcle_unit', 'TEST Webinar Unit', array( '_pcle_program_id' => $web_prog ), 'PCLE_WEBINAR_VIDEO' );
+$created_posts[] = $web_prog;
+$created_posts[] = $web_unit;
+
+pcle_eq( pcle_get_program_format( $web_prog ), 'series', 'a programme is a series until told otherwise' );
+
+$became = $patch_format( $web_prog, 'webinar' );
+pcle_eq( $became->get_status(), 200, 'a programme with one unit can become a webinar' );
+pcle_eq( $became->get_data()['format'], 'webinar', 'and the response says so' );
+
+$web_modules = pcle_authoring_get_children( $web_unit, 'pcle_module' );
+foreach ( $web_modules as $m ) {
+	$created_posts[] = (int) $m->ID;
+}
+pcle_eq( count( $web_modules ), 1, 'becoming a webinar creates its one module' );
+pcle_ok( false !== strpos( $web_modules[0]->post_content, 'PCLE_WEBINAR_VIDEO' ), "the unit's body moves to the module" );
+pcle_eq( trim( get_post_field( 'post_content', $web_unit ) ), '', 'and leaves the unit' );
+pcle_eq( $web_modules[0]->post_status, 'publish', 'the module takes the published programme\'s status, so the video is not hidden' );
+
+$web_data = pcle_rest_get( $admin, "/platform-cle/v1/programs/{$web_prog}" )->get_data();
+pcle_eq( $web_data['format'], 'webinar', 'the participant route says it is a webinar' );
+pcle_eq( $web_data['webinar_module'], (int) $web_modules[0]->ID, 'and where to send the participant' );
+pcle_eq( pcle_rest_get( $admin, "/platform-cle/v1/modules/{$web_modules[0]->ID}" )->get_data()['format'], 'webinar', 'the module knows it stands for a webinar' );
+
+// Progress and certificates keep working because the module is real.
+pcle_eq( pcle_get_program_progress( $web_prog, $admin )['total'], 1, 'a webinar counts as one module of progress' );
+
+// A second unit, module or session would never be shown, so it is refused.
+foreach ( array( array( 'pcle_unit', $web_prog ), array( 'pcle_module', $web_unit ), array( 'pcle_event', $web_unit ) ) as $attempt ) {
+	pcle_eq(
+		pcle_authoring_call( $admin, 'POST', '/platform-cle/v1/authoring/nodes', array( 'type' => $attempt[0], 'parent_id' => $attempt[1], 'title' => 'TEST Extra' ) )->get_status(),
+		409,
+		"a webinar refuses another {$attempt[0]}"
+	);
+}
+pcle_eq(
+	pcle_authoring_call( $admin, 'POST', '/platform-cle/v1/authoring/move', array( 'id' => $module2, 'parent_id' => $web_unit ) )->get_status(),
+	409,
+	'nor can a module be moved into one'
+);
+
+$web_quiz = pcle_authoring_call( $admin, 'POST', '/platform-cle/v1/authoring/nodes', array( 'type' => 'pcle_quiz', 'parent_id' => $web_modules[0]->ID, 'title' => 'TEST Webinar Quiz' ) );
+pcle_eq( $web_quiz->get_status(), 200, 'but its module takes a quiz' );
+$created_posts[] = (int) $web_quiz->get_data()['id'];
+
+// The unit is hidden from its author, so the programme's status carries it.
+$patch_status = function ( $status ) use ( $admin, $web_prog ) {
+	pcle_authoring_call( $admin, 'PATCH', "/platform-cle/v1/authoring/nodes/{$web_prog}", array( 'status' => $status ) );
+};
+$patch_status( 'draft' );
+pcle_eq( get_post_status( $web_unit ), 'draft', "unpublishing a webinar takes its unit with it" );
+pcle_eq( get_post_status( $web_modules[0]->ID ), 'draft', 'and its module' );
+$patch_status( 'publish' );
+pcle_eq( get_post_status( $web_unit ), 'publish', 'publishing it brings them back' );
+pcle_eq( get_post_status( $web_modules[0]->ID ), 'publish', 'both of them' );
+pcle_eq( get_post_status( $web_quiz->get_data()['id'] ), 'draft', 'while a quiz keeps its own status' );
+
+// Switching again is idempotent, and going back is always allowed.
+pcle_eq( $patch_format( $web_prog, 'webinar' )->get_status(), 200, 'asking twice is harmless' );
+pcle_eq( count( pcle_authoring_get_children( $web_unit, 'pcle_module' ) ), 1, 'and creates nothing more' );
+pcle_eq( $patch_format( $web_prog, 'series' )->get_status(), 200, 'a webinar can go back to a series' );
+pcle_eq( pcle_get_program_format( $web_prog ), 'series', 'and is one again' );
+pcle_eq( $patch_format( $web_prog, 'podcast' )->get_status(), 400, 'an unknown format is refused' );
+
+// A programme with more than one of anything cannot be squeezed into one.
+$refused = $patch_format( $prog_a, 'webinar' );
+pcle_eq( $refused->get_status(), 409, 'a programme with two modules cannot become a webinar' );
+pcle_eq( $refused->as_error()->get_error_code(), 'pcle_webinar_shape', 'and says why' );
+pcle_eq( pcle_get_program_format( $prog_a ), 'series', 'and stays a series' );
+
+// From nothing: an empty programme gets both levels.
+$empty_prog      = pcle_make_post( 'pcle_program', 'TEST Empty Webinar' );
+$created_posts[] = $empty_prog;
+pcle_eq( $patch_format( $empty_prog, 'webinar' )->get_status(), 200, 'an empty programme can become a webinar' );
+$empty_units = pcle_authoring_get_children( $empty_prog, 'pcle_unit' );
+foreach ( $empty_units as $u ) {
+	$created_posts[] = (int) $u->ID;
+	foreach ( pcle_authoring_get_children( $u->ID, 'pcle_module' ) as $m ) {
+		$created_posts[] = (int) $m->ID;
+	}
+}
+pcle_eq( count( $empty_units ), 1, 'with one unit' );
+pcle_eq( count( pcle_get_program_module_ids( $empty_prog ) ), 1, 'holding one module' );
+
+// The builder list and a backup both carry the format.
+$patch_format( $web_prog, 'webinar' );
+wp_set_current_user( $admin );
+$web_backup = pcle_backup_export_program( $web_prog );
+pcle_eq( $web_backup['programme']['program_format'], 'webinar', 'a backup records the format' );
+$listed = wp_list_filter( pcle_rest_get( $admin, '/platform-cle/v1/authoring/programs' )->get_data()['programs'], array( 'id' => $web_prog ) );
+pcle_eq( reset( $listed )['format'], 'webinar', 'the builder list shows the format' );
+
+wp_set_current_user( 0 );
+
+/* ------------------------------------------------------------------ */
 /* Teardown                                                           */
 /* ------------------------------------------------------------------ */
 pcle_smoke_teardown();

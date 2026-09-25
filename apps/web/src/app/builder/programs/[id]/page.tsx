@@ -18,6 +18,7 @@ import PageShell from "@/components/page-shell";
 import {
   createNodeAction,
   saveCreditsAction,
+  setFormatAction,
   setStatusAction,
 } from "@/app/actions/authoring";
 import { isAuthenticated } from "@/lib/auth";
@@ -48,6 +49,7 @@ export default async function BuilderProgramPage({
 
   const isDraft = tree.status !== "publish";
   const units = tree.children.filter((child) => child.type === "pcle_unit");
+  const isWebinar = tree.format === "webinar";
 
   return (
     <PageShell>
@@ -63,6 +65,10 @@ export default async function BuilderProgramPage({
 
         {isDraft && (
           <Badge className="bg-amber-100 text-amber-800">Draft</Badge>
+        )}
+
+        {isWebinar && (
+          <Badge className="bg-sky-100 text-sky-800">Webinar</Badge>
         )}
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -175,6 +181,66 @@ export default async function BuilderProgramPage({
         </ActionForm>
       </details>
 
+      {/*
+        Two submit buttons rather than a select and a save: the choice is the
+        action. Becoming a webinar may be refused — a second unit in the way —
+        and ActionForm shows the server's reason beside the buttons.
+      */}
+      <ActionForm
+        action={setFormatAction}
+        className="mt-4 flex flex-wrap items-center gap-2 text-sm"
+      >
+        <input type="hidden" name="id" value={tree.id} />
+        <span className="text-zinc-500">Format</span>
+        <Button
+          type="submit"
+          name="format"
+          value="series"
+          size="sm"
+          variant={isWebinar ? "outline" : "default"}
+          aria-pressed={!isWebinar}
+        >
+          Series
+        </Button>
+        <Button
+          type="submit"
+          name="format"
+          value="webinar"
+          size="sm"
+          variant={isWebinar ? "default" : "outline"}
+          aria-pressed={isWebinar}
+        >
+          Webinar
+        </Button>
+        <span className="w-full text-xs text-zinc-500">
+          A webinar is one video, with an optional quiz. Participants go
+          straight to it — there are no units to click through.
+        </span>
+      </ActionForm>
+
+      {isWebinar ? (
+        <Card className="mt-8 p-6">
+          {/*
+            The unit is still there — progress, certificates and reports all
+            count modules inside units — but a webinar's author never needs to
+            see it. Drawing the unit's tree shows just the module row, with
+            its own editor link and its add menu for a quiz.
+          */}
+          {units[0] ? (
+            <TreeView node={units[0]} />
+          ) : (
+            <p className="text-zinc-600">
+              This webinar has no module. Switch to Series and back to
+              Webinar to create one.
+            </p>
+          )}
+
+          <p className="mt-6 border-t border-zinc-100 pt-4 text-sm text-zinc-500">
+            Open the module to paste the video address and write the
+            description. Add a quiz to it if the webinar needs one.
+          </p>
+        </Card>
+      ) : (
       <Card className="mt-8 p-6">
         {units.length === 0 ? (
           <p className="text-zinc-600">
@@ -208,6 +274,7 @@ export default async function BuilderProgramPage({
           </Button>
         </ActionForm>
       </Card>
+      )}
 
       <p className="mt-6 text-sm text-zinc-500">
         Click any title to write its body, attach a document or image, or embed

@@ -61,6 +61,7 @@ function pcle_rest_get_my_training( $request ) {
 			'id'       => (int) $program->ID,
 			'title'    => get_the_title( $program ),
 			'progress' => pcle_rest_shape_progress( pcle_get_program_progress( $program->ID ) ),
+			'format'   => pcle_get_program_format( $program->ID ),
 		);
 	}
 
@@ -424,14 +425,18 @@ function pcle_rest_get_program( $request ) {
 
 	return rest_ensure_response(
 		array(
-			'id'       => (int) $program->ID,
-			'title'    => get_the_title( $program ),
-			'content'  => pcle_rest_rendered_content( $program ),
-			'progress' => pcle_rest_shape_progress( pcle_get_program_progress( $program->ID ) ),
+			'id'             => (int) $program->ID,
+			'title'          => get_the_title( $program ),
+			'content'        => pcle_rest_rendered_content( $program ),
+			'progress'       => pcle_rest_shape_progress( pcle_get_program_progress( $program->ID ) ),
 			// Approved hours per jurisdiction. Not summable — see
 			// pcle_get_credit_hours().
-			'credits'  => pcle_rest_shape_credit_hours( $program->ID ),
-			'units'    => array_map( 'pcle_rest_shape_unit', pcle_get_units( $program->ID ) ),
+			'credits'        => pcle_rest_shape_credit_hours( $program->ID ),
+			'format'         => pcle_get_program_format( $program->ID ),
+			// Where a webinar's participant actually goes. 0 for a series, or
+			// for a webinar whose module is not published yet.
+			'webinar_module' => pcle_get_webinar_module_id( $program->ID ),
+			'units'          => array_map( 'pcle_rest_shape_unit', pcle_get_units( $program->ID ) ),
 		)
 	);
 }
@@ -487,6 +492,10 @@ function pcle_rest_get_module( $request ) {
 			'can_mark'  => ( pcle_user_is_staff() && ! pcle_previewing_as_participant() ),
 			'unit'      => pcle_rest_shape_ref( $unit ),
 			'program'   => pcle_rest_shape_ref( $program ),
+			// A webinar's module is the whole programme, so the app drops the
+			// programme and unit from the trail rather than link to screens a
+			// webinar skips.
+			'format'    => $program ? pcle_get_program_format( $program->ID ) : 'series',
 			'scenarios' => array_map( $shape_child, pcle_get_scenarios( $module->ID ) ),
 			'templates' => array_map( $shape_child, pcle_get_templates( $module->ID ) ),
 			/*

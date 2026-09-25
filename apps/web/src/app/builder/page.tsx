@@ -129,6 +129,10 @@ export default async function BuilderPage() {
                       {program.status !== "publish" && (
                         <Badge className="bg-amber-100 text-amber-800">Draft</Badge>
                       )}
+
+                      {program.format === "webinar" && (
+                        <Badge className="bg-sky-100 text-sky-800">Webinar</Badge>
+                      )}
                     </div>
                   </CardHeader>
 

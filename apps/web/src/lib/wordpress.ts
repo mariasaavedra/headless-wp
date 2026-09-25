@@ -11,6 +11,7 @@ import type {
   UploadedMedia,
   NodeType,
   Program,
+  ProgramFormat,
   ProgramReport,
   QuizForTaking,
   QuizQuestion,
@@ -529,6 +530,8 @@ async function updateNode(
     body?: string;
     excerpt?: string;
     credits?: Record<string, number>;
+    /** Programmes. Becoming a webinar reshapes it on the server, or is refused. */
+    format?: ProgramFormat;
     /** Quizzes. The server sanitises and re-keys these; it owns the rules. */
     questions?: QuizQuestion[];
     pass_mark?: number;

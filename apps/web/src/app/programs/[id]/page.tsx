@@ -9,7 +9,7 @@ import UnitSection from "@/components/unit-section";
 import WpContent from "@/components/wp-content";
 import { isAuthenticated } from "@/lib/auth";
 import { decodeEntities } from "@/lib/html";
-import { isPreview } from "@/lib/preview";
+import { isPreview, keepPreview } from "@/lib/preview";
 import type { Program } from "@/lib/types";
 import { getProgram } from "@/lib/wordpress";
 
@@ -30,6 +30,12 @@ export default async function ProgramPage({
     program = await getProgram(Number(id), preview);
   } catch (error) {
     return renderAccessError(error);
+  }
+
+  // A webinar is its one module: this screen would only be a link to it.
+  // Outside the try, because redirect() works by throwing.
+  if (program.format === "webinar" && program.webinar_module) {
+    redirect(keepPreview(`/modules/${program.webinar_module}`, preview));
   }
 
   return (

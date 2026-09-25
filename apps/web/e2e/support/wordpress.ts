@@ -215,6 +215,18 @@ class WordPress {
     });
   }
 
+  /** Changes fields on a node, as the builder's PATCH does. */
+  async updateNode(id: number, changes: Record<string, unknown>): Promise<void> {
+    const response = await this.api.patch(
+      `${API}/platform-cle/v1/authoring/nodes/${id}`,
+      { headers: this.headers, data: changes }
+    );
+
+    if (!response.ok()) {
+      throw new Error(`Could not update ${id}: ${await response.text()}`);
+    }
+  }
+
   /** `cascade` takes everything under it too — needed for a whole programme. */
   async deleteNode(id: number, cascade = false): Promise<void> {
     await this.api.delete(
