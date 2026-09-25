@@ -134,7 +134,10 @@ export default async function ModulePage({
       <Breadcrumbs
         trail={[
           { label: "My Training", href: "/my-training" },
-          ...(courseModule.program
+          // A webinar's programme and unit screens only lead back here.
+          ...(courseModule.format === "webinar"
+            ? []
+            : courseModule.program
             ? [
                 {
                   label: courseModule.program.title,
@@ -145,7 +148,7 @@ export default async function ModulePage({
                 },
               ]
             : []),
-          ...(courseModule.unit
+          ...(courseModule.unit && courseModule.format !== "webinar"
             ? [
                 {
                   label: courseModule.unit.title,

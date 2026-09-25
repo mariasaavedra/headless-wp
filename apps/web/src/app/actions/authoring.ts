@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import type {
   NodeType,
+  ProgramFormat,
   QuizQuestion,
   QuizQuestionType,
   UploadedMedia,
@@ -59,6 +60,11 @@ function describe(error: unknown): string {
     }
     if (error.status === 403) {
       return "You do not have permission to change this programme.";
+    }
+    // Refusals worth reading as WordPress wrote them: they name what is in
+    // the way, which a generic line here cannot.
+    if (error.code === "pcle_webinar_shape") {
+      return error.message;
     }
     if (error.status === 409) {
       return "That item still contains others. Confirm the deletion to remove them too.";
@@ -233,6 +239,27 @@ async function saveCreditsAction(
 
   try {
     await updateNode(id, { credits });
+  } catch (error) {
+    return { error: describe(error) };
+  }
+
+  refresh();
+  return {};
+}
+
+async function setFormatAction(
+  _prev: BuilderActionState,
+  formData: FormData
+): Promise<BuilderActionState> {
+  const id = readId(formData.get("id"));
+  const format = String(formData.get("format") ?? "");
+
+  if (!id || !["series", "webinar"].includes(format)) {
+    return { error: "That change could not be applied." };
+  }
+
+  try {
+    await updateNode(id, { format: format as ProgramFormat });
   } catch (error) {
     return { error: describe(error) };
   }
@@ -563,6 +590,7 @@ export {
   createProgramAction,
   saveBodyAction,
   saveCreditsAction,
+  setFormatAction,
   renameNodeAction,
   setStatusAction,
   deleteNodeAction,

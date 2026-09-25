@@ -99,7 +99,8 @@ function pcle_backup_export_node( $post ) {
 
 	switch ( $post->post_type ) {
 		case 'pcle_program':
-			$node['credits'] = pcle_get_credit_hours( $post->ID );
+			$node['credits']        = pcle_get_credit_hours( $post->ID );
+			$node['program_format'] = pcle_get_program_format( $post->ID );
 			break;
 
 		case 'pcle_quiz':
@@ -358,6 +359,12 @@ function pcle_backup_restore_node( $node, $parent_id, $order, &$created ) {
 				if ( isset( pcle_jurisdictions()[ $code ] ) && pcle_sanitize_credit_hours( $hours ) > 0 ) {
 					update_post_meta( $post_id, pcle_credit_hours_meta_key( $code ), pcle_sanitize_credit_hours( $hours ) );
 				}
+			}
+
+			// Only the flag. The structure arrives with the rest of the
+			// backup, and a backup of a webinar already has its one module.
+			if ( 'webinar' === ( $node['program_format'] ?? '' ) ) {
+				update_post_meta( $post_id, PCLE_PROGRAM_FORMAT_META, 'webinar' );
 			}
 			break;
 

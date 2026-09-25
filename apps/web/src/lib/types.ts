@@ -48,11 +48,20 @@ type UnitDetail = Unit & {
   program: Ref | null;
 };
 
+/**
+ * How a programme is shaped. A webinar is one video: a single unit and module
+ * the app never shows as such, sending the participant straight to the module.
+ */
+type ProgramFormat = "series" | "webinar";
+
 type Program = {
   id: number;
   title: string;
   content: string;
   progress: Progress;
+  format: ProgramFormat;
+  /** A webinar's one module, once published; 0 otherwise. */
+  webinar_module: number;
   units: Unit[];
 };
 
@@ -75,6 +84,8 @@ type ModuleDetail = {
   can_mark: boolean;
   unit: Ref | null;
   program: Ref | null;
+  /** The programme's format — a webinar's module stands for the whole of it. */
+  format: ProgramFormat;
   scenarios: ModuleResource[];
   templates: ModuleResource[];
   quizzes: QuizSummary[];
@@ -279,6 +290,7 @@ type TrainingProgram = {
   id: number;
   title: string;
   progress: Progress;
+  format: ProgramFormat;
 };
 
 export type {
@@ -289,6 +301,7 @@ export type {
   EnrollmentPerson,
   EnrollmentResult,
   Progress,
+  ProgramFormat,
   Ref,
   ReportParticipant,
   ProgramReport,
@@ -418,6 +431,7 @@ type AuthoringProgram = Authorship & {
   title: string;
   status: string;
   credits: CreditHours[];
+  format: ProgramFormat;
   units: number;
   modules: number;
   enrollees: number;
@@ -454,6 +468,8 @@ type TreeNode = Authorship & {
   gates_completion?: boolean;
   /** Programmes only. */
   credits?: CreditHours[];
+  /** Programmes only. */
+  format?: ProgramFormat;
 };
 
 /** A file attached to a node through the builder. */

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { Badge } from "@pcle/ui/components/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@pcle/ui/components/card";
 
 import { renderAccessError } from "@/components/access-error";
@@ -45,8 +46,13 @@ export default async function MyTrainingPage() {
               >
                 <Card className="hover:border-zinc-300">
                   <CardHeader>
-                    <CardTitle className="text-xl font-medium text-zinc-950">
+                    <CardTitle className="flex flex-wrap items-center gap-2 text-xl font-medium text-zinc-950">
                       {decodeEntities(program.title)}
+                      {program.format === "webinar" && (
+                        <Badge className="bg-sky-100 text-sky-800">
+                          Webinar
+                        </Badge>
+                      )}
                     </CardTitle>
                   </CardHeader>
 
