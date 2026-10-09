@@ -85,7 +85,7 @@ export default async function QuizPage({
   }
 
   return (
-    <PageShell>
+    <PageShell code="P6">
       {preview && <PreviewBanner programmeId={quiz.program?.id} />}
 
       <Breadcrumbs

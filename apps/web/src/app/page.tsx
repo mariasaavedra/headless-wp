@@ -5,6 +5,7 @@ import { Button } from "@pcle/ui/components/button";
 import { Card, CardContent } from "@pcle/ui/components/card";
 
 import { logoutAction } from "@/app/actions/auth";
+import { PageCode } from "@/components/screen-code";
 import { isAuthenticated } from "@/lib/auth";
 import { decodeEntities } from "@/lib/html";
 import { pathsFor, type Path } from "@/lib/navigation";
@@ -147,6 +148,7 @@ export default async function Home() {
           </div>
         )}
       </div>
+      <PageCode code="P1" />
     </main>
   );
 }

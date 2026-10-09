@@ -27,6 +27,7 @@ import {
   setStatusAction,
 } from "@/app/actions/authoring";
 import { NODE_LABELS } from "@/components/builder/node-labels";
+import { PopupCode } from "@/components/screen-code";
 import type { NodeType } from "@/lib/types";
 
 /**
@@ -96,6 +97,8 @@ export function AddChildMenu({
             {state.error}
           </p>
         )}
+
+        <PopupCode code="D1" />
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -159,11 +162,14 @@ export function NodeMenu({
               {statusState.error}
             </p>
           )}
+
+          <PopupCode code="D2" />
         </DropdownMenuContent>
       </DropdownMenu>
 
       <AlertDialog open={confirming} onOpenChange={setConfirming}>
         <AlertDialogContent>
+          <PopupCode code="M1" corner />
           <AlertDialogHeader>
             <AlertDialogTitle>Delete “{title}”?</AlertDialogTitle>
             <AlertDialogDescription>

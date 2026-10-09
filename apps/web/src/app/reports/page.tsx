@@ -37,7 +37,7 @@ export default async function ReportsPage() {
   }
 
   return (
-    <PageShell>
+    <PageShell code="P12">
       <h1 className="text-3xl font-semibold tracking-tight text-zinc-950">
         Reports
       </h1>

@@ -39,7 +39,7 @@ export default async function ProgramPage({
   }
 
   return (
-    <PageShell>
+    <PageShell code="P3">
       {preview && <PreviewBanner programmeId={Number(id)} />}
 
       <Breadcrumbs

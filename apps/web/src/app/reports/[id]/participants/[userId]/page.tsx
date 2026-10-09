@@ -66,7 +66,7 @@ export default async function ParticipantProgressPage({
     : "Report";
 
   return (
-    <PageShell>
+    <PageShell code="P14">
       <Breadcrumbs
         trail={[
           { label: "Reports", href: "/reports" },

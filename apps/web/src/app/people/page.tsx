@@ -38,7 +38,7 @@ export default async function PeoplePage() {
   }
 
   return (
-    <PageShell wide>
+    <PageShell code="P8" wide>
       <h1 className="text-3xl font-semibold tracking-tight text-zinc-950">
         People
       </h1>

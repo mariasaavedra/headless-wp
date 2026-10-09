@@ -34,7 +34,7 @@ export default async function AccountPage() {
   }
 
   return (
-    <PageShell>
+    <PageShell code="P7">
       <h1 className="text-3xl font-semibold tracking-tight text-zinc-950">
         Your account
       </h1>

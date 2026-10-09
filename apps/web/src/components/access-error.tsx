@@ -55,7 +55,7 @@ export function renderAccessError(
   }
 
   return (
-    <PageShell>
+    <PageShell code="P15">
       <h1 className="text-2xl font-semibold text-zinc-950">
         {forbidden?.title ?? "You are not enrolled in this programme"}
       </h1>

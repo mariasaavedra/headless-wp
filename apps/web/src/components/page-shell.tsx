@@ -5,6 +5,7 @@ import { Button } from "@pcle/ui/components/button";
 import { cn } from "@pcle/ui/lib/utils";
 
 import { logoutAction } from "@/app/actions/auth";
+import { PageCode } from "@/components/screen-code";
 import { pathsFor } from "@/lib/navigation";
 
 /**
@@ -22,9 +23,16 @@ import { pathsFor } from "@/lib/navigation";
  */
 export default async function PageShell({
   children,
+  code,
   wide = false,
 }: {
   children: ReactNode;
+  /**
+   * The screen's code from docs/ui-map.md, shown in the corner. Required, so
+   * a new screen cannot ship without one: pick the next free number and add
+   * it to the map.
+   */
+  code: string;
   /**
    * Widens the content column. The default is sized for prose, which is what
    * almost every screen here is; a cohort table is the exception and gets
@@ -98,6 +106,8 @@ export default async function PageShell({
       >
         {children}
       </main>
+
+      <PageCode code={code} />
     </div>
   );
 }

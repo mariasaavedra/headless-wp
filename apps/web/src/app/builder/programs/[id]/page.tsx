@@ -52,7 +52,7 @@ export default async function BuilderProgramPage({
   const isWebinar = tree.format === "webinar";
 
   return (
-    <PageShell>
+    <PageShell code="P10">
       <Breadcrumbs
         trail={[
           { label: "Build", href: "/builder" },

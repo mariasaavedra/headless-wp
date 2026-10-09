@@ -138,7 +138,7 @@ export default async function ProgramReportPage({
   const title = report.program ? decodeEntities(report.program.title) : "Report";
 
   return (
-    <PageShell wide>
+    <PageShell code="P13" wide>
       <Breadcrumbs
         trail={[{ label: "Reports", href: "/reports" }, { label: title }]}
       />
