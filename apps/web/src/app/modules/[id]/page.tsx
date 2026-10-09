@@ -128,7 +128,7 @@ export default async function ModulePage({
   }
 
   return (
-    <PageShell>
+    <PageShell code="P4">
       {preview && <PreviewBanner programmeId={courseModule.program?.id} />}
 
       <Breadcrumbs

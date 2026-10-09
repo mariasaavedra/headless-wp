@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import LoginForm from "@/components/login-form";
+import { PageCode } from "@/components/screen-code";
 import { isAuthenticated } from "@/lib/auth";
 
 /*
@@ -54,6 +55,7 @@ export default async function LoginPage({
         </p>
       )}
       <LoginForm />
+      <PageCode code="P0" />
     </main>
   );
 }

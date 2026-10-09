@@ -40,7 +40,7 @@ export default async function BuilderPage() {
   }
 
   return (
-    <PageShell>
+    <PageShell code="P9">
       <h1 className="text-3xl font-semibold tracking-tight text-zinc-950">
         Build
       </h1>

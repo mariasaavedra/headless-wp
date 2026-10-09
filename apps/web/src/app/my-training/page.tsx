@@ -26,7 +26,7 @@ export default async function MyTrainingPage() {
   }
 
   return (
-    <PageShell>
+    <PageShell code="P2">
       <h1 className="text-3xl font-semibold tracking-tight text-zinc-950">
         My Training
       </h1>

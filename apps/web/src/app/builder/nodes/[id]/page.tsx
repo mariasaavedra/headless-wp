@@ -45,7 +45,7 @@ export default async function BuilderNodePage({
   const title = decodeEntities(node.title);
 
   return (
-    <PageShell>
+    <PageShell code="P11">
       <Breadcrumbs
         trail={[
           { label: "Build", href: "/builder" },
