@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 
-import { Badge } from "@pcle/ui/components/badge";
 import { Card, CardContent } from "@pcle/ui/components/card";
 
 import { renderAccessError } from "@/components/access-error";
@@ -9,6 +8,7 @@ import PageShell from "@/components/page-shell";
 import PreviewBanner from "@/components/preview-banner";
 import QuizRunner from "@/components/quiz-runner";
 import WpContent from "@/components/wp-content";
+import { StateBadge } from "@/components/state-badge";
 import { isAuthenticated } from "@/lib/auth";
 import { isPreview, keepPreview } from "@/lib/preview";
 import { decodeEntities } from "@/lib/html";
@@ -39,15 +39,9 @@ function Attempts({ attempts }: { attempts: QuizAttempt[] }) {
             key={attempt.id}
             className="flex flex-wrap items-center gap-3 border-b border-zinc-100 pb-2 text-sm"
           >
-            <Badge
-              className={
-                attempt.passed
-                  ? "bg-emerald-100 text-emerald-800"
-                  : "bg-zinc-100 text-zinc-700"
-              }
-            >
+            <StateBadge state={attempt.passed ? "complete" : "failed"}>
               {attempt.passed ? "Passed" : "Not passed"}
-            </Badge>
+            </StateBadge>
 
             <span className="text-zinc-900">
               {attempt.score} / {attempt.max_score}
@@ -117,13 +111,11 @@ export default async function QuizPage({
         </h1>
 
         {quiz.passed && (
-          <Badge className="bg-emerald-100 text-emerald-800">Passed</Badge>
+          <StateBadge state="complete">Passed</StateBadge>
         )}
 
         {quiz.required && !quiz.passed && (
-          <Badge className="bg-amber-100 text-amber-800">
-            Required for this module
-          </Badge>
+          <StateBadge state="required">Required for this module</StateBadge>
         )}
       </div>
 

@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { Badge } from "@pcle/ui/components/badge";
 import { Card, CardContent } from "@pcle/ui/components/card";
 
 import { renderAccessError } from "@/components/access-error";
 import PageShell from "@/components/page-shell";
+import { StateBadge } from "@/components/state-badge";
 import { isAuthenticated } from "@/lib/auth";
 import { decodeEntities } from "@/lib/html";
 import type { AuthoringProgram } from "@/lib/types";
@@ -63,9 +63,7 @@ export default async function ReportsPage() {
                       </h2>
 
                       {program.status !== "publish" && (
-                        <Badge className="bg-amber-100 text-amber-800">
-                          Draft
-                        </Badge>
+                        <StateBadge state="draft" />
                       )}
                     </div>
 

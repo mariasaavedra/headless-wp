@@ -15,6 +15,7 @@ import QuizEditor from "@/components/builder/quiz-editor";
 import { NODE_BADGES } from "@/components/builder/node-labels";
 import PageShell from "@/components/page-shell";
 import WpContent from "@/components/wp-content";
+import { StateBadge } from "@/components/state-badge";
 import { saveBodyAction } from "@/app/actions/authoring";
 import { isAuthenticated } from "@/lib/auth";
 import { decodeEntities } from "@/lib/html";
@@ -70,9 +71,7 @@ export default async function BuilderNodePage({
           {title}
         </h1>
 
-        {node.status !== "publish" && (
-          <Badge className="bg-amber-100 text-amber-800">Draft</Badge>
-        )}
+        <StateBadge state={node.status === "publish" ? "published" : "draft"} />
       </div>
 
       <AuthorshipLine item={node} />

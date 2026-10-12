@@ -2,7 +2,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PlusIcon } from "lucide-react";
 
-import { Badge } from "@pcle/ui/components/badge";
 import { Button } from "@pcle/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@pcle/ui/components/card";
 import { Input } from "@pcle/ui/components/input";
@@ -15,7 +14,9 @@ import {
 } from "@/app/actions/authoring";
 import AuthorshipLine from "@/components/builder/authorship-line";
 import PageShell from "@/components/page-shell";
+import { StateBadge, SwatchBadge } from "@/components/state-badge";
 import { isAuthenticated } from "@/lib/auth";
+import { FORMAT_SWATCHES } from "@/lib/colours";
 import { decodeEntities } from "@/lib/html";
 import type { AuthoringProgram } from "@/lib/types";
 import { getAuthoringPrograms } from "@/lib/wordpress";
@@ -127,11 +128,11 @@ export default async function BuilderPage() {
                       </CardTitle>
 
                       {program.status !== "publish" && (
-                        <Badge className="bg-amber-100 text-amber-800">Draft</Badge>
+                        <StateBadge state="draft" />
                       )}
 
                       {program.format === "webinar" && (
-                        <Badge className="bg-sky-100 text-sky-800">Webinar</Badge>
+                        <SwatchBadge swatch={FORMAT_SWATCHES.webinar}>Webinar</SwatchBadge>
                       )}
                     </div>
                   </CardHeader>

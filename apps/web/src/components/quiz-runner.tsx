@@ -24,6 +24,7 @@ import {
 import { submitQuizAction } from "@/app/actions/quiz";
 import { decodeEntities } from "@/lib/html";
 import type { QuizForTaking, QuizResult } from "@/lib/types";
+import { StateBadge } from "@/components/state-badge";
 
 /**
  * What the reader sees once the server has marked their answers.
@@ -92,15 +93,9 @@ function Results({
                   <Badge variant="secondary">{index + 1}</Badge>
 
                   {question.scored ? (
-                    <Badge
-                      className={
-                        question.correct
-                          ? "bg-emerald-100 text-emerald-800"
-                          : "bg-red-100 text-red-800"
-                      }
-                    >
+                    <StateBadge state={question.correct ? "complete" : "failed"}>
                       {question.correct ? "Correct" : "Incorrect"}
-                    </Badge>
+                    </StateBadge>
                   ) : (
                     <Badge variant="secondary">Not scored</Badge>
                   )}

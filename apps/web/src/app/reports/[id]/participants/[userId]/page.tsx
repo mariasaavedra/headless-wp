@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 
-import { Badge } from "@pcle/ui/components/badge";
 import { Card, CardContent } from "@pcle/ui/components/card";
 
 import { renderAccessError } from "@/components/access-error";
@@ -8,6 +7,7 @@ import Breadcrumbs from "@/components/breadcrumbs";
 import MarkParticipantModule from "@/components/mark-participant-module";
 import PageShell from "@/components/page-shell";
 import ProgressBar from "@/components/progress-bar";
+import { StateBadge } from "@/components/state-badge";
 import { isAuthenticated } from "@/lib/auth";
 import { decodeEntities } from "@/lib/html";
 import type { ParticipantModule, ParticipantProgress } from "@/lib/types";
@@ -116,9 +116,7 @@ export default async function ParticipantProgressPage({
                             {decodeEntities(module.title)}
                           </span>
                           {module.completed && (
-                            <Badge className="bg-emerald-100 text-emerald-800">
-                              Completed
-                            </Badge>
+                            <StateBadge state="complete">Completed</StateBadge>
                           )}
                         </div>
                         <div className="mt-0.5 text-xs">

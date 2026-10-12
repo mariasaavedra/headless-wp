@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { Badge } from "@pcle/ui/components/badge";
 import { Button } from "@pcle/ui/components/button";
 import { Card, CardContent } from "@pcle/ui/components/card";
 
@@ -10,7 +9,9 @@ import Breadcrumbs from "@/components/breadcrumbs";
 import EnrollParticipants from "@/components/enroll-participants";
 import PageShell from "@/components/page-shell";
 import RemoveParticipant from "@/components/remove-participant";
+import { StateBadge } from "@/components/state-badge";
 import { isAuthenticated } from "@/lib/auth";
+import type { State } from "@/lib/colours";
 import { decodeEntities } from "@/lib/html";
 import type { ProgramReport, ReportParticipant } from "@/lib/types";
 import { getMe, getProgramReport } from "@/lib/wordpress";
@@ -22,6 +23,17 @@ function RecordedDate({ value }: { value: string | null }) {
   }
 
   return <>{value.slice(0, 10)}</>;
+}
+
+/**
+ * Where a participant stands, for the status column.
+ *
+ * Not started is told apart from in progress: an instructor looking for who
+ * has not begun should not have to read the modules column row by row.
+ */
+function participantState(row: ReportParticipant): State {
+  if (row.finished) return "complete";
+  return row.completed > 0 ? "inProgress" : "notStarted";
 }
 
 function ParticipantRow({
@@ -83,11 +95,9 @@ function ParticipantRow({
       </td>
 
       <td className="py-3 pr-4 text-sm">
-        {row.finished ? (
-          <Badge className="bg-emerald-100 text-emerald-800">Finished</Badge>
-        ) : (
-          <span className="text-zinc-500">In progress</span>
-        )}
+        <StateBadge state={participantState(row)}>
+          {row.finished ? "Finished" : undefined}
+        </StateBadge>
       </td>
 
       <td className="py-3 text-right">
