@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@pcle/ui/components/card";
 
 import { renderAccessError } from "@/components/access-error";
+import { ColourStrip } from "@/components/colour-marks";
 import PageShell from "@/components/page-shell";
 import ProgressBar from "@/components/progress-bar";
 import { SwatchBadge } from "@/components/state-badge";
@@ -45,7 +46,8 @@ export default async function MyTrainingPage() {
                 href={`/programs/${program.id}`}
                 className="block transition hover:shadow-sm"
               >
-                <Card className="hover:border-zinc-300">
+                <Card className="relative hover:border-zinc-300">
+                  <ColourStrip swatch={program.color} />
                   <CardHeader>
                     <CardTitle className="flex flex-wrap items-center gap-2 text-xl font-medium text-zinc-950">
                       {decodeEntities(program.title)}

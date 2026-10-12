@@ -62,6 +62,7 @@ function pcle_rest_get_my_training( $request ) {
 			'title'    => get_the_title( $program ),
 			'progress' => pcle_rest_shape_progress( pcle_get_program_progress( $program->ID ) ),
 			'format'   => pcle_get_program_format( $program->ID ),
+			'color'    => pcle_get_colour( $program->ID ),
 		);
 	}
 
@@ -229,6 +230,7 @@ function pcle_rest_shape_module( $module ) {
 		'title'     => get_the_title( $module ),
 		'excerpt'   => pcle_rest_excerpt( $module ),
 		'completed' => ( ! pcle_previewing_as_participant() && pcle_is_module_complete( $module->ID ) ),
+		'color'     => pcle_get_effective_colour( $module->ID ),
 	);
 }
 
@@ -271,6 +273,7 @@ function pcle_rest_shape_unit( $unit, $children = true ) {
 		'title'    => get_the_title( $unit ),
 		'excerpt'  => pcle_rest_excerpt( $unit ),
 		'progress' => pcle_rest_shape_progress( pcle_get_unit_progress( $unit->ID ) ),
+		'color'    => pcle_get_effective_colour( $unit->ID ),
 	);
 
 	if ( $children ) {
@@ -433,6 +436,7 @@ function pcle_rest_get_program( $request ) {
 			// pcle_get_credit_hours().
 			'credits'        => pcle_rest_shape_credit_hours( $program->ID ),
 			'format'         => pcle_get_program_format( $program->ID ),
+			'color'          => pcle_get_colour( $program->ID ),
 			// Where a webinar's participant actually goes. 0 for a series, or
 			// for a webinar whose module is not published yet.
 			'webinar_module' => pcle_get_webinar_module_id( $program->ID ),

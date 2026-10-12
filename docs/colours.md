@@ -9,6 +9,28 @@ The palette lives in `apps/web/src/lib/colours.ts`. Screens never pick a
 Tailwind colour or a hex value; they ask for a state (`<StateBadge>`) or a
 named swatch (`<SwatchBadge>`) from `components/state-badge.tsx`.
 
+## Programme and item colours
+
+An author gives a programme a colour from the dot beside its title in the
+Program builder (P10), using the colour menu (D3). Everything inside the
+programme shows that colour, unless an item has been given its own; then
+everything inside *that* item shows the item's colour instead. Choosing
+**Use the programme's colour** (or the unit's) hands an item back.
+
+The menu says where a colour comes from: *Teal strong, from the programme*
+or *Plum soft, its own colour*.
+
+| Where | How it shows |
+|---|---|
+| Program builder (P10) | A strip down the left of every row, and the dot that opens D3 |
+| Item editor (P11) | The dot beside the title |
+| Build (P9), Reports (P12), My Training (P2) | A strip down the left of the programme's card |
+| Program (P3) | A strip down the left of each unit; a dot beside a module whose colour differs from its unit's |
+
+WordPress stores only the swatch *name* an item was given itself
+(`_pcle_colour`), never a colour value, and refuses names that are not in the
+palette. Choosing a colour is not recorded as an edit.
+
 ## Swatches
 
 Each hue below exists as `<hue>-soft` and `<hue>-strong`, e.g. `teal-soft`.

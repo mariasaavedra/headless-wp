@@ -8,10 +8,12 @@ import { Button } from "@pcle/ui/components/button";
 import ActionForm from "@/components/builder/action-form";
 import { authorshipText } from "@/components/builder/authorship-line";
 import CollapsibleNode from "@/components/builder/collapsible-node";
+import ColourMenu from "@/components/builder/colour-menu";
 import { AddChildMenu, NodeMenu } from "@/components/builder/row-actions";
 import { DragHandle } from "@/components/builder/sortable-group";
 import { StateBadge } from "@/components/state-badge";
 import { reorderAction } from "@/app/actions/authoring";
+import { swatchSolid, type Swatch } from "@/lib/colours";
 import { decodeEntities } from "@/lib/html";
 import type { NodeType, TreeNode } from "@/lib/types";
 
@@ -114,11 +116,16 @@ export default function NodeRow({
   node,
   parentId,
   siblingIds,
+  inherited,
+  inheritedFrom,
   children,
 }: {
   node: TreeNode;
   parentId: number;
   siblingIds: number[];
+  /** The colour this row shows unless it has its own, and whose it is. */
+  inherited: Swatch | null;
+  inheritedFrom: string;
   children?: React.ReactNode;
 }) {
   const isDraft = node.status !== "publish";
@@ -127,9 +134,24 @@ export default function NodeRow({
 
   const hasChildren = node.children.length > 0;
 
+  /*
+   * The strip is a border kept on every row, transparent when there is no
+   * colour, so colouring one item does not shift the rest sideways.
+   */
   const row = (
-    <div className="flex flex-wrap items-center gap-2 py-2">
+    <div
+      className="flex flex-wrap items-center gap-2 border-l-4 py-2 pl-2"
+      style={{ borderLeftColor: swatchSolid(node.color ?? inherited) }}
+    >
       <DragHandle />
+
+      <ColourMenu
+        nodeId={node.id}
+        title={title}
+        own={node.color}
+        inherited={inherited}
+        inheritedFrom={inheritedFrom}
+      />
 
       {/*
         On hover only. A line under every row would double the height of the

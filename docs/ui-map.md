@@ -58,3 +58,4 @@ pointing at the right thing.
 |---|---|---|---|
 | D1 | Add menu (new module, unit or quiz) | **Add** on a row in P10 | `components/builder/row-actions.tsx` (`AddChildMenu`) |
 | D2 | Item actions menu (publish, delete) | **⋯** on a row in P10 | `components/builder/row-actions.tsx` (`NodeMenu`) |
+| D3 | Colour menu (32 swatches) | The coloured dot beside a title in P10 or P11 | `components/builder/colour-menu.tsx` |

@@ -10,6 +10,7 @@ import { renderAccessError } from "@/components/access-error";
 import Breadcrumbs from "@/components/breadcrumbs";
 import ActionForm from "@/components/builder/action-form";
 import AuthorshipLine from "@/components/builder/authorship-line";
+import ColourMenu from "@/components/builder/colour-menu";
 import EditableTitle from "@/components/builder/editable-title";
 import { NODE_LABELS } from "@/components/builder/node-labels";
 import TreeView from "@/components/builder/tree-view";
@@ -62,6 +63,14 @@ export default async function BuilderProgramPage({
       />
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
+        <ColourMenu
+          nodeId={tree.id}
+          title={decodeEntities(tree.title)}
+          own={tree.color}
+          inherited={null}
+          inheritedFrom={null}
+        />
+
         <EditableTitle nodeId={tree.id} title={decodeEntities(tree.title)} />
 
         <StateBadge state={isDraft ? "draft" : "published"} />
@@ -226,7 +235,11 @@ export default async function BuilderProgramPage({
             its own editor link and its add menu for a quiz.
           */}
           {units[0] ? (
-            <TreeView node={units[0]} />
+            <TreeView
+              node={units[0]}
+              inherited={units[0].color ?? tree.color}
+              inheritedFrom={units[0].color ? "unit" : "programme"}
+            />
           ) : (
             <p className="text-zinc-600">
               This webinar has no module. Switch to Series and back to
@@ -247,7 +260,7 @@ export default async function BuilderProgramPage({
             add one to start.
           </p>
         ) : (
-          <TreeView node={tree} />
+          <TreeView node={tree} inherited={tree.color} inheritedFrom="programme" />
         )}
 
         {/*

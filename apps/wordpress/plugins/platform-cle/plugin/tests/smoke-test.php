@@ -3326,6 +3326,66 @@ pcle_eq( reset( $listed )['format'], 'webinar', 'the builder list shows the form
 wp_set_current_user( 0 );
 
 /* ------------------------------------------------------------------ */
+pcle_section( '# Colours' );
+/* ------------------------------------------------------------------ */
+
+$patch_colour = function ( $id, $colour ) use ( $admin ) {
+	return pcle_authoring_call( $admin, 'PATCH', "/platform-cle/v1/authoring/nodes/{$id}", array( 'color' => $colour ) );
+};
+
+$col_prog   = pcle_make_post( 'pcle_program', 'TEST Colour Programme' );
+$col_unit   = pcle_make_post( 'pcle_unit', 'TEST Colour Unit', array( '_pcle_program_id' => $col_prog ) );
+$col_module = pcle_make_post( 'pcle_module', 'TEST Colour Module', array( '_pcle_unit_id' => $col_unit ) );
+array_push( $created_posts, $col_prog, $col_unit, $col_module );
+
+pcle_eq( count( pcle_colour_swatches() ), 32, 'the palette has 32 swatches' );
+pcle_eq( pcle_get_effective_colour( $col_module ), null, 'nothing is coloured until someone chooses' );
+
+$col_modified = get_post_field( 'post_modified_gmt', $col_prog );
+sleep( 1 );
+$coloured = $patch_colour( $col_prog, 'teal-strong' );
+pcle_eq( $coloured->get_status(), 200, 'an author can colour a programme' );
+pcle_eq( $coloured->get_data()['color'], 'teal-strong', 'and the response says so' );
+clean_post_cache( $col_prog );
+pcle_eq( get_post_field( 'post_modified_gmt', $col_prog ), $col_modified, 'choosing a colour is not recorded as an edit' );
+pcle_eq( pcle_get_effective_colour( $col_module ), 'teal-strong', 'everything inside it takes the colour' );
+
+pcle_eq( $patch_colour( $col_unit, 'plum-soft' )->get_status(), 200, 'an item inside can have its own' );
+pcle_eq( pcle_get_effective_colour( $col_module ), 'plum-soft', 'which its own contents take instead' );
+pcle_eq( pcle_get_effective_colour( $col_prog ), 'teal-strong', 'while the programme keeps its own' );
+
+$bad = $patch_colour( $col_unit, '#ff0000' );
+pcle_eq( $bad->get_status(), 400, 'a colour value is refused: only swatch names are stored' );
+pcle_eq( $bad->as_error()->get_error_code(), 'pcle_invalid_colour', 'and says why' );
+pcle_eq( pcle_get_colour( $col_unit ), 'plum-soft', 'and the colour already there stays' );
+
+update_post_meta( $col_module, PCLE_COLOUR_META, 'retired-soft' );
+pcle_eq( pcle_get_colour( $col_module ), null, 'a stored name no longer in the palette reads as none' );
+pcle_eq( pcle_get_effective_colour( $col_module ), 'plum-soft', 'so the item inherits instead' );
+delete_post_meta( $col_module, PCLE_COLOUR_META );
+
+$col_tree = pcle_rest_get( $admin, "/platform-cle/v1/authoring/nodes/{$col_module}" )->get_data();
+pcle_eq( $col_tree['color'], null, 'the editor gets the item\'s own colour' );
+pcle_eq( $col_tree['inherited_color'], 'plum-soft', 'and the one it shows without it' );
+
+$col_program = pcle_rest_get( $admin, "/platform-cle/v1/programs/{$col_prog}" )->get_data();
+pcle_eq( $col_program['color'], 'teal-strong', 'the participant route carries the programme colour' );
+pcle_eq( $col_program['units'][0]['color'], 'plum-soft', 'a unit carries the colour it shows' );
+pcle_eq( $col_program['units'][0]['modules'][0]['color'], 'plum-soft', 'and so does a module' );
+
+wp_set_current_user( $admin );
+$col_backup = pcle_backup_export_program( $col_prog );
+pcle_eq( $col_backup['programme']['color'], 'teal-strong', 'a backup records a programme colour' );
+wp_set_current_user( 0 );
+
+pcle_eq( $patch_colour( $col_unit, '' )->get_status(), 200, 'clearing a colour is allowed' );
+pcle_eq( pcle_get_colour( $col_unit ), null, 'and the item has none of its own' );
+pcle_eq( pcle_get_effective_colour( $col_module ), 'teal-strong', 'so it shows the programme\'s again' );
+
+$listed = wp_list_filter( pcle_rest_get( $admin, '/platform-cle/v1/authoring/programs' )->get_data()['programs'], array( 'id' => $col_prog ) );
+pcle_eq( reset( $listed )['color'], 'teal-strong', 'the builder list shows the colour' );
+
+/* ------------------------------------------------------------------ */
 /* Teardown                                                           */
 /* ------------------------------------------------------------------ */
 pcle_smoke_teardown();

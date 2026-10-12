@@ -97,6 +97,14 @@ function pcle_backup_export_node( $post ) {
 		'source_id' => (int) $post->ID,
 	);
 
+	// Only when it has one: an item without a colour inherits, and a file
+	// saying `null` on every row would read as though that were a choice.
+	$colour = pcle_get_colour( $post->ID );
+
+	if ( $colour ) {
+		$node['color'] = $colour;
+	}
+
 	switch ( $post->post_type ) {
 		case 'pcle_program':
 			$node['credits']        = pcle_get_credit_hours( $post->ID );
@@ -351,6 +359,12 @@ function pcle_backup_restore_node( $node, $parent_id, $order, &$created ) {
 	if ( $parent_id ) {
 		$map = pcle_relationship_map();
 		update_post_meta( $post_id, $map[ $type ]['meta_key'], $parent_id );
+	}
+
+	// A name from another site's palette is dropped, not failed on: the
+	// content matters, and the item simply inherits instead.
+	if ( isset( $node['color'] ) ) {
+		pcle_set_colour( $post_id, (string) $node['color'] );
 	}
 
 	switch ( $type ) {
