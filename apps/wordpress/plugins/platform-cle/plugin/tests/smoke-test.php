@@ -130,6 +130,55 @@ function pcle_smoke_teardown() {
 }
 register_shutdown_function( 'pcle_smoke_teardown' );
 
+/**
+ * Deletes what an EARLIER run left behind, before this one starts.
+ *
+ * The teardown above only knows what this run created, and a run that is
+ * killed (Ctrl-C, a container stopped, a CI timeout) never reaches it: no
+ * shutdown function runs. Those leftovers used to stay for good — on one
+ * machine "TEST Program A" from a run weeks earlier was the first published
+ * programme, and two e2e tests that read "the first published programme"
+ * failed against it.
+ *
+ * Only what this file marks as its own: posts carrying `_pcle_test`, and
+ * accounts whose email is `test+…@example.test`, a shape nothing else uses
+ * (the demo seeder and the e2e suite both write `name@example.test`).
+ */
+function pcle_smoke_sweep_leftovers() {
+	global $wpdb;
+
+	$posts = get_posts(
+		array(
+			'post_type'   => array_values( get_post_types() ),
+			'post_status' => 'any',
+			'numberposts' => -1,
+			'meta_key'    => '_pcle_test', // phpcs:ignore WordPress.DB.SlowDBQuery
+			'fields'      => 'ids',
+		)
+	);
+
+	foreach ( $posts as $pid ) {
+		wp_delete_post( $pid, true );
+	}
+
+	$users = $wpdb->get_col(
+		$wpdb->prepare(
+			"SELECT ID FROM {$wpdb->users} WHERE user_email LIKE %s AND user_email LIKE %s",
+			$wpdb->esc_like( 'test+' ) . '%',
+			'%' . $wpdb->esc_like( '@example.test' )
+		)
+	);
+
+	foreach ( $users as $uid ) {
+		wp_delete_user( (int) $uid );
+	}
+
+	if ( $posts || $users ) {
+		printf( "Swept %d post(s) and %d account(s) left by an earlier run.\n", count( $posts ), count( $users ) );
+	}
+}
+pcle_smoke_sweep_leftovers();
+
 // Program A (student enrolled) → Unit → Module; plus a Case Update.
 $prog_a  = pcle_make_post( 'pcle_program', 'TEST Program A' );
 $prog_b  = pcle_make_post( 'pcle_program', 'TEST Program B' );
