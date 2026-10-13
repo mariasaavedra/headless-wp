@@ -2,6 +2,7 @@ import { decodeEntities } from "@/lib/html";
 import { NODE_LABELS } from "@/components/builder/node-labels";
 import NodeRow from "@/components/builder/node-row";
 import SortableGroup from "@/components/builder/sortable-group";
+import type { Swatch } from "@/lib/colours";
 import type { NodeType, TreeNode } from "@/lib/types";
 
 /**
@@ -16,7 +17,25 @@ function childrenOfType(node: TreeNode, type: NodeType): TreeNode[] {
   return node.children.filter((child) => child.type === type);
 }
 
-export default function TreeView({ node }: { node: TreeNode }) {
+/** "programme", "unit": whose colour an item is showing, in words. */
+function owner(type: NodeType): string {
+  return NODE_LABELS[type].singular.toLowerCase();
+}
+
+/**
+ * `inherited` is the colour this node's children show unless they have their
+ * own, and `inheritedFrom` whose colour that is. Worked out here, walking down
+ * the tree the page already has, rather than asked of the server per row.
+ */
+export default function TreeView({
+  node,
+  inherited,
+  inheritedFrom,
+}: {
+  node: TreeNode;
+  inherited: Swatch | null;
+  inheritedFrom: string;
+}) {
   const groups = node.allowed_children
     .map((type) => ({ type, items: childrenOfType(node, type) }))
     .filter((group) => group.items.length > 0);
@@ -44,8 +63,18 @@ export default function TreeView({ node }: { node: TreeNode }) {
                   node={child}
                   parentId={node.id}
                   siblingIds={group.items.map((item) => item.id)}
+                  inherited={inherited}
+                  inheritedFrom={inheritedFrom}
                 >
-                  <TreeView node={child} />
+                  <TreeView
+                    node={child}
+                    inherited={child.color ?? inherited}
+                    // With nothing coloured above, "Use the unit's colour"
+                    // names the parent, so the choice still reads.
+                    inheritedFrom={
+                      child.color || !inherited ? owner(child.type) : inheritedFrom
+                    }
+                  />
                 </NodeRow>
               ),
             }))}

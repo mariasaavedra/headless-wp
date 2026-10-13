@@ -13,6 +13,7 @@ import {
   restoreProgramAction,
 } from "@/app/actions/authoring";
 import AuthorshipLine from "@/components/builder/authorship-line";
+import { ColourStrip } from "@/components/colour-marks";
 import PageShell from "@/components/page-shell";
 import { StateBadge, SwatchBadge } from "@/components/state-badge";
 import { isAuthenticated } from "@/lib/auth";
@@ -120,7 +121,8 @@ export default async function BuilderPage() {
                 href={`/builder/programs/${program.id}`}
                 className="block transition hover:shadow-sm"
               >
-                <Card className="hover:border-zinc-300">
+                <Card className="relative hover:border-zinc-300">
+                  <ColourStrip swatch={program.color} />
                   <CardHeader>
                     <div className="flex flex-wrap items-center gap-3">
                       <CardTitle className="text-xl font-medium text-zinc-950">

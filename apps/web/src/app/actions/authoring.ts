@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { isSwatch } from "@/lib/colours";
 import type {
   NodeType,
   ProgramFormat,
@@ -260,6 +261,33 @@ async function setFormatAction(
 
   try {
     await updateNode(id, { format: format as ProgramFormat });
+  } catch (error) {
+    return { error: describe(error) };
+  }
+
+  refresh();
+  return {};
+}
+
+/**
+ * Gives an item its own colour, or clears it ("") so it inherits again.
+ *
+ * The name is checked here as well as on the server so a tampered form gets
+ * a sentence back rather than a 400 described as a permissions problem.
+ */
+async function setColourAction(
+  _prev: BuilderActionState,
+  formData: FormData
+): Promise<BuilderActionState> {
+  const id = readId(formData.get("id"));
+  const color = String(formData.get("color") ?? "");
+
+  if (!id || (color !== "" && !isSwatch(color))) {
+    return { error: "That colour could not be applied." };
+  }
+
+  try {
+    await updateNode(id, { color });
   } catch (error) {
     return { error: describe(error) };
   }
@@ -591,6 +619,7 @@ export {
   saveBodyAction,
   saveCreditsAction,
   setFormatAction,
+  setColourAction,
   renameNodeAction,
   setStatusAction,
   deleteNodeAction,

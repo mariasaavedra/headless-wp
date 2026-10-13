@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { Card, CardContent } from "@pcle/ui/components/card";
 
 import { renderAccessError } from "@/components/access-error";
+import { ColourStrip } from "@/components/colour-marks";
 import PageShell from "@/components/page-shell";
 import { StateBadge } from "@/components/state-badge";
 import { isAuthenticated } from "@/lib/auth";
@@ -55,7 +56,8 @@ export default async function ReportsPage() {
                 href={`/reports/${program.id}`}
                 className="block transition hover:shadow-sm"
               >
-                <Card className="p-6 hover:ring-foreground/20">
+                <Card className="relative p-6 hover:ring-foreground/20">
+                  <ColourStrip swatch={program.color} />
                   <CardContent className="p-0">
                     <div className="flex flex-wrap items-center gap-3">
                       <h2 className="text-xl font-medium text-zinc-950">

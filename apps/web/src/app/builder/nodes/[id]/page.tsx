@@ -11,6 +11,7 @@ import Breadcrumbs from "@/components/breadcrumbs";
 import ActionForm from "@/components/builder/action-form";
 import AuthorshipLine from "@/components/builder/authorship-line";
 import BodyEditor from "@/components/builder/body-editor";
+import ColourMenu from "@/components/builder/colour-menu";
 import QuizEditor from "@/components/builder/quiz-editor";
 import { NODE_BADGES } from "@/components/builder/node-labels";
 import PageShell from "@/components/page-shell";
@@ -66,6 +67,15 @@ export default async function BuilderNodePage({
         <Badge variant="secondary" className="uppercase tracking-wide">
           {NODE_BADGES[node.type]}
         </Badge>
+
+        <ColourMenu
+          nodeId={node.id}
+          title={title}
+          own={node.color}
+          inherited={node.inherited_color}
+          // The editor knows the colour above it, not which ancestor set it.
+          inheritedFrom={node.parent ? "parent" : null}
+        />
 
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-950">
           {title}

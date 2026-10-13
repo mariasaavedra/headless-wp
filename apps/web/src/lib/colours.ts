@@ -16,6 +16,10 @@ import type { CSSProperties } from "react";
  * can name one: "make Draft gold-soft".
  */
 
+/*
+ * The plugin keeps the same list of hue names, to refuse anything else
+ * (pcle_colour_swatches() in includes/colours.php). Change both together.
+ */
 const HUES = {
   rose: 15,
   coral: 35,
@@ -70,6 +74,36 @@ function swatchStyle(swatch: Swatch): CSSProperties {
       };
 }
 
+/** Whether a value from a form or the API is a swatch this palette has. */
+function isSwatch(value: unknown): value is Swatch {
+  return typeof value === "string" && (SWATCHES as string[]).includes(value);
+}
+
+/** "teal-strong" → "Teal strong", for menus and titles. */
+function swatchLabel(swatch: Swatch): string {
+  const { hue, tone } = parts(swatch);
+  return `${hue[0].toUpperCase()}${hue.slice(1)} ${tone}`;
+}
+
+/**
+ * The one colour that stands for a swatch on a strip or a dot.
+ *
+ * A soft swatch's badge fill is too pale to see as a 4px line, so its strip
+ * is a stronger version of the same hue; a strong swatch uses its fill.
+ * Unknown names, including ones from a newer palette, draw nothing.
+ */
+function swatchSolid(swatch: Swatch | null | undefined): string {
+  if (!isSwatch(swatch)) {
+    return "transparent";
+  }
+
+  const { tone, angle } = parts(swatch);
+
+  return tone === "soft"
+    ? `oklch(0.80 0.10 ${angle})`
+    : `oklch(0.52 0.15 ${angle})`;
+}
+
 /**
  * What a badge can say about something's state.
  *
@@ -118,5 +152,14 @@ const FORMAT_SWATCHES = {
   webinar: "indigo-soft",
 } as const satisfies Record<string, Swatch>;
 
-export { HUES, SWATCHES, STATES, FORMAT_SWATCHES, swatchStyle };
+export {
+  HUES,
+  SWATCHES,
+  STATES,
+  FORMAT_SWATCHES,
+  isSwatch,
+  swatchLabel,
+  swatchSolid,
+  swatchStyle,
+};
 export type { Hue, Tone, Swatch, State };

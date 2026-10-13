@@ -247,6 +247,8 @@ function pcle_authoring_shape_node( $post ) {
 		'status'          => $post->post_status,
 		'menu_order'      => (int) $post->menu_order,
 		'allowed_children' => pcle_allowed_child_types( $post->post_type ),
+		// Its own colour only; the builder inherits down the tree it renders.
+		'color'           => pcle_get_colour( $post->ID ),
 		'children'        => array(),
 	) + pcle_authoring_shape_authorship( $post );
 
@@ -550,6 +552,7 @@ function pcle_authoring_list_programs() {
 			'status'     => $program->post_status,
 			'credits'    => pcle_rest_shape_credit_hours( $program->ID ),
 			'format'     => pcle_get_program_format( $program->ID ),
+			'color'      => pcle_get_colour( $program->ID ),
 			'units'      => count( pcle_authoring_get_children( $program->ID, 'pcle_unit' ) ),
 			'modules'    => count( pcle_get_program_module_ids( $program->ID ) ),
 			'enrollees'  => count( pcle_get_program_enrollee_ids( $program->ID ) ),
@@ -783,6 +786,27 @@ function pcle_authoring_update_node( $request ) {
 
 		if ( is_wp_error( $reshaped ) ) {
 			return $reshaped;
+		}
+	}
+
+	if ( null !== $request['color'] ) {
+		// Checked before anything is written, for the same reason.
+		$coloured = pcle_set_colour( $id, (string) $request['color'] );
+
+		if ( is_wp_error( $coloured ) ) {
+			return $coloured;
+		}
+
+		/*
+		 * A colour is how the curriculum looks in the app, not what it says,
+		 * so a request carrying nothing else is not recorded as an edit:
+		 * recolouring a programme should not make it "last edited" by
+		 * whoever chose the colour.
+		 */
+		$fields = array( 'title', 'excerpt', 'body', 'content', 'status', 'format', 'starts_at', 'questions', 'pass_mark', 'gates_completion', 'credits' );
+
+		if ( ! array_filter( $fields, fn( $field ) => null !== $request[ $field ] ) ) {
+			return rest_ensure_response( pcle_authoring_shape_node( get_post( $id ) ) );
 		}
 	}
 
@@ -1157,6 +1181,10 @@ function pcle_authoring_get_node( $request ) {
 	$parent_id = pcle_get_parent_id( $post->ID );
 
 	$node['parent']  = $parent_id ? pcle_rest_shape_ref( get_post( $parent_id ) ) : null;
+
+	// What the item shows while it has no colour of its own, so the editor
+	// can say so without fetching every ancestor.
+	$node['inherited_color'] = $parent_id ? pcle_get_effective_colour( $parent_id ) : null;
 	$node['program'] = pcle_rest_shape_ref( get_post( pcle_get_program_for_post( $post->ID ) ) );
 
 	return rest_ensure_response( $node );

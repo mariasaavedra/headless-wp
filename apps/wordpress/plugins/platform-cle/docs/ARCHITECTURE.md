@@ -41,6 +41,7 @@ comes first because everything storage-backed depends on the tables existing).
 | `includes/health.php` | REST health-check endpoint for deploy/uptime checks. |
 | `includes/credits.php` | CLE credit hours per jurisdiction, carried by the programme. |
 | `includes/formats.php` | Programme format: a series, or a webinar — one hidden unit holding one module, which participants land on directly. |
+| `includes/colours.php` | The colour an author gives a programme or an item: a swatch name from a fixed palette, inherited down the tree by anything without its own. |
 | `includes/attendance.php` | Attendance at live sessions, marked by instructors. |
 | `includes/quizzes.php` | The `pcle_quiz` CPT, questions in meta, server-side marking, completion gating. |
 | `includes/certificates.php` | Completion certificates — **scaffold**, pending accreditation identity. |
@@ -361,6 +362,7 @@ restorable.
 | `_pcle_program_id` / `_pcle_unit_id` / `_pcle_module_id` | post meta | hierarchical relationships |
 | `_pcle_event_datetime` | post meta | event date/time (`Y-m-d H:i:s`) |
 | `_pcle_program_format` | post meta (programme) | `webinar` when the programme is one video; absent for a series |
+| `_pcle_colour` | post meta (any curriculum item) | A swatch name such as `teal-strong`; absent when the item inherits its parent's |
 | `_pcle_credit_hours_<code>` | post meta (program) | approved credit hours per jurisdiction |
 | `_pcle_quiz_questions` | post meta (quiz) | questions **and answers** — never registered in REST |
 | `_pcle_quiz_pass_mark` | post meta (quiz) | percentage required to pass |

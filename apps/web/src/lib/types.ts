@@ -6,6 +6,8 @@
  * and administrators in wp-admin.
  */
 
+import type { Swatch } from "@/lib/colours";
+
 type Progress = {
   completed: number;
   total: number;
@@ -23,6 +25,8 @@ type ModuleSummary = {
   title: string;
   excerpt: string;
   completed: boolean;
+  /** The colour it shows: its own, else the nearest ancestor's. */
+  color: Swatch | null;
 };
 
 type SessionEvent = {
@@ -39,6 +43,8 @@ type Unit = {
   title: string;
   excerpt: string;
   progress: Progress;
+  /** The colour it shows: its own, else the programme's. */
+  color: Swatch | null;
   modules: ModuleSummary[];
   events: SessionEvent[];
 };
@@ -60,6 +66,7 @@ type Program = {
   content: string;
   progress: Progress;
   format: ProgramFormat;
+  color: Swatch | null;
   /** A webinar's one module, once published; 0 otherwise. */
   webinar_module: number;
   units: Unit[];
@@ -291,6 +298,7 @@ type TrainingProgram = {
   title: string;
   progress: Progress;
   format: ProgramFormat;
+  color: Swatch | null;
 };
 
 export type {
@@ -432,6 +440,7 @@ type AuthoringProgram = Authorship & {
   status: string;
   credits: CreditHours[];
   format: ProgramFormat;
+  color: Swatch | null;
   units: number;
   modules: number;
   enrollees: number;
@@ -457,6 +466,8 @@ type TreeNode = Authorship & {
   status: string;
   menu_order: number;
   allowed_children: NodeType[];
+  /** Its own colour only. Without one it shows its parent's; see TreeView. */
+  color: Swatch | null;
   children: TreeNode[];
   /** Events only. */
   starts_at?: string;
@@ -512,6 +523,8 @@ type NodeDetail = Omit<TreeNode, "questions"> & {
   rendered: string;
   parent: Ref | null;
   program: Ref | null;
+  /** The colour it shows while it has none of its own. */
+  inherited_color: Swatch | null;
   /**
    * Quizzes only. The tree carries a count; opening the node carries the
    * questions themselves, answers included, because this route is staff-only.

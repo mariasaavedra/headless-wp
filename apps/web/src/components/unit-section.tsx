@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Badge } from "@pcle/ui/components/badge";
 import { Card, CardContent } from "@pcle/ui/components/card";
 
+import { ColourDot, ColourStrip } from "@/components/colour-marks";
 import ProgressBar from "@/components/progress-bar";
 import { decodeEntities } from "@/lib/html";
 import { keepPreview } from "@/lib/preview";
@@ -35,7 +36,8 @@ export default function UnitSection({
   const title = decodeEntities(unit.title);
 
   return (
-    <Card className="p-6">
+    <Card className="relative p-6">
+      <ColourStrip swatch={unit.color} />
       <CardContent className="p-0">
         <Heading className="text-xl font-medium text-zinc-950">
           {linkHeading ? (
@@ -82,6 +84,14 @@ export default function UnitSection({
 
                   <span>
                     <span className="block font-medium text-zinc-900">
+                      {/*
+                        Only when it differs from the unit's: the strip
+                        already says the rest, and a dot on every row would
+                        only repeat it.
+                      */}
+                      {module.color && module.color !== unit.color && (
+                        <ColourDot swatch={module.color} className="mr-2 size-2.5 align-middle" />
+                      )}
                       {decodeEntities(module.title)}
                       <span className="sr-only">
                         {module.completed ? " (completed)" : " (not completed)"}

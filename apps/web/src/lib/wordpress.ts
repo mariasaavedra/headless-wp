@@ -1,4 +1,5 @@
 import { getAuthToken, setAuthCookie, clearAuthCookie } from "@/lib/auth";
+import type { Swatch } from "@/lib/colours";
 import type {
   AuthoringProgram,
   EnrollmentResult,
@@ -532,6 +533,8 @@ async function updateNode(
     credits?: Record<string, number>;
     /** Programmes. Becoming a webinar reshapes it on the server, or is refused. */
     format?: ProgramFormat;
+    /** A swatch name, or "" to clear it so the item inherits again. */
+    color?: Swatch | "";
     /** Quizzes. The server sanitises and re-keys these; it owns the rules. */
     questions?: QuizQuestion[];
     pass_mark?: number;
