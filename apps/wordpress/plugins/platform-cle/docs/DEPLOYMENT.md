@@ -51,9 +51,11 @@ Four things it refuses to do:
 - Stay quiet about a broken site — it fails if
   `/wp-json/platform-cle/v1/health` does not report `ok` when it is finished.
 
-Deploying on every merge that touches the plugin is a commented-out `push`
-trigger in the same file. Uncomment it once a few manual runs have done the
-right thing.
+Every merge to `main` that touches `apps/wordpress/plugins/platform-cle/plugin/`
+deploys it, the same way Vercel deploys `apps/web`, so the app and the plugin
+it calls go live together. A merge that touches neither file is not a deploy.
+Running the workflow by hand (Actions → Deploy plugin) is still there for a
+dry run, a verify-only check, or a redeploy.
 
 ### By hand
 

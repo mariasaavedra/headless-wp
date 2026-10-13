@@ -35,14 +35,16 @@ on:
         type: boolean
         default: false
 
-  # Deploying on every merge that touches the plugin. Uncomment once you have
-  # watched a few manual runs do the right thing — a dry run costs nothing and
-  # prints the exact file list.
-  #
-  # push:
-  #   branches: [main]
-  #   paths:
-  #     - 'apps/wordpress/plugins/platform-cle/plugin/**'
+  # Every merge that touches the plugin deploys it. Vercel already deploys
+  # apps/web from main on its own; without this the two drifted apart, and a
+  # merged feature could be live in the app while the plugin it calls was
+  # weeks old (the colour screens saved nothing until a deploy was run by
+  # hand). A push run is a real deploy: no inputs, so dry_run and verify_only
+  # are both off, and the smoke tests still gate the copy.
+  push:
+    branches: [main]
+    paths:
+      - 'apps/wordpress/plugins/platform-cle/plugin/**'
 
 # One deploy at a time, and never cancel one half-way: an interrupted rsync
 # leaves the plugin directory in a state nobody chose.
