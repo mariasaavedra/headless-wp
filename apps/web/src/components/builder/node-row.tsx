@@ -2,7 +2,6 @@ import Link from "next/link";
 
 import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 
-import { Badge } from "@pcle/ui/components/badge";
 import { cn } from "@pcle/ui/lib/utils";
 import { Button } from "@pcle/ui/components/button";
 
@@ -11,6 +10,7 @@ import { authorshipText } from "@/components/builder/authorship-line";
 import CollapsibleNode from "@/components/builder/collapsible-node";
 import { AddChildMenu, NodeMenu } from "@/components/builder/row-actions";
 import { DragHandle } from "@/components/builder/sortable-group";
+import { StateBadge } from "@/components/state-badge";
 import { reorderAction } from "@/app/actions/authoring";
 import { decodeEntities } from "@/lib/html";
 import type { NodeType, TreeNode } from "@/lib/types";
@@ -145,7 +145,7 @@ export default function NodeRow({
       </Link>
 
       {isDraft && (
-        <Badge className="bg-amber-100 text-amber-800">Draft</Badge>
+        <StateBadge state="draft" />
       )}
 
       {node.type === "pcle_event" && node.starts_at && (

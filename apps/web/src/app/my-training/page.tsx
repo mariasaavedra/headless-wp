@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { Badge } from "@pcle/ui/components/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@pcle/ui/components/card";
 
 import { renderAccessError } from "@/components/access-error";
 import PageShell from "@/components/page-shell";
 import ProgressBar from "@/components/progress-bar";
+import { SwatchBadge } from "@/components/state-badge";
 import { isAuthenticated } from "@/lib/auth";
+import { FORMAT_SWATCHES } from "@/lib/colours";
 import { decodeEntities } from "@/lib/html";
 import type { TrainingProgram } from "@/lib/types";
 import { getMyTraining } from "@/lib/wordpress";
@@ -49,9 +50,9 @@ export default async function MyTrainingPage() {
                     <CardTitle className="flex flex-wrap items-center gap-2 text-xl font-medium text-zinc-950">
                       {decodeEntities(program.title)}
                       {program.format === "webinar" && (
-                        <Badge className="bg-sky-100 text-sky-800">
+                        <SwatchBadge swatch={FORMAT_SWATCHES.webinar}>
                           Webinar
-                        </Badge>
+                        </SwatchBadge>
                       )}
                     </CardTitle>
                   </CardHeader>

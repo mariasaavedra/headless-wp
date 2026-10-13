@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { Badge } from "@pcle/ui/components/badge";
 
 import { renderAccessError } from "@/components/access-error";
 import Breadcrumbs from "@/components/breadcrumbs";
@@ -9,6 +8,7 @@ import CompleteToggle from "@/components/complete-toggle";
 import PageShell from "@/components/page-shell";
 import PreviewBanner from "@/components/preview-banner";
 import WpContent from "@/components/wp-content";
+import { StateBadge } from "@/components/state-badge";
 import { isAuthenticated } from "@/lib/auth";
 import { isPreview, keepPreview } from "@/lib/preview";
 import { decodeEntities } from "@/lib/html";
@@ -92,13 +92,11 @@ function QuizList({
               </span>
 
               {quiz.passed ? (
-                <Badge className="ml-auto bg-emerald-100 text-emerald-800">
+                <StateBadge state="complete" className="ml-auto">
                   Passed
-                </Badge>
+                </StateBadge>
               ) : quiz.required ? (
-                <Badge className="ml-auto bg-amber-100 text-amber-800">
-                  Required
-                </Badge>
+                <StateBadge state="required" className="ml-auto" />
               ) : null}
             </Link>
           </li>
@@ -171,7 +169,7 @@ export default async function ModulePage({
             completed={courseModule.completed}
           />
         ) : courseModule.completed ? (
-          <Badge className="bg-emerald-100 text-emerald-800">✓ Completed</Badge>
+          <StateBadge state="complete">✓ Completed</StateBadge>
         ) : (
           /*
            * Said, not left blank: without it a participant looks for the

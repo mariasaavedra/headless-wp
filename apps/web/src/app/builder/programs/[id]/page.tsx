@@ -2,7 +2,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PlusIcon } from "lucide-react";
 
-import { Badge } from "@pcle/ui/components/badge";
 import { Button } from "@pcle/ui/components/button";
 import { Card } from "@pcle/ui/components/card";
 import { Input } from "@pcle/ui/components/input";
@@ -15,6 +14,7 @@ import EditableTitle from "@/components/builder/editable-title";
 import { NODE_LABELS } from "@/components/builder/node-labels";
 import TreeView from "@/components/builder/tree-view";
 import PageShell from "@/components/page-shell";
+import { StateBadge, SwatchBadge } from "@/components/state-badge";
 import {
   createNodeAction,
   saveCreditsAction,
@@ -22,6 +22,7 @@ import {
   setStatusAction,
 } from "@/app/actions/authoring";
 import { isAuthenticated } from "@/lib/auth";
+import { FORMAT_SWATCHES } from "@/lib/colours";
 import { decodeEntities } from "@/lib/html";
 import type { TreeNode } from "@/lib/types";
 import { getProgramTree } from "@/lib/wordpress";
@@ -63,12 +64,10 @@ export default async function BuilderProgramPage({
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <EditableTitle nodeId={tree.id} title={decodeEntities(tree.title)} />
 
-        {isDraft && (
-          <Badge className="bg-amber-100 text-amber-800">Draft</Badge>
-        )}
+        <StateBadge state={isDraft ? "draft" : "published"} />
 
         {isWebinar && (
-          <Badge className="bg-sky-100 text-sky-800">Webinar</Badge>
+          <SwatchBadge swatch={FORMAT_SWATCHES.webinar}>Webinar</SwatchBadge>
         )}
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
