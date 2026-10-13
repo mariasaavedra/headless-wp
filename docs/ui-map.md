@@ -36,7 +36,7 @@ pointing at the right thing.
 | P4 | Module | `/modules/:id` | Participants (enrolled) | `app/modules/[id]/page.tsx` |
 | P5 | Unit | `/units/:id` | Participants (enrolled) | `app/units/[id]/page.tsx` |
 | P6 | Quiz | `/quizzes/:id` | Participants (enrolled) | `app/quizzes/[id]/page.tsx` |
-| P7 | Your account | `/account` | Everyone | `app/account/page.tsx` |
+| P7 | Your account (incl. My colours) | `/account` | Everyone | `app/account/page.tsx` |
 | P8 | People | `/people` | Authors (changing a role takes an administrator) | `app/people/page.tsx` |
 | P9 | Build | `/builder` | Authors | `app/builder/page.tsx` |
 | P10 | Program builder | `/builder/programs/:id` | Authors | `app/builder/programs/[id]/page.tsx` |

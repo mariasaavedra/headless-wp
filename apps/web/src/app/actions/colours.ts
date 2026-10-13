@@ -19,6 +19,7 @@ import {
   WordPressApiError,
   getColourSettings,
   saveColourSettings,
+  setMyColour,
 } from "@/lib/wordpress";
 
 /**
@@ -114,4 +115,29 @@ async function resetColoursAction(): Promise<BuilderActionState> {
   return apply(() => structuredClone(DEFAULT_SETTINGS));
 }
 
-export { setDefaultColourAction, setDisplayAction, resetColoursAction };
+/** The reader's own colour for one of their programmes. "" clears it. */
+async function setMyColourAction(
+  _prev: BuilderActionState,
+  formData: FormData
+): Promise<BuilderActionState> {
+  const programId = Number(formData.get("program_id"));
+  const color = String(formData.get("color") ?? "");
+
+  if (!Number.isInteger(programId) || programId <= 0 || (color !== "" && !isSwatch(color))) {
+    return { error: "That colour could not be applied." };
+  }
+
+  try {
+    await setMyColour(programId, color);
+  } catch (error) {
+    if (error instanceof WordPressApiError && error.status === 403) {
+      return { error: "You can only colour programmes on your own My Training." };
+    }
+    return { error: "That change could not be saved. Please try again." };
+  }
+
+  revalidatePath("/", "layout");
+  return {};
+}
+
+export { setDefaultColourAction, setDisplayAction, resetColoursAction, setMyColourAction };

@@ -115,3 +115,37 @@ test.describe("Colour settings", () => {
     await expect(page.getByRole("button", { name: "Hide colours from participants" })).toBeDisabled();
   });
 });
+
+/**
+ * A participant's own colours (P7): only they see them, and they can hand a
+ * programme back to its own colour.
+ */
+test.describe("My colours", () => {
+  test("a participant recolours their programme, and gives it back", async ({ page }) => {
+    await signIn(page, people.participant);
+    await page.goto("/account");
+
+    const trigger = page.getByRole("button", { name: /^Colour for / }).first();
+    const name = (await trigger.getAttribute("aria-label"))!.replace(/^Colour for (.*): .*$/, "$1");
+
+    await trigger.click();
+    await page.getByRole("menuitem", { name: "Rose strong", exact: true }).click();
+
+    await expect(
+      page.getByRole("button", { name: `Colour for ${name}: Rose strong, your colour` })
+    ).toBeVisible();
+
+    // My Training shows it as the card's strip.
+    await page.goto("/my-training");
+    const card = page.getByRole("link", { name: new RegExp(name) });
+    await expect(card.locator('[style*="oklch(0.52 0.15 15)"]').first()).toBeAttached();
+
+    await page.goto("/account");
+    await page.getByRole("button", { name: new RegExp(`^Colour for ${name}:`) }).click();
+    await page.getByRole("menuitem", { name: "Use the programme's colour" }).click();
+
+    await expect(
+      page.getByRole("button", { name: new RegExp(`^Colour for ${name}: (?!Rose strong, your colour)`) })
+    ).toBeVisible();
+  });
+});
