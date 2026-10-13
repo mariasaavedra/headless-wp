@@ -45,6 +45,7 @@ pointing at the right thing.
 | P13 | Program report | `/reports/:id` | Authors | `app/reports/[id]/page.tsx` |
 | P14 | Participant report | `/reports/:id/participants/:userId` | Authors | `app/reports/[id]/participants/[userId]/page.tsx` |
 | P15 | Not allowed | any of the above, when WordPress refuses access | Anyone without access | `components/access-error.tsx` |
+| P16 | Colours | `/colours` | Authors (the defaults and display take an administrator) | `app/colours/page.tsx` |
 
 ## Popups
 
@@ -58,4 +59,4 @@ pointing at the right thing.
 |---|---|---|---|
 | D1 | Add menu (new module, unit or quiz) | **Add** on a row in P10 | `components/builder/row-actions.tsx` (`AddChildMenu`) |
 | D2 | Item actions menu (publish, delete) | **⋯** on a row in P10 | `components/builder/row-actions.tsx` (`NodeMenu`) |
-| D3 | Colour menu (32 swatches) | The coloured dot beside a title in P10 or P11 | `components/builder/colour-menu.tsx` |
+| D3 | Colour menu (32 swatches) | The coloured dot beside a title in P10, P11 or P16 | `components/colours/swatch-menu.tsx` |

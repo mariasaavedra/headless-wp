@@ -8,12 +8,13 @@ import { Button } from "@pcle/ui/components/button";
 import ActionForm from "@/components/builder/action-form";
 import { authorshipText } from "@/components/builder/authorship-line";
 import CollapsibleNode from "@/components/builder/collapsible-node";
-import ColourMenu from "@/components/builder/colour-menu";
+import ColourMenu from "@/components/colours/colour-menu";
+import { ColourStrip } from "@/components/colour-marks";
 import { AddChildMenu, NodeMenu } from "@/components/builder/row-actions";
 import { DragHandle } from "@/components/builder/sortable-group";
 import { StateBadge } from "@/components/state-badge";
 import { reorderAction } from "@/app/actions/authoring";
-import { swatchSolid, type Swatch } from "@/lib/colours";
+import type { Swatch } from "@/lib/colours";
 import { decodeEntities } from "@/lib/html";
 import type { NodeType, TreeNode } from "@/lib/types";
 
@@ -134,15 +135,12 @@ export default function NodeRow({
 
   const hasChildren = node.children.length > 0;
 
-  /*
-   * The strip is a border kept on every row, transparent when there is no
-   * colour, so colouring one item does not shift the rest sideways.
-   */
+  // The left padding is kept on every row, coloured or not, so colouring one
+  // item does not shift it sideways from the rest.
   const row = (
-    <div
-      className="flex flex-wrap items-center gap-2 border-l-4 py-2 pl-2"
-      style={{ borderLeftColor: swatchSolid(node.color ?? inherited) }}
-    >
+    <div className="relative flex flex-wrap items-center gap-2 py-2 pl-3">
+      <ColourStrip swatch={node.color ?? inherited} />
+
       <DragHandle />
 
       <ColourMenu

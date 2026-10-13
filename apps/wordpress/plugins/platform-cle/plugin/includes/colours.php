@@ -111,3 +111,172 @@ function pcle_get_effective_colour( $post_id ) {
 
 	return null;
 }
+
+/* =========================================================================
+ * Site-wide colour settings (P16 Colours, in the web app)
+ * ========================================================================= */
+
+/** Option holding what an administrator changed. Absent keys use the app's defaults. */
+const PCLE_COLOUR_SETTINGS_OPTION = 'pcle_colour_settings';
+
+/**
+ * The shape of the settings: each key, and what it may hold.
+ *
+ * Only what an administrator CHANGED is stored. The defaults live in the web
+ * app (DEFAULT_SETTINGS in lib/colours.ts) with the rest of what a swatch
+ * looks like, so they are written down once.
+ *
+ * Which hues each state may use (so a failed quiz is never coloured like a
+ * completed one) is checked by the app before it saves, where the families
+ * are defined. Only administrators can write here at all.
+ *
+ * @return array<string,string[]> Group => the keys it may contain.
+ */
+function pcle_colour_setting_keys() {
+	return array(
+		'kinds'   => array( 'pcle_unit', 'pcle_module', 'pcle_quiz', 'pcle_event', 'pcle_scenario', 'pcle_template' ),
+		'formats' => array( 'webinar' ),
+		'states'  => array( 'draft', 'published', 'notStarted', 'inProgress', 'complete', 'failed', 'required' ),
+	);
+}
+
+/**
+ * Checks and cleans a settings object.
+ *
+ * A swatch group maps each key to a swatch name, or to null for "no colour";
+ * a key left out means "the default". Anything unknown is refused rather than
+ * dropped, so a typo in a request comes back as an error instead of a save
+ * that silently did less than asked.
+ *
+ * @param mixed $input Settings, as decoded from the request.
+ * @return array|WP_Error
+ */
+function pcle_sanitize_colour_settings( $input ) {
+	if ( ! is_array( $input ) ) {
+		return new WP_Error( 'pcle_invalid_colour_settings', __( 'Colour settings must be an object.', 'platform-cle' ), array( 'status' => 400 ) );
+	}
+
+	$clean = array();
+
+	foreach ( $input as $group => $value ) {
+		if ( isset( pcle_colour_setting_keys()[ $group ] ) ) {
+			if ( ! is_array( $value ) ) {
+				return new WP_Error( 'pcle_invalid_colour_settings', sprintf( 'Expected an object for %s.', $group ), array( 'status' => 400 ) );
+			}
+
+			foreach ( $value as $key => $swatch ) {
+				if ( ! in_array( $key, pcle_colour_setting_keys()[ $group ], true ) ) {
+					return new WP_Error( 'pcle_invalid_colour_settings', sprintf( 'Unknown setting %s.%s.', $group, $key ), array( 'status' => 400 ) );
+				}
+
+				if ( null !== $swatch && ! in_array( $swatch, pcle_colour_swatches(), true ) ) {
+					return new WP_Error( 'pcle_invalid_colour', __( 'Unknown colour.', 'platform-cle' ), array( 'status' => 400 ) );
+				}
+
+				$clean[ $group ][ $key ] = $swatch;
+			}
+			continue;
+		}
+
+		switch ( $group ) {
+			case 'mark':
+				if ( ! in_array( $value, array( 'strip', 'tint' ), true ) ) {
+					return new WP_Error( 'pcle_invalid_colour_settings', __( 'Unknown mark style.', 'platform-cle' ), array( 'status' => 400 ) );
+				}
+				$clean['mark'] = $value;
+				break;
+
+			case 'participants':
+				if ( ! is_bool( $value ) ) {
+					return new WP_Error( 'pcle_invalid_colour_settings', __( 'participants must be true or false.', 'platform-cle' ), array( 'status' => 400 ) );
+				}
+				$clean['participants'] = $value;
+				break;
+
+			default:
+				return new WP_Error( 'pcle_invalid_colour_settings', sprintf( 'Unknown setting %s.', $group ), array( 'status' => 400 ) );
+		}
+	}
+
+	return $clean;
+}
+
+/**
+ * What an administrator has changed, cleaned on the way out too, so an
+ * option edited by hand cannot hand the app something it cannot draw.
+ *
+ * @return array
+ */
+function pcle_get_colour_settings() {
+	$stored = pcle_sanitize_colour_settings( get_option( PCLE_COLOUR_SETTINGS_OPTION, array() ) );
+
+	return is_wp_error( $stored ) ? array() : $stored;
+}
+
+/**
+ * Whether participants see programme and item colours. On unless turned off.
+ *
+ * @return bool
+ */
+function pcle_colours_shown_to_participants() {
+	return false !== ( pcle_get_colour_settings()['participants'] ?? true );
+}
+
+/**
+ * The colour a participant route reports: the effective colour, or none at
+ * all when an administrator has turned colours off for participants.
+ *
+ * Decided here rather than in the app, so the setting holds for anyone
+ * reading these routes, staff previewing as a participant included.
+ *
+ * @param int $post_id Post ID.
+ * @return string|null
+ */
+function pcle_participant_colour( $post_id ) {
+	return pcle_colours_shown_to_participants() ? pcle_get_effective_colour( $post_id ) : null;
+}
+
+/**
+ * GET /colour-settings — anyone, signed in or not: every screen draws its
+ * badges from these, the sign-in screen included, and nothing in them is
+ * private. PUT — administrators, replacing the whole object.
+ */
+function pcle_register_colour_routes() {
+	register_rest_route(
+		'platform-cle/v1',
+		'/colour-settings',
+		array(
+			array(
+				'methods'             => 'GET',
+				'callback'            => fn() => rest_ensure_response( (object) pcle_get_colour_settings() ),
+				'permission_callback' => '__return_true',
+			),
+			array(
+				'methods'             => 'PUT',
+				'callback'            => 'pcle_rest_put_colour_settings',
+				'permission_callback' => fn() => current_user_can( 'manage_options' )
+					? true
+					: new WP_Error( 'pcle_cannot_change_colours', __( 'Only an administrator may change the colour settings.', 'platform-cle' ), array( 'status' => is_user_logged_in() ? 403 : 401 ) ),
+			),
+		)
+	);
+}
+
+/**
+ * PUT /colour-settings.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return WP_REST_Response|WP_Error
+ */
+function pcle_rest_put_colour_settings( $request ) {
+	$clean = pcle_sanitize_colour_settings( $request->get_json_params() );
+
+	if ( is_wp_error( $clean ) ) {
+		return $clean;
+	}
+
+	update_option( PCLE_COLOUR_SETTINGS_OPTION, $clean, false );
+
+	return rest_ensure_response( (object) $clean );
+}
+add_action( 'rest_api_init', 'pcle_register_colour_routes' );

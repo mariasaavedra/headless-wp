@@ -48,7 +48,15 @@ export default function TreeView({
     <div className="ml-4 border-l border-zinc-200 pl-4">
       {groups.map((group) => (
         <section key={group.type} className="mt-3">
-          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+          <h3 className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+            {/* The kind's colour from the Colours screen, as on its badge. */}
+            {group.type !== "pcle_program" && (
+              <span
+                aria-hidden="true"
+                className="size-2 rounded-sm"
+                style={{ backgroundColor: `var(--kind-${group.type}-fg)` }}
+              />
+            )}
             {NODE_LABELS[group.type].plural}
           </h3>
 

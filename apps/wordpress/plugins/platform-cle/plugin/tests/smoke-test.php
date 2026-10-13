@@ -3386,6 +3386,61 @@ $listed = wp_list_filter( pcle_rest_get( $admin, '/platform-cle/v1/authoring/pro
 pcle_eq( reset( $listed )['color'], 'teal-strong', 'the builder list shows the colour' );
 
 /* ------------------------------------------------------------------ */
+pcle_section( '# Colour settings' );
+/* ------------------------------------------------------------------ */
+
+$saved_colour_settings = get_option( PCLE_COLOUR_SETTINGS_OPTION, null );
+delete_option( PCLE_COLOUR_SETTINGS_OPTION );
+
+$put_settings = function ( $uid, $body ) {
+	wp_set_current_user( $uid );
+	$request = new WP_REST_Request( 'PUT', '/platform-cle/v1/colour-settings' );
+	$request->set_header( 'Content-Type', 'application/json' );
+	$request->set_body( wp_json_encode( $body ) );
+	return rest_do_request( $request );
+};
+
+$read = pcle_rest_get( 0, '/platform-cle/v1/colour-settings' );
+pcle_eq( $read->get_status(), 200, 'anyone may read the colour settings, signed in or not' );
+pcle_eq( (array) $read->get_data(), array(), 'and with nothing changed there is nothing stored' );
+
+$wanted = array(
+	'kinds'        => array( 'pcle_quiz' => 'magenta-soft', 'pcle_unit' => null ),
+	'states'       => array( 'draft' => 'gold-soft' ),
+	'mark'         => 'tint',
+	'participants' => false,
+);
+pcle_eq( $put_settings( $instructor, $wanted )->get_status(), 403, 'an instructor may not change them' );
+pcle_eq( $put_settings( 0, $wanted )->get_status(), 401, 'nor may someone signed out' );
+
+$saved = $put_settings( $admin, $wanted );
+pcle_eq( $saved->get_status(), 200, 'an administrator may' );
+pcle_eq( pcle_get_colour_settings(), $wanted, 'and what was sent is what is kept, "no colour" included' );
+
+pcle_eq( $put_settings( $admin, array( 'states' => array( 'draft' => '#ffcc00' ) ) )->get_status(), 400, 'a colour value is refused' );
+pcle_eq( $put_settings( $admin, array( 'kinds' => array( 'pcle_program' => 'teal-soft' ) ) )->get_status(), 400, 'so is a kind that has no badge' );
+pcle_eq( $put_settings( $admin, array( 'theme' => 'dark' ) )->get_status(), 400, 'and a setting that does not exist' );
+pcle_eq( pcle_get_colour_settings(), $wanted, 'a refused save changes nothing' );
+
+// Turned off for participants: the participant routes stop reporting colours,
+// while the builder still shows them to its authors.
+pcle_eq( pcle_colours_shown_to_participants(), false, 'colours can be turned off for participants' );
+$hidden = pcle_rest_get( $admin, "/platform-cle/v1/programs/{$col_prog}" )->get_data();
+pcle_eq( $hidden['color'], null, 'then the participant route reports no programme colour' );
+pcle_eq( $hidden['units'][0]['color'], null, 'nor a unit colour' );
+pcle_eq( pcle_rest_get( $admin, "/platform-cle/v1/authoring/nodes/{$col_prog}" )->get_data()['color'], 'teal-strong', 'while the builder still has it' );
+
+update_option( PCLE_COLOUR_SETTINGS_OPTION, array( 'mark' => 'confetti', 'participants' => 'yes' ) );
+pcle_eq( pcle_get_colour_settings(), array(), 'a hand-edited option the app cannot use reads as nothing changed' );
+
+if ( null === $saved_colour_settings ) {
+	delete_option( PCLE_COLOUR_SETTINGS_OPTION );
+} else {
+	update_option( PCLE_COLOUR_SETTINGS_OPTION, $saved_colour_settings, false );
+}
+wp_set_current_user( 0 );
+
+/* ------------------------------------------------------------------ */
 /* Teardown                                                           */
 /* ------------------------------------------------------------------ */
 pcle_smoke_teardown();

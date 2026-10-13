@@ -11,12 +11,12 @@ import Breadcrumbs from "@/components/breadcrumbs";
 import ActionForm from "@/components/builder/action-form";
 import AuthorshipLine from "@/components/builder/authorship-line";
 import BodyEditor from "@/components/builder/body-editor";
-import ColourMenu from "@/components/builder/colour-menu";
+import ColourMenu from "@/components/colours/colour-menu";
 import QuizEditor from "@/components/builder/quiz-editor";
 import { NODE_BADGES } from "@/components/builder/node-labels";
 import PageShell from "@/components/page-shell";
 import WpContent from "@/components/wp-content";
-import { StateBadge } from "@/components/state-badge";
+import { KindBadge, StateBadge } from "@/components/state-badge";
 import { saveBodyAction } from "@/app/actions/authoring";
 import { isAuthenticated } from "@/lib/auth";
 import { decodeEntities } from "@/lib/html";
@@ -64,9 +64,13 @@ export default async function BuilderNodePage({
       />
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <Badge variant="secondary" className="uppercase tracking-wide">
-          {NODE_BADGES[node.type]}
-        </Badge>
+        {node.type === "pcle_program" ? (
+          <Badge variant="secondary" className="uppercase tracking-wide">
+            {NODE_BADGES[node.type]}
+          </Badge>
+        ) : (
+          <KindBadge kind={node.type} className="uppercase tracking-wide" />
+        )}
 
         <ColourMenu
           nodeId={node.id}

@@ -227,6 +227,21 @@ class WordPress {
     }
   }
 
+  /**
+   * Replaces the site's colour settings (P16). `{}` puts every default back,
+   * which is how a test that changed one leaves the site.
+   */
+  async setColourSettings(settings: Record<string, unknown>): Promise<void> {
+    const response = await this.api.put(`${API}/platform-cle/v1/colour-settings`, {
+      headers: this.headers,
+      data: settings,
+    });
+
+    if (!response.ok()) {
+      throw new Error(`Could not set the colour settings: ${await response.text()}`);
+    }
+  }
+
   /** `cascade` takes everything under it too — needed for a whole programme. */
   async deleteNode(id: number, cascade = false): Promise<void> {
     await this.api.delete(
