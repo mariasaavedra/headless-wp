@@ -3441,6 +3441,46 @@ if ( null === $saved_colour_settings ) {
 wp_set_current_user( 0 );
 
 /* ------------------------------------------------------------------ */
+pcle_section( '# My colours' );
+/* ------------------------------------------------------------------ */
+
+$put_mine = function ( $uid, $program_id, $colour ) {
+	return pcle_authoring_call( $uid, 'PUT', "/platform-cle/v1/me/colours/{$program_id}", array( 'color' => $colour ) );
+};
+
+delete_user_meta( $student, PCLE_MY_COLOURS_META );
+update_post_meta( $unit, PCLE_COLOUR_META, 'amber-strong' );
+
+$listed_mine = pcle_rest_get( $student, '/platform-cle/v1/me/colours' )->get_data();
+$mine_row    = wp_list_filter( $listed_mine['programs'], array( 'id' => $prog_a ) );
+pcle_eq( count( $mine_row ), 1, 'a participant\'s own programmes are listed to colour' );
+pcle_eq( reset( $mine_row )['color'], null, 'with no colour of their own yet' );
+pcle_eq( count( wp_list_filter( $listed_mine['programs'], array( 'id' => $col_prog ) ) ), 0, 'and nobody else\'s' );
+
+pcle_eq( pcle_rest_get( 0, '/platform-cle/v1/me/colours' )->get_status(), 401, 'someone signed out has no colours' );
+pcle_eq( $put_mine( $student, $col_prog, 'plum-strong' )->get_status(), 403, 'a programme they are not enrolled in is not theirs to colour' );
+pcle_eq( $put_mine( $student, $prog_a, 'purple' )->get_status(), 400, 'an unknown colour is refused' );
+
+pcle_eq( $put_mine( $student, $prog_a, 'plum-strong' )->get_status(), 200, 'a participant can colour their own programme' );
+pcle_eq( pcle_rest_get( $student, "/platform-cle/v1/programs/{$prog_a}" )->get_data()['color'], 'plum-strong', 'and sees it on the programme' );
+pcle_eq( pcle_rest_get( $student, "/platform-cle/v1/units/{$unit}" )->get_data()['color'], 'plum-strong', 'over a unit with its own colour, too' );
+$training_row = wp_list_filter( pcle_rest_get( $student, '/platform-cle/v1/my-training' )->get_data()['programs'], array( 'id' => $prog_a ) );
+pcle_eq( reset( $training_row )['color'], 'plum-strong', 'and on My Training' );
+pcle_eq( pcle_rest_get( $admin, "/platform-cle/v1/units/{$unit}" )->get_data()['color'], 'amber-strong', 'while nobody else sees it' );
+
+update_option( PCLE_COLOUR_SETTINGS_OPTION, array( 'participants' => false ) );
+pcle_eq( pcle_rest_get( $student, "/platform-cle/v1/programs/{$prog_a}" )->get_data()['color'], null, 'with colours hidden from participants, their own colour is hidden too' );
+pcle_eq( pcle_rest_get( $student, '/platform-cle/v1/me/colours' )->get_data()['shown'], false, 'and the list says why' );
+delete_option( PCLE_COLOUR_SETTINGS_OPTION );
+
+pcle_eq( $put_mine( $student, $prog_a, '' )->get_status(), 200, 'a participant can clear their colour' );
+pcle_eq( get_user_meta( $student, PCLE_MY_COLOURS_META, true ), '', 'and nothing is left stored' );
+pcle_eq( pcle_rest_get( $student, "/platform-cle/v1/units/{$unit}" )->get_data()['color'], 'amber-strong', 'so the unit shows its own colour again' );
+
+delete_post_meta( $unit, PCLE_COLOUR_META );
+wp_set_current_user( 0 );
+
+/* ------------------------------------------------------------------ */
 /* Teardown                                                           */
 /* ------------------------------------------------------------------ */
 pcle_smoke_teardown();

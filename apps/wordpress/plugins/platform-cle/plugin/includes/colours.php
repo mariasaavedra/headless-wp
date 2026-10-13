@@ -223,18 +223,168 @@ function pcle_colours_shown_to_participants() {
 }
 
 /**
- * The colour a participant route reports: the effective colour, or none at
- * all when an administrator has turned colours off for participants.
+ * The colour a participant route reports.
+ *
+ * The reader's own colour for the programme, if they chose one; otherwise
+ * the item's effective colour. None at all when an administrator has turned
+ * colours off for participants.
  *
  * Decided here rather than in the app, so the setting holds for anyone
- * reading these routes, staff previewing as a participant included.
+ * reading these routes, staff previewing as a participant included. A
+ * preview shows no personal colours: it is the programme as somebody meets
+ * it for the first time.
  *
  * @param int $post_id Post ID.
  * @return string|null
  */
 function pcle_participant_colour( $post_id ) {
-	return pcle_colours_shown_to_participants() ? pcle_get_effective_colour( $post_id ) : null;
+	if ( ! pcle_colours_shown_to_participants() ) {
+		return null;
+	}
+
+	if ( ! pcle_previewing_as_participant() ) {
+		$mine = pcle_get_my_colours()[ pcle_get_program_for_post( $post_id ) ] ?? null;
+
+		if ( $mine ) {
+			return $mine;
+		}
+	}
+
+	return pcle_get_effective_colour( $post_id );
 }
+
+/* =========================================================================
+ * A reader's own colours (Your account, P7)
+ * ========================================================================= */
+
+/** User meta: programme ID => swatch name. Seen by nobody but its owner. */
+const PCLE_MY_COLOURS_META = 'pcle_my_colours';
+
+/**
+ * The colours a reader chose for their own programmes.
+ *
+ * A personal colour stands for the whole programme, items with their own
+ * colour included: it is how this one person tells their programmes apart,
+ * and a programme that is half their colour and half the author's would not
+ * do that.
+ *
+ * @param int $user_id User ID (defaults to the current user).
+ * @return array<int,string>
+ */
+function pcle_get_my_colours( $user_id = 0 ) {
+	$user_id = $user_id ? (int) $user_id : get_current_user_id();
+
+	if ( ! $user_id ) {
+		return array();
+	}
+
+	$stored = get_user_meta( $user_id, PCLE_MY_COLOURS_META, true );
+
+	return is_array( $stored )
+		? array_filter( $stored, fn( $colour ) => in_array( $colour, pcle_colour_swatches(), true ) )
+		: array();
+}
+
+/**
+ * GET /me/colours — each programme on the reader's My Training, with the
+ * colour they chose for it and the colour it has otherwise.
+ *
+ * @return WP_REST_Response
+ */
+function pcle_rest_get_my_colours() {
+	$mine = pcle_get_my_colours();
+	$out  = array();
+
+	foreach ( pcle_get_visible_programs() as $program ) {
+		$out[] = array(
+			'id'            => (int) $program->ID,
+			'title'         => get_the_title( $program ),
+			'color'         => $mine[ $program->ID ] ?? null,
+			'program_color' => pcle_get_colour( $program->ID ),
+		);
+	}
+
+	return rest_ensure_response(
+		array(
+			// Whether participants see colours at all, so the screen can say
+			// why a choice made here is not showing.
+			'shown'    => pcle_colours_shown_to_participants(),
+			'programs' => $out,
+		)
+	);
+}
+
+/**
+ * PUT /me/colours/<id> — choose, or clear with "", one programme's colour.
+ *
+ * Only for a programme on the reader's own My Training: anything else is
+ * not theirs to colour, and storing it would only be clutter.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return WP_REST_Response|WP_Error
+ */
+function pcle_rest_put_my_colour( $request ) {
+	$program_id = (int) $request['id'];
+	$colour     = (string) $request['color'];
+
+	if ( ! in_array( $program_id, array_map( 'intval', wp_list_pluck( pcle_get_visible_programs(), 'ID' ) ), true ) ) {
+		return new WP_Error( 'pcle_not_your_programme', __( 'You can only colour programmes on your own My Training.', 'platform-cle' ), array( 'status' => 403 ) );
+	}
+
+	if ( '' !== $colour && ! in_array( $colour, pcle_colour_swatches(), true ) ) {
+		return new WP_Error( 'pcle_invalid_colour', __( 'Unknown colour.', 'platform-cle' ), array( 'status' => 400 ) );
+	}
+
+	$mine = pcle_get_my_colours();
+
+	if ( '' === $colour ) {
+		unset( $mine[ $program_id ] );
+	} else {
+		$mine[ $program_id ] = $colour;
+	}
+
+	if ( $mine ) {
+		update_user_meta( get_current_user_id(), PCLE_MY_COLOURS_META, $mine );
+	} else {
+		delete_user_meta( get_current_user_id(), PCLE_MY_COLOURS_META );
+	}
+
+	return pcle_rest_get_my_colours();
+}
+
+/** Registers the personal colour routes. Signed-in readers, for themselves only. */
+function pcle_register_my_colour_routes() {
+	$signed_in = static fn() => is_user_logged_in()
+		? true
+		: new WP_Error( 'pcle_not_authenticated', __( 'You must be signed in.', 'platform-cle' ), array( 'status' => 401 ) );
+
+	register_rest_route(
+		'platform-cle/v1',
+		'/me/colours',
+		array(
+			'methods'             => 'GET',
+			'callback'            => 'pcle_rest_get_my_colours',
+			'permission_callback' => $signed_in,
+		)
+	);
+
+	register_rest_route(
+		'platform-cle/v1',
+		'/me/colours/(?P<id>\d+)',
+		array(
+			'methods'             => 'PUT',
+			'callback'            => 'pcle_rest_put_my_colour',
+			'permission_callback' => $signed_in,
+			'args'                => array(
+				'color' => array(
+					'required' => true,
+					'type'     => 'string',
+				),
+			),
+		)
+	);
+}
+add_action( 'rest_api_init', 'pcle_register_my_colour_routes' );
 
 /**
  * GET /colour-settings — anyone, signed in or not: every screen draws its

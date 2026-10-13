@@ -364,6 +364,7 @@ restorable.
 | `_pcle_program_format` | post meta (programme) | `webinar` when the programme is one video; absent for a series |
 | `_pcle_colour` | post meta (any curriculum item) | A swatch name such as `teal-strong`; absent when the item inherits its parent's |
 | `pcle_colour_settings` | option | What an administrator changed on the Colours screen (badge colours per kind, format and state; mark style; whether participants see colours). Absent keys use the app's defaults |
+| `pcle_my_colours` | user meta | Programme ID → swatch name: the colours one reader chose for their own programmes, seen by nobody else |
 | `_pcle_credit_hours_<code>` | post meta (program) | approved credit hours per jurisdiction |
 | `_pcle_quiz_questions` | post meta (quiz) | questions **and answers** — never registered in REST |
 | `_pcle_quiz_pass_mark` | post meta (quiz) | percentage required to pass |

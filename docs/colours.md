@@ -34,6 +34,18 @@ When colours are hidden from participants, WordPress stops sending them on the
 participant routes, so the setting holds for staff previewing as a
 participant too.
 
+## My colours (on P7, Your account)
+
+Anyone signed in can recolour the programmes on their own My Training, under
+**My colours**. Only they see the result: it replaces the programme's colour,
+and the colours of the items inside it, on their My Training and programme
+pages. **Use the programme's colour** gives it back.
+
+WordPress keeps these per person (user meta `pcle_my_colours`) and refuses a
+programme that is not on the reader's own My Training. They are hidden, with
+every other colour, when an administrator hides colours from participants, and
+a staff member previewing as a participant does not see their own.
+
 ## Programme and item colours
 
 An author gives a programme a colour from the dot beside its title in the

@@ -185,6 +185,30 @@ async function getAccount(): Promise<Account> {
   }) as Promise<Account>;
 }
 
+/**
+ * The programmes on this reader's My Training, each with the colour they
+ * chose for it and the colour it has otherwise. `shown` is false when an
+ * administrator has hidden colours from participants.
+ */
+type MyColours = {
+  shown: boolean;
+  programs: { id: number; title: string; color: Swatch | null; program_color: Swatch | null }[];
+};
+
+async function getMyColours(): Promise<MyColours> {
+  return wordpressFetch("/platform-cle/v1/me/colours", { auth: true }) as Promise<MyColours>;
+}
+
+/** "" clears it, so the programme shows its own colour again. */
+async function setMyColour(programId: number, color: Swatch | ""): Promise<void> {
+  await wordpressFetch(`/platform-cle/v1/me/colours/${programId}`, {
+    auth: true,
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ color }),
+  });
+}
+
 async function changeUsername(
   username: string,
   currentPassword: string
@@ -645,9 +669,11 @@ export {
   changeUsername,
   changePassword,
   getColourSettings,
+  getMyColours,
+  setMyColour,
   saveColourSettings,
   WordPressAuthError,
   WordPressApiError,
 };
 
-export type { Account };
+export type { Account, MyColours };
