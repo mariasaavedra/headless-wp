@@ -292,7 +292,8 @@ async function setColourAction(
     return { error: describe(error) };
   }
 
-  refresh();
+  // Colours show beyond the builder: My Training, Reports, the Colours screen.
+  revalidatePath("/", "layout");
   return {};
 }
 

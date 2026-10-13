@@ -10,12 +10,12 @@ import { renderAccessError } from "@/components/access-error";
 import Breadcrumbs from "@/components/breadcrumbs";
 import ActionForm from "@/components/builder/action-form";
 import AuthorshipLine from "@/components/builder/authorship-line";
-import ColourMenu from "@/components/builder/colour-menu";
+import ColourMenu from "@/components/colours/colour-menu";
 import EditableTitle from "@/components/builder/editable-title";
 import { NODE_LABELS } from "@/components/builder/node-labels";
 import TreeView from "@/components/builder/tree-view";
 import PageShell from "@/components/page-shell";
-import { StateBadge, SwatchBadge } from "@/components/state-badge";
+import { FormatBadge, StateBadge } from "@/components/state-badge";
 import {
   createNodeAction,
   saveCreditsAction,
@@ -23,7 +23,6 @@ import {
   setStatusAction,
 } from "@/app/actions/authoring";
 import { isAuthenticated } from "@/lib/auth";
-import { FORMAT_SWATCHES } from "@/lib/colours";
 import { decodeEntities } from "@/lib/html";
 import type { TreeNode } from "@/lib/types";
 import { getProgramTree } from "@/lib/wordpress";
@@ -76,7 +75,7 @@ export default async function BuilderProgramPage({
         <StateBadge state={isDraft ? "draft" : "published"} />
 
         {isWebinar && (
-          <SwatchBadge swatch={FORMAT_SWATCHES.webinar}>Webinar</SwatchBadge>
+          <FormatBadge format="webinar" />
         )}
 
         <div className="ml-auto flex flex-wrap items-center gap-2">

@@ -34,20 +34,33 @@ export function ColourDot({
 }
 
 /**
- * A strip down the left edge of a card. The card needs `relative`; its own
- * rounded corners and overflow clip the strip to fit. Nothing at all when
- * there is no colour, so an uncoloured card looks exactly as it did.
+ * A strip down the left edge of a card, and a faint wash over it when the
+ * Colours screen says "Tinted" (`.colour-tint`, in globals.css, keyed off
+ * `data-colour-mark` on <html>).
+ *
+ * The card needs `relative`; its own rounded corners and overflow clip both
+ * to fit. Nothing at all when there is no colour, so an uncoloured card looks
+ * exactly as it did.
  */
 export function ColourStrip({ swatch }: { swatch: Swatch | null }) {
   if (!swatch) {
     return null;
   }
 
+  const colour = swatchSolid(swatch);
+
   return (
-    <span
-      aria-hidden="true"
-      className="absolute inset-y-0 left-0 w-1.5"
-      style={{ backgroundColor: swatchSolid(swatch) }}
-    />
+    <>
+      <span
+        aria-hidden="true"
+        className="colour-tint pointer-events-none absolute inset-0"
+        style={{ backgroundColor: colour }}
+      />
+      <span
+        aria-hidden="true"
+        className="absolute inset-y-0 left-0 w-1.5"
+        style={{ backgroundColor: colour }}
+      />
+    </>
   );
 }

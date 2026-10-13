@@ -1,5 +1,8 @@
+import { cache } from "react";
+
 import { getAuthToken, setAuthCookie, clearAuthCookie } from "@/lib/auth";
-import type { Swatch } from "@/lib/colours";
+import { DEFAULT_SETTINGS, changesFromDefaults, mergeSettings } from "@/lib/colours";
+import type { ColourSettings, Swatch } from "@/lib/colours";
 import type {
   AuthoringProgram,
   EnrollmentResult,
@@ -577,6 +580,36 @@ async function reorderChildren(input: {
   });
 }
 
+/**
+ * The site's colour settings, over the defaults.
+ *
+ * Once per request, however many components ask. Never throws: the root
+ * layout draws every badge from this, and a WordPress that cannot be reached
+ * should cost the site its custom colours, not its pages (the front door
+ * already survives that, and this must not undo it).
+ */
+const getColourSettings = cache(async (): Promise<ColourSettings> => {
+  try {
+    return mergeSettings(await wordpressFetch("/platform-cle/v1/colour-settings"));
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+});
+
+/**
+ * Replaces what is stored with how these settings differ from the defaults.
+ * The whole object each time, so the request says exactly what the site will
+ * look like afterwards.
+ */
+async function saveColourSettings(settings: ColourSettings): Promise<void> {
+  await wordpressFetch("/platform-cle/v1/colour-settings", {
+    auth: true,
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(changesFromDefaults(settings)),
+  });
+}
+
 export {
   WORDPRESS_SITE_URL,
   wordpressFetch,
@@ -611,6 +644,8 @@ export {
   getAccount,
   changeUsername,
   changePassword,
+  getColourSettings,
+  saveColourSettings,
   WordPressAuthError,
   WordPressApiError,
 };

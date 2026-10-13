@@ -65,6 +65,12 @@ async function pathsFor(): Promise<Path[]> {
         label: "People",
         description:
           "Who has an account and what they may do. Changing a role takes an administrator.",
+      },
+      {
+        href: "/colours",
+        label: "Colours",
+        description:
+          "Colour programmes, and choose the colours every badge is drawn in. The badges are an administrator's.",
       }
     );
   }

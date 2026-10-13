@@ -1,36 +1,40 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import { Badge } from "@pcle/ui/components/badge";
-import { cn } from "@pcle/ui/lib/utils";
 
-import { STATES, swatchStyle, type State, type Swatch } from "@/lib/colours";
+import { NODE_BADGES } from "@/components/builder/node-labels";
+import { STATES, type Format, type Kind, type State } from "@/lib/colours";
 
 /**
- * A badge filled with one swatch from lib/colours.ts.
+ * Badges coloured from the Colours screen (P16).
+ *
+ * The colour is read from CSS custom properties the root layout writes
+ * (`--state-draft-bg` and its pair), not chosen here. That is what lets an
+ * administrator recolour every Draft badge at once, and lets a client
+ * component use these without anyone handing it the settings.
  *
  * The colour goes in `style`, not a class: Tailwind only ships the classes it
- * finds written out in the source, so a swatch chosen by name at runtime
- * would come out unstyled.
+ * finds written out in the source.
  */
-export function SwatchBadge({
-  swatch,
+function tokenStyle(token: string): CSSProperties {
+  return {
+    backgroundColor: `var(--${token}-bg)`,
+    color: `var(--${token}-fg)`,
+    borderColor: `var(--${token}-border)`,
+  };
+}
+
+function TokenBadge({
+  token,
   className,
   children,
 }: {
-  swatch: Swatch | null;
+  token: string;
   className?: string;
   children: ReactNode;
 }) {
-  if (!swatch) {
-    return (
-      <Badge variant="outline" className={cn("text-zinc-500", className)}>
-        {children}
-      </Badge>
-    );
-  }
-
   return (
-    <Badge className={className} style={swatchStyle(swatch)}>
+    <Badge variant="outline" className={className} style={tokenStyle(token)}>
       {children}
     </Badge>
   );
@@ -53,8 +57,26 @@ export function StateBadge({
   children?: ReactNode;
 }) {
   return (
-    <SwatchBadge swatch={STATES[state].swatch} className={className}>
+    <TokenBadge token={`state-${state}`} className={className}>
       {children ?? STATES[state].label}
-    </SwatchBadge>
+    </TokenBadge>
+  );
+}
+
+/** What kind of item something is ("Quiz", "Module"), in that kind's colour. */
+export function KindBadge({ kind, className }: { kind: Kind; className?: string }) {
+  return (
+    <TokenBadge token={`kind-${kind}`} className={className}>
+      {NODE_BADGES[kind]}
+    </TokenBadge>
+  );
+}
+
+/** A programme's format, where it is not the usual series. */
+export function FormatBadge({ format }: { format: Format }) {
+  return (
+    <TokenBadge token={`format-${format}`}>
+      {format === "webinar" ? "Webinar" : format}
+    </TokenBadge>
   );
 }

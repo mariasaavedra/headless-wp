@@ -15,9 +15,8 @@ import {
 import AuthorshipLine from "@/components/builder/authorship-line";
 import { ColourStrip } from "@/components/colour-marks";
 import PageShell from "@/components/page-shell";
-import { StateBadge, SwatchBadge } from "@/components/state-badge";
+import { FormatBadge, StateBadge } from "@/components/state-badge";
 import { isAuthenticated } from "@/lib/auth";
-import { FORMAT_SWATCHES } from "@/lib/colours";
 import { decodeEntities } from "@/lib/html";
 import type { AuthoringProgram } from "@/lib/types";
 import { getAuthoringPrograms } from "@/lib/wordpress";
@@ -134,7 +133,7 @@ export default async function BuilderPage() {
                       )}
 
                       {program.format === "webinar" && (
-                        <SwatchBadge swatch={FORMAT_SWATCHES.webinar}>Webinar</SwatchBadge>
+                        <FormatBadge format="webinar" />
                       )}
                     </div>
                   </CardHeader>

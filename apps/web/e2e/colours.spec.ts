@@ -69,3 +69,49 @@ test.describe("Colours", () => {
     ).toBeVisible();
   });
 });
+
+/**
+ * The Colours screen (P16): the badges' colours are an administrator's, and
+ * each state keeps to its own family.
+ */
+test.describe("Colour settings", () => {
+  let wordpress: WordPress;
+
+  test.beforeAll(async () => {
+    wordpress = await WordPress.asAdministrator();
+  });
+
+  test.afterAll(async () => {
+    await wordpress.setColourSettings({});
+  });
+
+  test("an administrator recolours every Draft badge", async ({ page }) => {
+    await signIn(page, people.administrator);
+    await page.goto("/colours");
+
+    await page.getByRole("button", { name: /^Colour for “Draft”:/ }).click();
+
+    // Draft keeps to warm colours: a green is not offered.
+    await expect(page.getByRole("menuitem", { name: "Emerald soft", exact: true })).toBeDisabled();
+
+    await page.getByRole("menuitem", { name: "Gold soft", exact: true }).click();
+
+    await expect(page.getByRole("button", { name: "Colour for “Draft”: Gold soft" })).toBeVisible();
+
+    // The colour reaches every screen from the root layout, the builder included.
+    await page.goto("/builder");
+    const style = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue("--state-draft-bg").trim()
+    );
+    expect(style).toBe("oklch(0.935 0.045 95)");
+  });
+
+  test("an instructor sees the defaults but cannot change them", async ({ page }) => {
+    await signIn(page, people.instructor);
+    await page.goto("/colours");
+
+    await expect(page.getByText("Only administrators change these.").first()).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Colour for “Draft”:/ })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Hide colours from participants" })).toBeDisabled();
+  });
+});

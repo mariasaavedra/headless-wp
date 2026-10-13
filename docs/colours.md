@@ -6,8 +6,33 @@ version (full fill, white text). Name a swatch in a change request:
 *"make Draft gold-soft"*.
 
 The palette lives in `apps/web/src/lib/colours.ts`. Screens never pick a
-Tailwind colour or a hex value; they ask for a state (`<StateBadge>`) or a
-named swatch (`<SwatchBadge>`) from `components/state-badge.tsx`.
+Tailwind colour or a hex value; they ask for a state, a kind or a format
+(`<StateBadge>`, `<KindBadge>`, `<FormatBadge>` in `components/state-badge.tsx`),
+and the colour comes from the Colours screen.
+
+## The Colours screen (P16)
+
+**Colours** in the header, for instructors and administrators.
+
+| Section | Who changes it | What it sets |
+|---|---|---|
+| Programmes | Authors | Each programme's colour, as the dot in the builder does |
+| Kinds of item | Administrators | The badge colour for units, modules, quizzes, live sessions, scenarios, templates, and the Webinar badge |
+| States | Administrators | The badge colour for each state below, within its family |
+| Display | Administrators | A strip down the left of a card, or a strip and a faint tint; whether participants see programme colours; restoring the original colours |
+
+Every choice is saved the moment it is made. WordPress stores only what
+differs from the defaults (`pcle_colour_settings`), so a default retuned in
+`lib/colours.ts` still reaches a site that has changed something else.
+
+The root layout turns the settings into CSS custom properties
+(`--state-draft-bg`, `--kind-pcle_quiz-fg`, …) that every badge reads, so a
+change reaches every screen at once. When WordPress cannot be reached, the
+defaults are used.
+
+When colours are hidden from participants, WordPress stops sending them on the
+participant routes, so the setting holds for staff previewing as a
+participant too.
 
 ## Programme and item colours
 
@@ -45,12 +70,12 @@ Each hue below exists as `<hue>-soft` and `<hue>-strong`, e.g. `teal-soft`.
 
 ## States
 
-A state is what a badge means, not the words on it: a passed quiz, a completed
+These are the defaults; administrators change them on P16. A state is what a badge means, not the words on it: a passed quiz, a completed
 module and a finished participant are all *Complete*.
 
 Each state may only use the hues in its family, so a failed quiz can never be
-coloured like a completed one. The app refuses to start if a default breaks
-this.
+coloured like a completed one. The colour menu offers only those hues, the
+save refuses any other, and the app refuses to start if a default breaks it.
 
 | State | Colour | Family | Where it shows |
 |---|---|---|---|
@@ -62,8 +87,17 @@ this.
 | Not passed | rose-soft | rose, coral, rust, magenta | Quiz attempts (P6) and results ("Not passed", "Incorrect") |
 | Required | gold-soft | amber, gold, rust, coral | Required quizzes (P4, P6) |
 
-## Other colours
+## Kinds of item (defaults)
 
 | Badge | Colour |
 |---|---|
+| Unit | cobalt-soft |
+| Module | cyan-soft |
+| Quiz | plum-soft |
+| Live session | magenta-soft |
+| Practice scenario | olive-soft |
+| Template | rust-soft |
 | Webinar | indigo-soft |
+
+Kind badges show on the item editor (P11); the builder's group headings
+(*Units*, *Quizzes*) carry a small square in the same colour.
